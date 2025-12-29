@@ -12,7 +12,7 @@ import com.derso.arquitetura.sessaocompra.config.SessaoCompraException;
 @Entity
 @Table(name = "sessao_compra")
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@NoArgsConstructor(access = AccessLevel.PACKAGE)
 public class SessaoCompra {
 
     @Id
@@ -35,16 +35,11 @@ public class SessaoCompra {
     @Column(name = "id_reserva_voo_volta")
     private UUID idReservaVooVolta;
 
-    /* ========= FACTORY ========= */
-
-    public static SessaoCompra iniciar() {
-        SessaoCompra sessao = new SessaoCompra();
-        sessao.id = UUID.randomUUID();
-        sessao.status = SessaoCompraStatus.INICIADA;
-        return sessao;
+    public SessaoCompra(UUID idCustomer) {
+        this.id = UUID.randomUUID();
+        this.idCustomer = idCustomer;
+        this.status = SessaoCompraStatus.INICIADA;
     }
-
-    /* ========= COMPORTAMENTO DE DOMÍNIO ========= */
 
     public void anexarCliente(UUID idCustomer) {
         exigirNaoFinalizada();
@@ -90,8 +85,6 @@ public class SessaoCompra {
     public void marcarErro() {
         this.status = SessaoCompraStatus.ERRO;
     }
-
-    /* ========= INVARIANTES ========= */
 
     private void exigirCliente() {
         if (idCustomer == null) {
