@@ -32,14 +32,41 @@ public class SessaoCompraController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Void> atualizarEstadoCompra(@PathVariable("id") UUID uuid, @RequestBody InteracaoDTO novoEstado) {
+    public ResponseEntity<Void> atualizarEstadoCompra(@PathVariable("id") UUID id, @RequestBody InteracaoDTO novoEstado) {
 
         // TODO o dado do cliente deve vir com o de autorização (posteriormente)
 
-        if (service.atualizarInteracaoCompra(uuid, novoEstado)) {
+        if (service.atualizarInteracaoCompra(id, novoEstado)) {
             return ResponseEntity.ok().build();
         } else {
             return ResponseEntity.notFound().build();
         }
     }
+
+    @PostMapping("/timeout")
+    public void processarExpirados() {
+
+        // TODO clientId para o serviço de Timeout
+        // TODO pensar em uma forma de notificar o front-end do cancelamento
+
+        service.processarExpirados();
+    }
+
+    @PutMapping("/{id}/iniciando-pagamento")
+    public void iniciarPagamento(@PathVariable("id") UUID id) {
+
+        // TODO clientId para o serviço de Pagamentos
+
+        if (service.iniciarPagamento(id)) {
+            // TODO ativar serviço de pagamento
+        } else {
+            // TODO verificar o cancelamento
+        }
+    }
+
+    @PutMapping("/{id}/pagamento-efetuado")
+    public void pagamentoEfetuado(@PathVariable("id") UUID id) {
+        service.pagamentoEfetuado(id);
+    }
+
 }

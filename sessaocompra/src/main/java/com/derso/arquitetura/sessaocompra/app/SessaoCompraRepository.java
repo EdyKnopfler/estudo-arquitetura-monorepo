@@ -1,5 +1,6 @@
 package com.derso.arquitetura.sessaocompra.app;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -30,5 +31,36 @@ public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID
         @Param("idReservaHotel") UUID idReservaHotel, 
         @Param("idReservaVooVolta") UUID idReservaVooVolta
     );
+
+    // TODO mais tarde com SELECT FOR UPDATE pois deveremos pegar os ids de reservas para cancelar nos outros serviçoss
+    @Modifying
+    @Query("""
+        UPDATE SessaoCompra s
+        SET
+            s.status = 'CANCELADA'
+        WHERE s.start_time < :horaRef
+            AND s.status = 'INICIADA'
+    """)
+    void cancelarExpirados(@Param("horaRef") Instant horaRef);
+
+    @Modifying
+    @Query("""
+        UPDATE SessaoCompra s
+        SET
+            s.status = 'EFETUANDO_PAGAMENTO'
+        WHERE s.id = :idSessao
+            AND s.status = 'INICIADA'
+    """)
+    int iniciarPagamento(@Param("idSessao") UUID id);
+
+    @Modifying
+    @Query("""
+        UPDATE SessaoCompra s
+        SET
+            s.status = 'PAGAMENTO_EFETUADO'
+        WHERE s.id = :idSessao
+            AND s.status = 'EFETUANDO_PAGAMENTO'
+    """)
+    void pagamentoEfetuado(@Param("idSessao") UUID id);
 
 }

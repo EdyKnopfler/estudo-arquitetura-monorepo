@@ -5,6 +5,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import com.derso.arquitetura.sessaocompra.config.SessaoCompraException;
@@ -35,11 +36,20 @@ public class SessaoCompra {
     @Column(name = "id_reserva_voo_volta")
     private UUID idReservaVooVolta;
 
+    @Column(name = "start_time")
+    private Instant inicio;
+
     public SessaoCompra(UUID idCustomer) {
         this.id = UUID.randomUUID();
         this.idCustomer = idCustomer;
         this.status = SessaoCompraStatus.INICIADA;
+        this.inicio = Instant.now();
     }
+
+    // TODO refletindo se mantenho estes métodos ou deixo tudo com os UPDATES
+    // Se um update não encontrar a linha no estado válido, preciso buscá-la para verificar o que ocorreu
+    // Talvez fazendo com JAVA, sempre começando com um select com lock pessimista, fique mais amigável (embora menos performático)
+    // Quando decidir eu resolvo hahaha. ChatGPT to the rescue.
 
     public void anexarCliente(UUID idCustomer) {
         exigirNaoFinalizada();
