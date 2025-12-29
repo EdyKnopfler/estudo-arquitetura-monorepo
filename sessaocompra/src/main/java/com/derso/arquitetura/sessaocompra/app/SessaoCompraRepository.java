@@ -38,7 +38,7 @@ public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID
         UPDATE SessaoCompra s
         SET
             s.status = 'CANCELADA'
-        WHERE s.start_time < :horaRef
+        WHERE s.inicio < :horaRef
             AND s.status = 'INICIADA'
     """)
     void cancelarExpirados(@Param("horaRef") Instant horaRef);
