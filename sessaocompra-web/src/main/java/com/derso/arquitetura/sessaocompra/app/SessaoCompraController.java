@@ -43,15 +43,6 @@ public class SessaoCompraController {
         }
     }
 
-    @PostMapping("/timeout")
-    public void processarExpirados() {
-
-        // TODO clientId para o serviço de Timeout
-        // TODO pensar em uma forma de notificar o front-end do cancelamento
-
-        service.processarExpirados();
-    }
-
     @PutMapping("/{id}/iniciando-pagamento")
     public void iniciarPagamento(@PathVariable("id") UUID id) {
 

@@ -1,0 +1,25 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Sessão Compra: serviço web",
+            "request": "launch",
+            "mainClass": "com.derso.arquitetura.sessaocompra.SessaoCompraApplication",
+            "projectName": "sessaocompra-web"
+        },
+        {
+            "type": "java",
+            "name": "SessaoCompra: serviço timeouts",
+            "request": "launch",
+            "mainClass": "com.derso.arquitetura.timeout.TimeoutApplication",
+            "projectName": "sessaocompra-timeout"
+        },
+        {
+            "type": "java",
+            "name": "Current File",
+            "request": "launch",
+            "mainClass": "${file}"
+        }
+    ]
+}

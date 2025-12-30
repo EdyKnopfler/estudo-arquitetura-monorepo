@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.derso.arquitetura.sessaocompra.entity.SessaoCompra;
 
@@ -33,32 +34,6 @@ public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID
         @Param("idReservaVooVolta") UUID idReservaVooVolta
     );
 
-    // TODO mais tarde com SELECT FOR UPDATE pois deveremos pegar os ids de reservas para cancelar nos outros serviços
-
-    public static interface ExpiradoDTO {
-        public UUID getIdSessao();
-        public UUID getIdCustomer();
-        public UUID getIdReservaVooIda();
-        public UUID getIdReservaHotel();
-        public UUID getIdReservaVooVolta();
-    }
-
-    @Modifying
-    @Query(
-        nativeQuery = true,
-        value = """
-            UPDATE sessao_compra
-            SET
-                status = 'CANCELADA'
-            WHERE start_time < :horaRef
-                AND status = 'INICIADA'
-            RETURNING
-                id AS idSessao, id_customer AS idCustomer,
-                id_reserva_voo_ida AS idReservaVooIda, id_reserva_hotel AS idReservaHotel, id_reserva_voo_volta as idReservaVooVolta
-        """
-    )
-    List<ExpiradoDTO> cancelarExpirados(@Param("horaRef") Instant horaRef);
-
     @Modifying
     @Query("""
         UPDATE SessaoCompra s
@@ -78,5 +53,39 @@ public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID
             AND s.status = 'EFETUANDO_PAGAMENTO'
     """)
     void pagamentoEfetuado(@Param("idSessao") UUID id);
+
+    @Modifying
+    @Transactional
+    @Query(
+        nativeQuery = true,
+        value = """
+            UPDATE sessao_compra
+            SET status = 'CANCELANDO'
+            WHERE id IN (
+                SELECT id
+                FROM sessao_compra
+                WHERE status = 'INICIADA'
+                AND inicio < :horaRef
+                ORDER BY inicio
+                LIMIT :batchSize
+                FOR UPDATE SKIP LOCKED
+            )
+            RETURNING
+                id,
+                id_reserva_voo_ida AS idReservaVooIda,
+                id_reserva_hotel AS idReservaHotel,
+                id_reserva_voo_volta AS idReservaVooVolta;
+        """
+    )
+    List<SessaoCompra> marcarLoteComoCancelando(@Param("batchSize") int tamanhoLote, @Param("horaRef") Instant horaRef);
+
+    @Modifying
+    @Transactional
+    @Query("""
+        UPDATE SessaoDTO s
+        SET s.status = :novoStatus
+        WHERE s.id = :idSessao
+    """)
+    void marcarStatus(@Param("idSessao") UUID id, @Param("novoStatus") String novoStatus);
 
 }
