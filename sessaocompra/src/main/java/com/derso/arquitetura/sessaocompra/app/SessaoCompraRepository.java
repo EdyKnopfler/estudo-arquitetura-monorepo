@@ -1,6 +1,7 @@
 package com.derso.arquitetura.sessaocompra.app;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -32,16 +33,31 @@ public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID
         @Param("idReservaVooVolta") UUID idReservaVooVolta
     );
 
-    // TODO mais tarde com SELECT FOR UPDATE pois deveremos pegar os ids de reservas para cancelar nos outros serviçoss
+    // TODO mais tarde com SELECT FOR UPDATE pois deveremos pegar os ids de reservas para cancelar nos outros serviços
+
+    public static interface ExpiradoDTO {
+        public UUID getIdSessao();
+        public UUID getIdCustomer();
+        public UUID getIdReservaVooIda();
+        public UUID getIdReservaHotel();
+        public UUID getIdReservaVooVolta();
+    }
+
     @Modifying
-    @Query("""
-        UPDATE SessaoCompra s
-        SET
-            s.status = 'CANCELADA'
-        WHERE s.inicio < :horaRef
-            AND s.status = 'INICIADA'
-    """)
-    void cancelarExpirados(@Param("horaRef") Instant horaRef);
+    @Query(
+        nativeQuery = true,
+        value = """
+            UPDATE sessao_compra
+            SET
+                status = 'CANCELADA'
+            WHERE start_time < :horaRef
+                AND status = 'INICIADA'
+            RETURNING
+                id AS idSessao, id_customer AS idCustomer,
+                id_reserva_voo_ida AS idReservaVooIda, id_reserva_hotel AS idReservaHotel, id_reserva_voo_volta as idReservaVooVolta
+        """
+    )
+    List<ExpiradoDTO> cancelarExpirados(@Param("horaRef") Instant horaRef);
 
     @Modifying
     @Query("""

@@ -2,11 +2,13 @@ package com.derso.arquitetura.sessaocompra.app;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.derso.arquitetura.sessaocompra.app.SessaoCompraRepository.ExpiradoDTO;
 import com.derso.arquitetura.sessaocompra.app.dto.InteracaoDTO;
 import com.derso.arquitetura.sessaocompra.entity.SessaoCompra;
 
@@ -50,7 +52,8 @@ public class SessaoCompraService {
         // e sair enviando as mensagens.
         // SELECT FOR UPDATE => não concorrer com o método iniciarPagamento
 
-        repositorio.cancelarExpirados(referencia);
+        List<ExpiradoDTO> expirados = repositorio.cancelarExpirados(referencia);
+        // System.out.println(expirados);
     }
 
     @Transactional
