@@ -1,4 +1,4 @@
-package com.derso.arquitetura.sessaocompra.app;
+package com.derso.arquitetura.sessaocompra;
 
 import java.time.Instant;
 import java.util.List;
@@ -10,7 +10,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.derso.arquitetura.sessaocompra.dto.CancelamentoDTO;
 import com.derso.arquitetura.sessaocompra.entity.SessaoCompra;
+import com.derso.arquitetura.sessaocompra.entity.SessaoCompraStatus;
 
 public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID> {
     
@@ -65,8 +67,8 @@ public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID
                 SELECT id
                 FROM sessao_compra
                 WHERE status = 'INICIADA'
-                AND inicio < :horaRef
-                ORDER BY inicio
+                AND start_time < :horaRef
+                ORDER BY start_time
                 LIMIT :batchSize
                 FOR UPDATE SKIP LOCKED
             )
@@ -77,15 +79,15 @@ public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID
                 id_reserva_voo_volta AS idReservaVooVolta;
         """
     )
-    List<SessaoCompra> marcarLoteComoCancelando(@Param("batchSize") int tamanhoLote, @Param("horaRef") Instant horaRef);
+    List<CancelamentoDTO> marcarLoteComoCancelando(@Param("batchSize") int tamanhoLote, @Param("horaRef") Instant horaRef);
 
     @Modifying
     @Transactional
     @Query("""
-        UPDATE SessaoDTO s
+        UPDATE SessaoCompra s
         SET s.status = :novoStatus
         WHERE s.id = :idSessao
     """)
-    void marcarStatus(@Param("idSessao") UUID id, @Param("novoStatus") String novoStatus);
+    void marcarStatus(@Param("idSessao") UUID id, @Param("novoStatus") SessaoCompraStatus novoStatus);
 
 }

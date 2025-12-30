@@ -12,9 +12,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.derso.arquitetura.sessaocompra.SessaoCompraService;
 import com.derso.arquitetura.sessaocompra.app.dto.CriacaoSessaoRequest;
 import com.derso.arquitetura.sessaocompra.app.dto.CriacaoSessaoResponse;
-import com.derso.arquitetura.sessaocompra.app.dto.InteracaoDTO;
+import com.derso.arquitetura.sessaocompra.dto.InteracaoDTO;
 
 import lombok.RequiredArgsConstructor;
 

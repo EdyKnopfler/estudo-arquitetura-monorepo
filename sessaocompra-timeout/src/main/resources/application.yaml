@@ -12,9 +12,9 @@ spring:
     driver-class-name: org.postgresql.Driver
 
     hikari:
-      maximum-pool-size: 10
-      minimum-idle: 2
-      pool-name: SessaoCompraPool
+      maximum-pool-size: 1
+      minimum-idle: 1
+      pool-name: TimeoutTaskPool
 
   jpa:
     open-in-view: false

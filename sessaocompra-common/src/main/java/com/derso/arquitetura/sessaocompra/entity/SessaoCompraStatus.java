@@ -7,7 +7,9 @@ public enum SessaoCompraStatus {
     PAGAMENTO_EFETUADO,
     VIAGEM_RESERVADA,
     ERRO,
-    CANCELADA;
+    CANCELANDO,
+    CANCELADA,
+    FALHA_CANCELAMENTO;
 
     public boolean finalizada() {
         return this == VIAGEM_RESERVADA || this == CANCELADA || this == ERRO;

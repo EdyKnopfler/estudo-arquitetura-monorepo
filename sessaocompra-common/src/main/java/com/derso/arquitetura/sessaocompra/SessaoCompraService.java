@@ -1,11 +1,11 @@
-package com.derso.arquitetura.sessaocompra.app;
+package com.derso.arquitetura.sessaocompra;
 
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.derso.arquitetura.sessaocompra.app.dto.InteracaoDTO;
+import com.derso.arquitetura.sessaocompra.dto.InteracaoDTO;
 import com.derso.arquitetura.sessaocompra.entity.SessaoCompra;
 
 import lombok.RequiredArgsConstructor;
