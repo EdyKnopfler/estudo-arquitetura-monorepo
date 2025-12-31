@@ -10,10 +10,17 @@
         },
         {
             "type": "java",
-            "name": "SessaoCompra: serviço timeouts",
+            "name": "Sessão Compra: serviço timeouts",
             "request": "launch",
             "mainClass": "com.derso.arquitetura.timeout.TimeoutApplication",
             "projectName": "sessaocompra-timeout"
+        },
+        {
+            "type": "java",
+            "name": "Clientes",
+            "request": "launch",
+            "mainClass": "com.derso.arquitetura.clientes.ClientesApplication",
+            "projectName": "clientes"
         },
         {
             "type": "java",

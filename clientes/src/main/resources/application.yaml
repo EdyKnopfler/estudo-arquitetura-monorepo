@@ -1,0 +1,40 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: clientes
+  
+  threads:
+    virtual:
+      enabled: true
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/clientes
+    username: app
+    password: app
+    driver-class-name: org.postgresql.Driver
+
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      pool-name: ClientesPool
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+
+    show-sql: true
+
+  flyway:
+    enabled: true
+    validate-on-migrate: true
+
+jwt:
+  secret: UM-SEGREDINHO-MUITO-LOUCO-PARA-DEV-PARA-PROD-CRIE-OUTRO-PROFILE-E-USE-ENV-VAR
