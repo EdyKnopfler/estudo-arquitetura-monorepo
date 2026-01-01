@@ -14,14 +14,44 @@ Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulan
 
 ### A fazer
 
+* [ ] **Timeout:** dispara sequência SAGAS de cancelamento
+
 * [ ] **Pagamentos**:
   * [ ] **web:** aciona o serviço externo, webhook de confirmação e erro
+    * [ ] chama endpoints do serviço externo
+    * [ ] bate no serviço de sessões para modificar o estado (árbitro)
+    * [ ] **sagas:** eventos de confirmação e cancelamento
+      * [ ] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
+    * [ ] dispara sequência SAGAS de confirmação a partir do webhook
   * [ ] **externo:** simula serviço externo, **introduz erros aleatórios**
+    * [ ] endpoints de pagamento e estorno, _devem falhar às vezes de propósito_
+
 * [ ] **Hotel:**
   * [ ] **web:** interação com usuário (pré-reservas)
-  * [ ] **sagas:** eventos de confirmação e cancelamento por timeout
+    * [ ] bate no serviço de sessões para modificar o estado (árbitro)
+  * [ ] **sagas:** eventos de confirmação e cancelamento
+    * [ ] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
   * [ ] **externo:** simula serviço externo, **introduz erros aleatórios**
+    * [ ] **pré-reserva:** cria reserva sem confirmação
+    * [ ] **confirmação:** confirma pré-reservas feitas _há menos de 15 minutos_
+    * [ ] _deve falhar às vezes de propósito_
+
 * [ ] **Voo:** para voos ida e volta, mesma estrutura de _Hotel_
   * [ ] **web:** interação com usuário (pré-reservas)
+    * [ ] bate no serviço de sessões para modificar o estado (árbitro)
+    * [ ] chama endpoints do serviço externo
   * [ ] **sagas:** eventos de confirmação e cancelamento por timeout
+    * [ ] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
+    * [ ] chama endpoints do serviço externo
   * [ ] **externo:** simula serviço externo, **introduz erros aleatórios**
+    * [ ] **pré-reserva:** cria reserva sem confirmação
+    * [ ] **confirmação:** confirma pré-reservas feitas _há menos de 15 minutos_
+    * [ ] _deve falhar às vezes de propósito_
+
+#### Tarefas repetidas
+
+* [ ] Serviços externos Voo/Hotel
+  * [ ] Pequeno banco de dados com id da reserva ,id do cliente e status é suficiente
+  * [ ] **Simulação de falha dos endpoints externos:** um bom e velho `Math.random()` resolve
+  * [ ] 2 instâncias do mesmo projeto?
+* [ ] **SAGAS:** conexão com uma fila de entrada e uma de saída (já tenho amostras com RabbitMQ em Python e Go)
