@@ -1,0 +1,12 @@
+server:
+  port: 8082
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/externo_hotel
+    hikari:
+      pool-name: ExternoHotelPool
+
+internal-backend:
+  clients:
+    um-id-bem-looooooongo-para-ambiente-dev-sistema-hotel: um-segredo-bem-looooooongo-para-ambiente-dev-sistema-hotel

@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: reserva
+
+  threads:
+    virtual:
+      enabled: true
+
+  datasource:
+    # url: jdbc:postgresql://localhost:5432/...
+    username: app
+    password: app
+    driver-class-name: org.postgresql.Driver
+
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      # pool-name: ...
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+
+    show-sql: true
+
+  flyway:
+    enabled: true
+    validate-on-migrate: true

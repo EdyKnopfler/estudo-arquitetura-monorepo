@@ -1,0 +1,12 @@
+server:
+  port: 8083
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/externo_voo
+    hikari:
+      pool-name: ExternoVooPool
+
+internal-backend:
+  clients:
+    um-id-bem-looooooongo-para-ambiente-dev-sistema-voo: um-segredo-bem-looooooongo-para-ambiente-dev-sistema-voo
