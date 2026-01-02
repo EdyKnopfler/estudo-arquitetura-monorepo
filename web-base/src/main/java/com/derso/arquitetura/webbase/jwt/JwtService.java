@@ -1,4 +1,4 @@
-package com.derso.arquitetura.jwt;
+package com.derso.arquitetura.webbase.jwt;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;

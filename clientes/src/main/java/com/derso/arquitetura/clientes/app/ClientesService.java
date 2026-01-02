@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.derso.arquitetura.clientes.entity.Cliente;
-import com.derso.arquitetura.config.BusinessException;
+import com.derso.arquitetura.webbase.config.BusinessException;
 
 import lombok.RequiredArgsConstructor;
 

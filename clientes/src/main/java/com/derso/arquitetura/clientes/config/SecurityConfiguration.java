@@ -10,7 +10,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.DefaultSecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-import com.derso.arquitetura.jwt.JwtAuthenticationFilter;
+import com.derso.arquitetura.webbase.jwt.JwtAuthenticationFilter;
 
 import static org.springframework.http.HttpMethod.POST;
 

@@ -12,8 +12,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.derso.arquitetura.jwt.UsuarioAutenticado;
-import com.derso.arquitetura.jwt.UsuarioInvalidoException;
+import com.derso.arquitetura.webbase.jwt.UsuarioAutenticado;
+import com.derso.arquitetura.webbase.jwt.UsuarioInvalidoException;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

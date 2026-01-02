@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.derso.arquitetura.clientes.app.ClientesService;
-import com.derso.arquitetura.jwt.JwtService;
+import com.derso.arquitetura.webbase.jwt.JwtService;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

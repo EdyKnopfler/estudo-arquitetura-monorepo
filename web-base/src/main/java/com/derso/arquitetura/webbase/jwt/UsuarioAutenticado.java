@@ -1,4 +1,4 @@
-package com.derso.arquitetura.jwt;
+package com.derso.arquitetura.webbase.jwt;
 
 public record UsuarioAutenticado(
     String id,

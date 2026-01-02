@@ -1,15 +1,16 @@
-package com.derso.arquitetura.config;
+package com.derso.arquitetura.webbase.config;
 
 import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import com.derso.arquitetura.jwt.UsuarioInvalidoException;
+import com.derso.arquitetura.webbase.jwt.UsuarioInvalidoException;
 
 import jakarta.persistence.EntityNotFoundException;
 
@@ -20,6 +21,11 @@ public class TrataErros {
     public ResponseEntity<ErroDTO> erroGeral(Exception e) {
         e.printStackTrace();
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ErroDTO(true, e.getMessage()));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<String> tratarJsonOuUuidInvalido(HttpMessageNotReadableException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
     }
 
     @ExceptionHandler(UsuarioInvalidoException.class)

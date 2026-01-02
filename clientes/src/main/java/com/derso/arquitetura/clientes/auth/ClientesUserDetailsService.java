@@ -22,7 +22,6 @@ public class ClientesUserDetailsService implements UserDetailsService {
             .orElseThrow(() -> new UsernameNotFoundException("Cliente " + email + " não encontrado"));
 
         return User.withUsername(email).build();
-
     }
     
 }
