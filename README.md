@@ -32,9 +32,9 @@ Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulan
   * [ ] **sagas:** eventos de confirmação e cancelamento
     * [ ] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
   * [ ] **externo:** simula serviço externo, **introduz erros aleatórios**
-    * [ ] **pré-reserva:** cria reserva sem confirmação
+    * [X] **pré-reserva:** cria reserva sem confirmação
     * [ ] **confirmação:** confirma pré-reservas feitas _há menos de 15 minutos_
-    * [ ] _deve falhar às vezes de propósito_
+    * [X] _deve falhar às vezes de propósito_
 
 * [ ] **Voo:** para voos ida e volta, mesma estrutura de _Hotel_
   * [ ] **web:** interação com usuário (pré-reservas)
@@ -44,14 +44,14 @@ Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulan
     * [ ] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
     * [ ] chama endpoints do serviço externo
   * [ ] **externo:** simula serviço externo, **introduz erros aleatórios**
-    * [ ] **pré-reserva:** cria reserva sem confirmação
+    * [X] **pré-reserva:** cria reserva sem confirmação
     * [ ] **confirmação:** confirma pré-reservas feitas _há menos de 15 minutos_
-    * [ ] _deve falhar às vezes de propósito_
+    * [X] _deve falhar às vezes de propósito_
 
 #### Tarefas repetidas
 
-* [ ] Serviços externos Voo/Hotel
-  * [ ] Pequeno banco de dados com id da reserva ,id do cliente e status é suficiente
-  * [ ] **Simulação de falha dos endpoints externos:** um bom e velho `Math.random()` resolve
-  * [ ] 2 instâncias do mesmo projeto?
+* [X] Serviços externos Voo/Hotel
+  * [X] Pequeno banco de dados com id da reserva, id do cliente e status é suficiente
+  * [X] **Simulação de falha dos endpoints externos:** um bom e velho `Math.random()` resolve
+  * [X] 2 instâncias do mesmo projeto?
 * [ ] **SAGAS:** conexão com uma fila de entrada e uma de saída (já tenho amostras com RabbitMQ em Python e Go)
