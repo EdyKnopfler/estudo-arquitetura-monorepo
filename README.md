@@ -7,6 +7,7 @@ Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulan
 ## Módulos
 
 * **clientes:** cadastra e autentica clientes
+* **reservas-externo:** simula serviços externos _instáveis_ para teste da arquitetura; não precisam implementar lógica completa
 * **sessaocompra-common:** centraliza a lógica de negócio das sessões de compra. Implementa bloqueios de consistência.
 * **sessaocompra-timeout:** invalida sessões de compra não confirmadas, expiradas
 * **sessaocompra-web:** interface web para a sessão de compra, onde o cliente informa as pré-reservas e o sistema de pagamentos notifica para confirmação.
@@ -31,9 +32,10 @@ Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulan
     * [ ] bate no serviço de sessões para modificar o estado (árbitro)
   * [ ] **sagas:** eventos de confirmação e cancelamento
     * [ ] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
-  * [ ] **externo:** simula serviço externo, **introduz erros aleatórios**
+  * [X] **externo:** simula serviço externo, **introduz erros aleatórios**
     * [X] **pré-reserva:** cria reserva sem confirmação
-    * [ ] **confirmação:** confirma pré-reservas feitas _há menos de 15 minutos_
+    * [X] **confirmação:** confirma pré-reservas feitas _há menos de 15 minutos_
+    * [X] **cancelamento:** cancela pré-reservas
     * [X] _deve falhar às vezes de propósito_
 
 * [ ] **Voo:** para voos ida e volta, mesma estrutura de _Hotel_
@@ -43,9 +45,10 @@ Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulan
   * [ ] **sagas:** eventos de confirmação e cancelamento por timeout
     * [ ] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
     * [ ] chama endpoints do serviço externo
-  * [ ] **externo:** simula serviço externo, **introduz erros aleatórios**
+  * [X] **externo:** simula serviço externo, **introduz erros aleatórios**
     * [X] **pré-reserva:** cria reserva sem confirmação
-    * [ ] **confirmação:** confirma pré-reservas feitas _há menos de 15 minutos_
+    * [X] **confirmação:** confirma pré-reservas feitas _há menos de 15 minutos_
+    * [X] **cancelamento:** cancela pré-reservas
     * [X] _deve falhar às vezes de propósito_
 
 #### Tarefas repetidas
@@ -54,4 +57,6 @@ Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulan
   * [X] Pequeno banco de dados com id da reserva, id do cliente e status é suficiente
   * [X] **Simulação de falha dos endpoints externos:** um bom e velho `Math.random()` resolve
   * [X] 2 instâncias do mesmo projeto?
-* [ ] **SAGAS:** conexão com uma fila de entrada e uma de saída (já tenho amostras com RabbitMQ em Python e Go)
+* [ ] Serviços internos Voo/Hotel
+  * [ ] Chamadas aos serviços externos correspondentes
+  * [ ] **SAGAS:** conexão com uma fila de entrada e uma de saída (já tenho amostras com RabbitMQ em Python e Go)
