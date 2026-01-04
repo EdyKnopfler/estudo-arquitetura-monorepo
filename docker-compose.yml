@@ -1,0 +1,12 @@
+services:
+  db:
+    image: postgres:18.1-alpine
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: tanto_faz_so_pra_dev
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./pgdata:/var/lib/postgresql/18/docker
