@@ -24,6 +24,26 @@
         },
         {
             "type": "java",
+            "name": "Serviço interno: Hotel (web)",
+            "request": "launch",
+            "mainClass": "com.derso.arquitetura.reservasinterno.ReservasInternoApplication",
+            "projectName": "reservas-interno-web",
+            "env": {
+                "SPRING_PROFILES_ACTIVE": "hotel"
+            }
+        },
+        {
+            "type": "java",
+            "name": "Serviço interno: Voo (web)",
+            "request": "launch",
+            "mainClass": "com.derso.arquitetura.reservasinterno.ReservasInternoApplication",
+            "projectName": "reservas-interno-web",
+            "env": {
+                "SPRING_PROFILES_ACTIVE": "voo"
+            }
+        },
+        {
+            "type": "java",
             "name": "Serviço externo: Hotel",
             "request": "launch",
             "mainClass": "com.derso.arquitetura.reservasexterno.ReservasExternoApplication",

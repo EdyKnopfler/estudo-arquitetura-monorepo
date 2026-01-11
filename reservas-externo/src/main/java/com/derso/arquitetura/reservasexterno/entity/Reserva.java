@@ -11,6 +11,11 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/**
+ * Simplificação de um sistema "externo" de reservas. Não guardamos todos os dados (como datas de início e término),
+ * apenas os necessários para o controle da comunicação com o serviço interno ("nosso") e da expiração automática
+ * que o interno deverá tratar.
+ */
 @Entity
 @Table(name = "reservas")
 @Getter

@@ -1,0 +1,19 @@
+server:
+  port: 8085
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/interno_voo
+    hikari:
+      pool-name: InternoVooPool
+
+# para ACEITAR requisições
+internal-backend:
+  clients:
+    um-id-bem-looooooongo-para-ambiente-dev-sistema-voo: um-segredo-bem-looooooongo-para-ambiente-dev-sistema-voo
+
+# para SOLICITAR ao serviço externo (que por coincidência usa a mesma chave em dev)
+external-backend:
+  url: http://localhost:8083
+  client-id: um-id-bem-looooooongo-para-ambiente-dev-sistema-voo
+  client-secret: um-segredo-bem-looooooongo-para-ambiente-dev-sistema-voo

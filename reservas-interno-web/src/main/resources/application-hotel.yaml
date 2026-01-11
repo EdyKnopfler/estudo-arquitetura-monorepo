@@ -1,0 +1,19 @@
+server:
+  port: 8084
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/interno_hotel
+    hikari:
+      pool-name: InternoHotelPool
+
+# para ACEITAR requisições
+internal-backend:
+  clients:
+    um-id-bem-looooooongo-para-ambiente-dev-sistema-hotel: um-segredo-bem-looooooongo-para-ambiente-dev-sistema-hotel
+
+# para SOLICITAR ao serviço externo (que por coincidência usa a mesma chave em dev)
+external-backend:
+  url: http://localhost:8082
+  client-id: um-id-bem-looooooongo-para-ambiente-dev-sistema-hotel
+  client-secret: um-segredo-bem-looooooongo-para-ambiente-dev-sistema-hotel

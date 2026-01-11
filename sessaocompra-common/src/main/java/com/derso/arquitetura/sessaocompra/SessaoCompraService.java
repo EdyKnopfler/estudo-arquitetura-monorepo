@@ -27,6 +27,9 @@ public class SessaoCompraService {
 
     @Transactional
     public boolean atualizarInteracaoCompra(UUID uuid, InteracaoDTO novoEstado) {
+
+        // TODO acho que esta atualização não será feita assim não...
+
         return repositorio.updateSessaoInteracaoCompra(
             uuid, 
             novoEstado.idCliente(),
