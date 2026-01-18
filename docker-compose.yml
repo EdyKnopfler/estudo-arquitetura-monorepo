@@ -1,4 +1,5 @@
 services:
+
   db:
     image: postgres:18.1-alpine
     restart: always
@@ -10,3 +11,16 @@ services:
       - "5432:5432"
     volumes:
       - ./pgdata:/var/lib/postgresql/18/docker
+
+  broker:
+    hostname: myrabbit
+    image: rabbitmq:4.2.2-management-alpine
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    volumes:
+      - ./rabbitmqdata:/var/lib/rabbitmq/mnesia/
+    environment:
+      RABBITMQ_DEFAULT_USER: cueio
+      RABBITMQ_DEFAULT_PASS: cueio
+      RABBITMQ_DEFAULT_VHOST: /

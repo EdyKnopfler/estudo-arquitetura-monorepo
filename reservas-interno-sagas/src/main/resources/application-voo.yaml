@@ -1,0 +1,13 @@
+server:
+  port: 8085
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/interno_voo
+    hikari:
+      pool-name: InternoVooPool
+      
+sagas:
+  estafila: voo
+  filaanterior: hotel
+  proximafila: pagamento

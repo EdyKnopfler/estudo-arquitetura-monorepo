@@ -17,6 +17,8 @@
     <module>reservas-externo</module>
     <module>reservas-interno-common</module>
     <module>reservas-interno-web</module>
+    <module>sagas-common</module>
+    <module>reservas-interno-sagas</module>
   </modules>
 
   <dependencyManagement>

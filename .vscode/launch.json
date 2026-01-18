@@ -34,10 +34,30 @@
         },
         {
             "type": "java",
+            "name": "Serviço interno: Hotel (SAGAS)",
+            "request": "launch",
+            "mainClass": "com.derso.arquitetura.reservasinternosagas.ReservasInternoSagasApplication",
+            "projectName": "reservas-interno-sagas",
+            "env": {
+                "SPRING_PROFILES_ACTIVE": "hotel"
+            }
+        },
+        {
+            "type": "java",
             "name": "Serviço interno: Voo (web)",
             "request": "launch",
             "mainClass": "com.derso.arquitetura.reservasinterno.ReservasInternoApplication",
             "projectName": "reservas-interno-web",
+            "env": {
+                "SPRING_PROFILES_ACTIVE": "voo"
+            }
+        },
+        {
+            "type": "java",
+            "name": "Serviço interno: Voo (SAGAS)",
+            "request": "launch",
+            "mainClass": "com.derso.arquitetura.reservasinternosagas.ReservasInternoSagasApplication",
+            "projectName": "reservas-interno-sagas",
             "env": {
                 "SPRING_PROFILES_ACTIVE": "voo"
             }

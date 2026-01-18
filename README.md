@@ -28,8 +28,9 @@ Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulan
     * [ ] endpoints de pagamento e estorno, _devem falhar às vezes de propósito_
 
 * [ ] **Hotel:**
-  * [ ] **web:** interação com usuário (pré-reservas)
+  * [X] **web:** interação com usuário (pré-reservas)
     * [ ] bate no serviço de sessões para modificar o estado (árbitro)
+    * [ ] chama endpoints do serviço externo
   * [ ] **sagas:** eventos de confirmação e cancelamento
     * [ ] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
   * [X] **externo:** simula serviço externo, **introduz erros aleatórios**
@@ -39,7 +40,7 @@ Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulan
     * [X] _deve falhar às vezes de propósito_
 
 * [ ] **Voo:** para voos ida e volta, mesma estrutura de _Hotel_
-  * [ ] **web:** interação com usuário (pré-reservas)
+  * [X] **web:** interação com usuário (pré-reservas)
     * [ ] bate no serviço de sessões para modificar o estado (árbitro)
     * [ ] chama endpoints do serviço externo
   * [ ] **sagas:** eventos de confirmação e cancelamento por timeout

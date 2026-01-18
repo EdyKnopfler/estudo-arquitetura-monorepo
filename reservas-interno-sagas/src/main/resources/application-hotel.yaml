@@ -1,0 +1,12 @@
+server:
+  port: 8084
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/interno_hotel
+    hikari:
+      pool-name: InternoHotelPool
+
+sagas:
+  estafila: hotel
+  proximafila: voo
