@@ -19,6 +19,7 @@
     <module>reservas-interno-web</module>
     <module>sagas-common</module>
     <module>reservas-interno-sagas</module>
+    <module>pagamento-externo</module>
   </modules>
 
   <dependencyManagement>

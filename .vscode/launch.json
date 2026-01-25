@@ -84,6 +84,13 @@
         },
         {
             "type": "java",
+            "name": "Serviço externo: Pagamento",
+            "request": "launch",
+            "mainClass": "com.derso.arquitetura.pagamentoexterno.PagamentoExternoApplication",
+            "projectName": "pagamento-externo"
+        },
+        {
+            "type": "java",
             "name": "Current File",
             "request": "launch",
             "mainClass": "${file}"

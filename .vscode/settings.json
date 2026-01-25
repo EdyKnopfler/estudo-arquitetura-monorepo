@@ -1,7 +1,4 @@
 {
     "java.configuration.updateBuildConfiguration": "automatic",
-    "java.compile.nullAnalysis.mode": "automatic",
-    "java.project.sourcePaths": [
-        "reservas-interno-common/src/main/java"
-    ]
+    "java.compile.nullAnalysis.mode": "automatic"
 }

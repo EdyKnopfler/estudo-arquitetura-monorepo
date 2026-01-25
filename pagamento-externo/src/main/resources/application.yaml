@@ -1,0 +1,17 @@
+server:
+  port: 8086
+
+spring:
+  application:
+    name: pagamentoexterno
+
+  threads:
+    virtual:
+      enabled: true
+
+# Clientes aceitos
+internal-backend:
+  clients:
+    um-id-bem-looooooongo-para-ambiente-dev-sistema-pagamento: um-segredo-bem-looooooongo-para-ambiente-dev-sistema-pagamento
+  webhooks:
+    um-id-bem-looooooongo-para-ambiente-dev-sistema-pagamento: http://localhost:8087/webhook

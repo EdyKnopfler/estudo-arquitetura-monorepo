@@ -21,18 +21,20 @@ Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulan
   * [ ] **web:** aciona o serviço externo, webhook de confirmação e erro
     * [ ] chama endpoints do serviço externo
     * [ ] bate no serviço de sessões para modificar o estado (árbitro)
-    * [ ] **sagas:** eventos de confirmação e cancelamento
-      * [ ] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
     * [ ] dispara sequência SAGAS de confirmação a partir do webhook
-  * [ ] **externo:** simula serviço externo, **introduz erros aleatórios**
-    * [ ] endpoints de pagamento e estorno, _devem falhar às vezes de propósito_
+  * [ ] **sagas:** eventos de confirmação e cancelamento
+    * [ ] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
+  * [X] **externo:** simula serviço externo, **introduz erros aleatórios**
+    * [X] endpoints de pagamento e estorno, _devem falhar às vezes de propósito_
 
 * [ ] **Hotel:**
   * [X] **web:** interação com usuário (pré-reservas)
     * [ ] bate no serviço de sessões para modificar o estado (árbitro)
     * [ ] chama endpoints do serviço externo
   * [ ] **sagas:** eventos de confirmação e cancelamento
-    * [ ] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
+    * [X] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
+    * [ ] bate no serviço de sessões para modificar o estado (árbitro)
+    * [ ] chama endpoints do serviço externo
   * [X] **externo:** simula serviço externo, **introduz erros aleatórios**
     * [X] **pré-reserva:** cria reserva sem confirmação
     * [X] **confirmação:** confirma pré-reservas feitas _há menos de 15 minutos_
@@ -44,7 +46,8 @@ Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulan
     * [ ] bate no serviço de sessões para modificar o estado (árbitro)
     * [ ] chama endpoints do serviço externo
   * [ ] **sagas:** eventos de confirmação e cancelamento por timeout
-    * [ ] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
+    * [X] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
+    * [ ] bate no serviço de sessões para modificar o estado (árbitro)
     * [ ] chama endpoints do serviço externo
   * [X] **externo:** simula serviço externo, **introduz erros aleatórios**
     * [X] **pré-reserva:** cria reserva sem confirmação
