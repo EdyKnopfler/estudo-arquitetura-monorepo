@@ -2,16 +2,26 @@
 
 Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulando pagamento, reserva de hoteis e voos em serviços separados.
 
-* **TODO** contêineres Docker, documentar inicialização e amostras de uso (quando estiver funcional)
+## **TODO** 
+
+* Contêineres Docker, documentar inicialização e amostras de uso (quando estiver funcional)
+* Desenhar alguns diagramas para ilustrar como funcionam os serviços e a coreografia SAGAS
 
 ## Módulos
 
 * **clientes:** cadastra e autentica clientes
-* **reservas-externo:** simula serviços externos _instáveis_ para teste da arquitetura; não precisam implementar lógica completa
+* **pagamento-externo**: simula serviço externo _instável_ de pagamento, com falhas, aceites e recusas; não precisa implementar lógica completa
+* **pagamento-interno-common**: centraliza a lógica de negócio dos pagamentos
+* **pagamento-interno-web**: interface web para a realização de pagamentos na aplicação; webhook para o serviço externo comunicar confirmação ou recusa de pagamentos
+* **pagamento-interno-sagas**: a confirmação de um pagamento envia mensagens para os sistemas de reservas realizarem a confirmação; ao menos uma instância deste serviço fica observando a fila para estornar pagamentos em caso de erro nas reservas
+* **reservas-externo:** simula serviços externos _instáveis_ para teste da arquitetura; não precisa implementar lógica completa
+* **reservas-interno-common**: centraliza a lógica de negócio das reservas de voo e hotel
+* **reservas-interno-web**: interface web para a realização de reservas na aplicação; deve haver ao menos uma instância para voos e uma para hotel
+* **reservas-interno-sagas**: responde aos eventos de pagamento e erros em outros serviços para confirmação e cancelamento das reservas; deve haver ao menos uma instância para voos e uma para hotel
 * **sessaocompra-common:** centraliza a lógica de negócio das sessões de compra. Implementa bloqueios de consistência.
 * **sessaocompra-timeout:** invalida sessões de compra não confirmadas, expiradas
 * **sessaocompra-web:** interface web para a sessão de compra, onde o cliente informa as pré-reservas e o sistema de pagamentos notifica para confirmação.
-* **web-base:** módulos reusados nos serviços web: tratamento de erros, tokens JWT
+* **web-base:** módulos reusados nos serviços web: tratamento de erros, tokens JWT, client id/client secret
 
 ### A fazer
 
