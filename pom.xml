@@ -10,6 +10,7 @@
 
   <modules>
     <module>web-base</module>
+    <module>sagas-common</module>
     <module>sessaocompra-common</module>
     <module>sessaocompra-web</module>
     <module>sessaocompra-timeout</module>
@@ -17,9 +18,10 @@
     <module>reservas-externo</module>
     <module>reservas-interno-common</module>
     <module>reservas-interno-web</module>
-    <module>sagas-common</module>
     <module>reservas-interno-sagas</module>
     <module>pagamento-externo</module>
+    <module>pagamento-interno-common</module>
+    <module>pagamento-interno-web</module>
   </modules>
 
   <dependencyManagement>

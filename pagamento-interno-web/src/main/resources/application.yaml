@@ -1,0 +1,48 @@
+server:
+  port: 8087
+
+spring:
+  application:
+    name: pagamentos-interno-web
+
+  threads:
+    virtual:
+      enabled: true
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/interno_pagamento
+    username: app
+    password: app
+    driver-class-name: org.postgresql.Driver
+
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      pool-name: InternoPagamentoPool
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+
+    show-sql: true
+
+  flyway:
+    enabled: true
+    validate-on-migrate: true
+
+# para ACEITAR requisições
+internal-backend:
+  clients:
+    um-id-bem-looooooongo-para-ambiente-dev-sistema-pagamento: um-segredo-bem-looooooongo-para-ambiente-dev-sistema-pagamento
+
+# para SOLICITAR ao serviço externo (que por coincidência usa a mesma chave em dev)
+external-backend:
+  url: http://localhost:8086
+  client-id: um-id-bem-looooooongo-para-ambiente-dev-sistema-pagamento
+  client-secret: um-segredo-bem-looooooongo-para-ambiente-dev-sistema-pagamento

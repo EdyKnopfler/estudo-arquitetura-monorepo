@@ -4,8 +4,13 @@ Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulan
 
 ## **TODO** 
 
-* Contêineres Docker, documentar inicialização e amostras de uso (quando estiver funcional)
+* Encaixar e conectar todos os serviços (isso **demora**!)
+  * Um pouquinho a cada final de semana e chegamos lá!
+* Preencher as regras de negócio
+  * _Vai ficar divertido fazendo isso com testes integrados_
+* Contêineres Docker para os serviços
 * Desenhar alguns diagramas para ilustrar como funcionam os serviços e a coreografia SAGAS
+* Documentar inicialização e amostras de uso (quando estiver funcional)
 
 ## Módulos
 
@@ -36,6 +41,10 @@ Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulan
     * [ ] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
   * [X] **externo:** simula serviço externo, **introduz erros aleatórios**
     * [X] endpoints de pagamento e estorno, _devem falhar às vezes de propósito_
+  * [ ] Testes integrados
+    * [ ] Requisição > Externo > Webhook
+    * [ ] Encaminha sucesso para outro serviço
+    * [ ] Notificação de falha por outro serviço
 
 * [ ] **Hotel:**
   * [X] **web:** interação com usuário (pré-reservas)
@@ -50,6 +59,10 @@ Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulan
     * [X] **confirmação:** confirma pré-reservas feitas _há menos de 15 minutos_
     * [X] **cancelamento:** cancela pré-reservas
     * [X] _deve falhar às vezes de propósito_
+  * [ ] Testes integrados
+    * [ ] Requisição > Externo
+    * [ ] Encaminha sucesso para outro serviço
+    * [ ] Notificação de falha por outro serviço
 
 * [ ] **Voo:** para voos ida e volta, mesma estrutura de _Hotel_
   * [X] **web:** interação com usuário (pré-reservas)
@@ -64,6 +77,10 @@ Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulan
     * [X] **confirmação:** confirma pré-reservas feitas _há menos de 15 minutos_
     * [X] **cancelamento:** cancela pré-reservas
     * [X] _deve falhar às vezes de propósito_
+  * [ ] Testes integrados
+    * [ ] Requisição > Externo
+    * [ ] Encaminha sucesso para outro serviço
+    * [ ] Notificação de falha por outro serviço
 
 #### Tarefas repetidas
 
@@ -71,6 +88,7 @@ Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulan
   * [X] Pequeno banco de dados com id da reserva, id do cliente e status é suficiente
   * [X] **Simulação de falha dos endpoints externos:** um bom e velho `Math.random()` resolve
   * [X] 2 instâncias do mesmo projeto?
-* [ ] Serviços internos Voo/Hotel
-  * [ ] Chamadas aos serviços externos correspondentes
-  * [ ] **SAGAS:** conexão com uma fila de entrada e uma de saída (já tenho amostras com RabbitMQ em Python e Go)
+* [X] Serviços internos Voo/Hotel
+  * [X] Chamadas aos serviços externos correspondentes
+  * [X] **SAGAS:** conexão com uma fila de entrada e uma de saída (já tenho amostras com RabbitMQ em Python e Go)
+  * [ ] Lógica de negócio (o "recheio")

@@ -91,6 +91,13 @@
         },
         {
             "type": "java",
+            "name": "Serviço interno: Pagamento (web)",
+            "request": "launch",
+            "mainClass": "com.derso.arquitetura.pagamentointerno.PagamentoInternoWebApplication",
+            "projectName": "pagamento-interno-web"
+        },
+        {
+            "type": "java",
             "name": "Current File",
             "request": "launch",
             "mainClass": "${file}"
