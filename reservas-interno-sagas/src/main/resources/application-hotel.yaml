@@ -6,4 +6,5 @@ spring:
 
 sagas:
   estafila: hotel
+  filaanterior: pagamento
   proximafila: voo

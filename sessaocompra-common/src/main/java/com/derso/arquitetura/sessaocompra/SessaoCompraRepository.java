@@ -86,8 +86,8 @@ public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID
     @Query("""
         UPDATE SessaoCompra s
         SET s.status = :novoStatus
-        WHERE s.id = :idSessao
+        WHERE s.id = :idSessao AND s.status = 'CANCELANDO'
     """)
-    void marcarStatus(@Param("idSessao") UUID id, @Param("novoStatus") SessaoCompraStatus novoStatus);
+    void marcarStatusCancelamento(@Param("idSessao") UUID id, @Param("novoStatus") SessaoCompraStatus novoStatus);
 
 }

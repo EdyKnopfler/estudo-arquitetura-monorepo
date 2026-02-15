@@ -1,3 +1,11 @@
+x-app-config: &app-vars
+  DB_HOST: db
+  DB_USER: app
+  DB_PASSWORD: app
+  BROKER-USER: cueio
+  BROKER_PASSWORD: cueio
+  JWT_SECRET: z2RhL3l1BqTDswPCcFuRWp4Gvnrl/VKSds7jOUqk6Og=
+
 services:
 
   db:
@@ -10,10 +18,10 @@ services:
     ports:
       - "5432:5432"
     volumes:
+      - ./databases.sql:/docker-entrypoint-initdb.d/databases.sql:ro
       - ./pgdata:/var/lib/postgresql/18/docker
 
   broker:
-    hostname: myrabbit
     image: rabbitmq:4.2.2-management-alpine
     ports:
       - "15672:15672"
@@ -24,3 +32,25 @@ services:
       RABBITMQ_DEFAULT_USER: cueio
       RABBITMQ_DEFAULT_PASS: cueio
       RABBITMQ_DEFAULT_VHOST: /
+
+  clientes:
+    build:
+      context: .
+      dockerfile: clientes/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      <<: *app-vars
+    depends_on:
+      - db
+
+  pagamento-externo:
+    build:
+      context: .
+      dockerfile: pagamento-externo/Dockerfile
+    ports:
+      - "8086:8086"
+    environment:
+      <<: *app-vars
+    depends_on:
+      - db

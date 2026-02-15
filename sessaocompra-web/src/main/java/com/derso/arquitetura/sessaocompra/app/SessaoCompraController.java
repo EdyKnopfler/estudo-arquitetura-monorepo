@@ -48,6 +48,8 @@ public class SessaoCompraController {
     public void iniciarPagamento(@PathVariable("id") UUID id) {
 
         // TODO clientId para o serviço de Pagamentos
+        // Ainda decidindo quem chama quem, a ideia é de que este serviço não fique agarrado coordenando.
+        // Deve somente ser chamado para arbitrar.
 
         if (service.iniciarPagamento(id)) {
             // TODO ativar serviço de pagamento

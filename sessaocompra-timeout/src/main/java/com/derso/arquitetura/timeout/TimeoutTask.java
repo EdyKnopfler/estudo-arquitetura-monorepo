@@ -37,9 +37,9 @@ public class TimeoutTask {
                     // voo.cancelar(sessao.idReservaVooIda());
                     // hotel.cancelar(sessao.getReservaHotelId());
                     // voo.cancelar(sessao.idReservaVooVolta());
-                    repositorio.marcarStatus(sessao.id(), SessaoCompraStatus.CANCELADA);
+                    repositorio.marcarStatusCancelamento(sessao.id(), SessaoCompraStatus.CANCELADA);
                 } catch (Exception e) {
-                    repositorio.marcarStatus(sessao.id(), SessaoCompraStatus.FALHA_CANCELAMENTO);
+                    repositorio.marcarStatusCancelamento(sessao.id(), SessaoCompraStatus.FALHA_CANCELAMENTO);
                 }
             }
         } while (expiradas.size() > 0);

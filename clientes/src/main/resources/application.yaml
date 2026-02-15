@@ -10,9 +10,9 @@ spring:
       enabled: true
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/clientes
-    username: app
-    password: app
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/clientes
+    username: ${DB_USER:app}
+    password: ${DB_PASSWORD:app}
     driver-class-name: org.postgresql.Driver
 
     hikari:
@@ -37,4 +37,4 @@ spring:
     validate-on-migrate: true
 
 jwt:
-  secret: UM-SEGREDINHO-MUITO-LOUCO-PARA-DEV-PARA-PROD-CRIE-OUTRO-PROFILE-E-USE-ENV-VAR
+  secret: ${JWT_SECRET:z2RhL3l1BqTDswPCcFuRWp4Gvnrl/VKSds7jOUqk6Og=}
