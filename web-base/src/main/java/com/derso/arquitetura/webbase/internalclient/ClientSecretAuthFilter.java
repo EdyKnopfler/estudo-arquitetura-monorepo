@@ -20,7 +20,7 @@ public class ClientSecretAuthFilter extends OncePerRequestFilter {
     private final Map<String, String> clientIdsAndSecrets;
 
     public ClientSecretAuthFilter(InternalClientsConfig clientIdsAndSecretsConfig) {
-        this.clientIdsAndSecrets = clientIdsAndSecretsConfig.getClients();
+        this.clientIdsAndSecrets = clientIdsAndSecretsConfig.getClientsAsMap();
     }
 
     @Override

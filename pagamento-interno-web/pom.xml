@@ -8,9 +8,9 @@
 		<version>0.0.1-SNAPSHOT</version>
 	</parent>
 	<groupId>com.derso.arquitetura</groupId>
-	<artifactId>pagamentos-interno-web</artifactId>
+	<artifactId>pagamento-interno-web</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>pagamentos-interno-web</name>
+	<name>pagamento-interno-web</name>
 	<description>Processamento de pagamentos - lado interno</description>
 	<url/>
 	<licenses>
@@ -132,6 +132,13 @@
 						</exclude>
 					</excludes>
 				</configuration>
+				<executions>
+					<execution>
+						<goals>
+							<goal>repackage</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>

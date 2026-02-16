@@ -8,7 +8,6 @@ import org.springframework.web.client.RestClient;
 
 import com.derso.arquitetura.pagamentoexterno.PagamentoExternoApplication;
 import com.derso.arquitetura.pagamentoexterno.config.WebhookConfig;
-import com.derso.arquitetura.webbase.internalclient.InternalClientsConfig;
 
 import lombok.RequiredArgsConstructor;
 
@@ -17,16 +16,14 @@ import lombok.RequiredArgsConstructor;
 public class WebhookService {
 
     private final WebhookConfig config;
-    private final InternalClientsConfig clientIdsAndSecretsConfig;
 
     public void enviarResposta(String idCliente, UUID idTransacao) {
-        String clienteWebhookUrl = config.getWebhooks().get(idCliente);
+        String clienteWebhookUrl = config.getUrlsById().get(idCliente);
 
         // Usando o mesmo secredo na resposta para o serviço interno
         RestClient restClient = RestClient.builder()
-            // .baseUrl(clienteWebhookUrl)
             .defaultHeader("X-Client-Id", idCliente)
-            .defaultHeader("X-Client-Secret", clientIdsAndSecretsConfig.getClients().get(idCliente))
+            .defaultHeader("X-Client-Secret", config.getSecretsById().get(idCliente))
             .build();
 
         boolean recusado = Math.random() < PagamentoExternoApplication.CHANCE_FALHA;

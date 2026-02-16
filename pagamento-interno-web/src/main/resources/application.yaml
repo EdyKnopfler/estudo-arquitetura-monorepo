@@ -1,18 +1,18 @@
 server:
-  port: 8087
+  port: ${PAGAMENTO_INTERNO_PORT:8087}
 
 spring:
   application:
-    name: pagamentos-interno-web
+    name: pagamento-interno-web
 
   threads:
     virtual:
       enabled: true
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/interno_pagamento
-    username: app
-    password: app
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/interno_pagamento
+    username: ${DB_USER:app}
+    password: ${DB_PASSWORD:app}
     driver-class-name: org.postgresql.Driver
 
     hikari:
@@ -39,10 +39,13 @@ spring:
 # para ACEITAR requisições
 internal-backend:
   clients:
-    um-id-bem-looooooongo-para-ambiente-dev-sistema-pagamento: um-segredo-bem-looooooongo-para-ambiente-dev-sistema-pagamento
+    - client-id: ${FRONT_END_ID}:frontEndId}
+      client-secret: ${FRONT_END_SECRET}:frontEndId}
+    - client-id: ${PAGAMENTO_EXTERNO_ID}:pagamentoExternoId}
+      client-secret: ${PAGAMENTO_EXTERNO_SECRET}:pagamentoExternoSecret}
 
 # para SOLICITAR ao serviço externo (que por coincidência usa a mesma chave em dev)
 external-backend:
-  url: http://localhost:8086
-  client-id: um-id-bem-looooooongo-para-ambiente-dev-sistema-pagamento
-  client-secret: um-segredo-bem-looooooongo-para-ambiente-dev-sistema-pagamento
+  url: http://${PAGAMENTO_EXTERNO_HOST:localhost}:${PAGAMENTO_EXTERNO_PORT:8086}
+  client-id: ${PAGAMENTO_INTERNO_ID}:pagamentoInternoId}
+  client-secret: ${PAGAMENTO_INTERNO_SECRET}:pagamentoInternoSecret}

@@ -1,5 +1,5 @@
 server:
-  port: 8086
+  port: ${PAGAMENTO_EXTERNO_PORT:8086}
 
 spring:
   application:
@@ -12,6 +12,9 @@ spring:
 # Clientes aceitos
 internal-backend:
   clients:
-    um-id-bem-looooooongo-para-ambiente-dev-sistema-pagamento: um-segredo-bem-looooooongo-para-ambiente-dev-sistema-pagamento
+    - client-id: ${PAGAMENTO_EXTERNO_ID:pagamentoExternoId}
+      client-secret: ${PAGAMENTO_EXTERNO_SECRET:pagamentoExternoSecret}
   webhooks:
-    um-id-bem-looooooongo-para-ambiente-dev-sistema-pagamento: http://localhost:8087/webhook
+    - url: http://${PAGAMENTO_INTERNO_HOST:localhost}:${PAGAMENTO_INTERNO_PORT:8087}/webhook
+      client-id: ${PAGAMENTO_INTERNO_ID:pagamentoInternoId}
+      client-secret: ${PAGAMENTO_INTERNO_SECRET:pagamentoInternoSecret}

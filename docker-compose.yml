@@ -1,10 +1,30 @@
-x-app-config: &app-vars
+x-db-config: &db-vars
   DB_HOST: db
   DB_USER: app
   DB_PASSWORD: app
+
+x-broker-config: &broker-vars
   BROKER-USER: cueio
   BROKER_PASSWORD: cueio
+
+x-jwt-config: &jwt-vars
   JWT_SECRET: z2RhL3l1BqTDswPCcFuRWp4Gvnrl/VKSds7jOUqk6Og=
+
+x-clientes: &clientes-vars
+  CLIENTES_HOST: clientes
+  CLIENTES_PORT: 8081
+
+x-pagamento-externo: &pagamento-externo-vars
+  PAGAMENTO_EXTERNO_HOST: pagamento-externo
+  PAGAMENTO_EXTERNO_PORT: 8086
+  PAGAMENTO_EXTERNO_ID: pagamentoExternoId
+  PAGAMENTO_EXTERNO_SECRET: pagamentoExternoSecret
+
+x-pagamento-interno: &pagamento-interno-vars
+  PAGAMENTO_INTERNO_HOST: pagamento-interno
+  PAGAMENTO_INTERNO_PORT: 8087
+  PAGAMENTO_INTERNO_ID: pagamentoInternoId
+  PAGAMENTO_INTERNO_SECRET: pagamentoInternoSecret  
 
 services:
 
@@ -40,7 +60,7 @@ services:
     ports:
       - "8081:8081"
     environment:
-      <<: *app-vars
+      <<: [*clientes-vars, *db-vars, *jwt-vars]
     depends_on:
       - db
 
@@ -51,6 +71,17 @@ services:
     ports:
       - "8086:8086"
     environment:
-      <<: *app-vars
+      <<: [*pagamento-externo-vars, *pagamento-interno-vars]
+    depends_on:
+      - db
+  
+  pagamento-interno-web:
+    build:
+      context: .
+      dockerfile: pagamento-interno-web/Dockerfile
+    ports:
+      - "8087:8087"
+    environment:
+      <<: [*pagamento-externo-vars, *pagamento-interno-vars, *db-vars, *jwt-vars]
     depends_on:
       - db
