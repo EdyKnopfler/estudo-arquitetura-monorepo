@@ -8,7 +8,7 @@ Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulan
   * Um pouquinho a cada final de semana e chegamos lá!
 * Preencher as regras de negócio
   * _Vai ficar divertido fazendo isso com testes integrados_
-* Contêineres Docker para os serviços
+* **(FEITO)** Contêineres Docker para os serviços
 * Desenhar alguns diagramas para ilustrar como funcionam os serviços e a coreografia SAGAS
 * Documentar inicialização e amostras de uso (quando estiver funcional)
 

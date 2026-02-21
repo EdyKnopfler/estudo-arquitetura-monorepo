@@ -1,19 +1,20 @@
 server:
-  port: 8085
+  port: ${RESERVAS_INTERNO_WEB_VOO_PORT:8085}
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/interno_voo
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/interno_voo
     hikari:
       pool-name: InternoVooPool
 
 # para ACEITAR requisições
 internal-backend:
   clients:
-    um-id-bem-looooooongo-para-ambiente-dev-sistema-voo: um-segredo-bem-looooooongo-para-ambiente-dev-sistema-voo
+    - client-id: ${RESERVAS_INTERNO_WEB_VOO_ID:reservasExternoHotelId}
+      client-secret: ${RESERVAS_INTERNO_WEB_VOO_SECRET:reservasExternoHotelId}
 
-# para SOLICITAR ao serviço externo (que por coincidência usa a mesma chave em dev)
+# para SOLICITAR ao serviço externo
 external-backend:
-  url: http://localhost:8083
-  client-id: um-id-bem-looooooongo-para-ambiente-dev-sistema-voo
-  client-secret: um-segredo-bem-looooooongo-para-ambiente-dev-sistema-voo
+  url: http://${RESERVAS_EXTERNO_VOO_HOST:localhost}:${RESERVAS_EXTERNO_VOO_PORT:8083}
+  client-id: ${RESERVAS_EXTERNO_VOO_ID:reservasExternoVooId}
+  client-secret: ${RESERVAS_EXTERNO_VOO_SECRET:reservasExternoVooSecret}

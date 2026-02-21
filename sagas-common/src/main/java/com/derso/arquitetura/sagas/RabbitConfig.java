@@ -14,6 +14,9 @@ public class RabbitConfig {
     @Value("${sagas.rabbithost}")
     private String rabbitHost;
 
+    @Value("${sagas.rabbitport}")
+    private String rabbitPort;
+
     @Value("${sagas.rabbituser}")
     private String rabbitUser;
 
@@ -24,6 +27,7 @@ public class RabbitConfig {
     public Connection rabbitConnection() throws Exception {
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost(rabbitHost);
+        factory.setPort(Integer.valueOf(rabbitPort));
         factory.setUsername(rabbitUser);
         factory.setPassword(rabbitPassword);
         return factory.newConnection();

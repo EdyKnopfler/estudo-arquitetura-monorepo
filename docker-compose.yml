@@ -1,33 +1,6 @@
-x-db-config: &db-vars
-  DB_HOST: db
-  DB_USER: app
-  DB_PASSWORD: app
-
-x-broker-config: &broker-vars
-  BROKER-USER: cueio
-  BROKER_PASSWORD: cueio
-
-x-jwt-config: &jwt-vars
-  JWT_SECRET: z2RhL3l1BqTDswPCcFuRWp4Gvnrl/VKSds7jOUqk6Og=
-
-x-clientes: &clientes-vars
-  CLIENTES_HOST: clientes
-  CLIENTES_PORT: 8081
-
-x-pagamento-externo: &pagamento-externo-vars
-  PAGAMENTO_EXTERNO_HOST: pagamento-externo
-  PAGAMENTO_EXTERNO_PORT: 8086
-  PAGAMENTO_EXTERNO_ID: pagamentoExternoId
-  PAGAMENTO_EXTERNO_SECRET: pagamentoExternoSecret
-
-x-pagamento-interno: &pagamento-interno-vars
-  PAGAMENTO_INTERNO_HOST: pagamento-interno
-  PAGAMENTO_INTERNO_PORT: 8087
-  PAGAMENTO_INTERNO_ID: pagamentoInternoId
-  PAGAMENTO_INTERNO_SECRET: pagamentoInternoSecret  
-
 services:
 
+  # Infraestrutura
   db:
     image: postgres:18.1-alpine
     restart: always
@@ -36,7 +9,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_DB: postgres_db
     ports:
-      - "5432:5432"
+      - "${DB_PORT}:${DB_PORT}"
     volumes:
       - ./databases.sql:/docker-entrypoint-initdb.d/databases.sql:ro
       - ./pgdata:/var/lib/postgresql/18/docker
@@ -44,44 +17,147 @@ services:
   broker:
     image: rabbitmq:4.2.2-management-alpine
     ports:
-      - "15672:15672"
-      - "5672:5672"
+      - "${BROKER_PORT}:${BROKER_PORT}"
+      - "${BROKER_PORT_WEB}:${BROKER_PORT_WEB}"
     volumes:
       - ./rabbitmqdata:/var/lib/rabbitmq/mnesia/
     environment:
-      RABBITMQ_DEFAULT_USER: cueio
-      RABBITMQ_DEFAULT_PASS: cueio
+      RABBITMQ_NODE_PORT: ${BROKER_PORT}
+      RABBITMQ_DEFAULT_USER: ${BROKER_USER}
+      RABBITMQ_DEFAULT_PASS: ${BROKER_PASSWORD}
       RABBITMQ_DEFAULT_VHOST: /
 
-  clientes:
-    build:
-      context: .
-      dockerfile: clientes/Dockerfile
-    ports:
-      - "8081:8081"
-    environment:
-      <<: [*clientes-vars, *db-vars, *jwt-vars]
-    depends_on:
-      - db
-
+  # Simulação de serviços externos instáveis
   pagamento-externo:
     build:
       context: .
       dockerfile: pagamento-externo/Dockerfile
+    env_file:
+      - .env
     ports:
-      - "8086:8086"
-    environment:
-      <<: [*pagamento-externo-vars, *pagamento-interno-vars]
+      - "${PAGAMENTO_EXTERNO_PORT}:${PAGAMENTO_EXTERNO_PORT}"
     depends_on:
       - db
   
+  reservas-externo-hotel:
+    build:
+      context: .
+      dockerfile: reservas-externo/Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "${RESERVAS_EXTERNO_HOTEL_PORT}:${RESERVAS_EXTERNO_HOTEL_PORT}"
+    environment:
+      SPRING_PROFILES_ACTIVE: hotel
+    depends_on:
+      - db
+  
+  reservas-externo-voo:
+    build:
+      context: .
+      dockerfile: reservas-externo/Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "${RESERVAS_EXTERNO_VOO_PORT}:${RESERVAS_EXTERNO_VOO_PORT}"
+    environment:
+      SPRING_PROFILES_ACTIVE: voo
+    depends_on:
+      - db
+
+  # Serviços internos da aplicação
+  clientes:
+    build:
+      context: .
+      dockerfile: clientes/Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "${CLIENTES_PORT}:${CLIENTES_PORT}"
+    depends_on:
+      - db
+
   pagamento-interno-web:
     build:
       context: .
       dockerfile: pagamento-interno-web/Dockerfile
+    env_file:
+      - .env
     ports:
-      - "8087:8087"
+      - "${PAGAMENTO_INTERNO_PORT}:${PAGAMENTO_INTERNO_PORT}"
+    depends_on:
+      - db
+  
+  reservas-interno-web-hotel:
+    build:
+      context: .
+      dockerfile: reservas-interno-web/Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "${RESERVAS_INTERNO_WEB_HOTEL_PORT}:${RESERVAS_INTERNO_WEB_HOTEL_PORT}"
     environment:
-      <<: [*pagamento-externo-vars, *pagamento-interno-vars, *db-vars, *jwt-vars]
+      SPRING_PROFILES_ACTIVE: hotel
+    depends_on:
+      - db
+
+  reservas-interno-web-voo:
+    build:
+      context: .
+      dockerfile: reservas-interno-web/Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "${RESERVAS_INTERNO_WEB_VOO_PORT}:${RESERVAS_INTERNO_WEB_VOO_PORT}"
+    environment:
+      SPRING_PROFILES_ACTIVE: voo
+    depends_on:
+      - db
+
+  sessaocompra-web:
+    build:
+      context: .
+      dockerfile: sessaocompra-web/Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "${SESSAO_COMPRA_WEB_PORT}:${SESSAO_COMPRA_WEB_PORT}"
+    depends_on:
+      - db
+
+  # Serviços SAGAS
+  reservas-interno-sagas-hotel:
+    build:
+      context: .
+      dockerfile: reservas-interno-sagas/Dockerfile
+    env_file:
+      - .env
+    environment:
+      SPRING_PROFILES_ACTIVE: hotel
+    depends_on:
+      - db
+      - broker
+  
+  reservas-interno-sagas-voo:
+    build:
+      context: .
+      dockerfile: reservas-interno-sagas/Dockerfile
+    env_file:
+      - .env
+    environment:
+      SPRING_PROFILES_ACTIVE: voo
+    depends_on:
+      - db
+      - broker
+
+  # TODO serviço SAGAS de pagamento (interno)
+
+  # Timeout de limpeza de reservas não confirmadas
+  sessaocompra-timeout:
+    build:
+      context: .
+      dockerfile: sessaocompra-timeout/Dockerfile
+    env_file:
+      - .env
     depends_on:
       - db

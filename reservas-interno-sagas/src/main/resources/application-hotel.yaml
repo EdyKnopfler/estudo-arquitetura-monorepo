@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/interno_hotel
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/interno_hotel
     hikari:
       pool-name: InternoHotelPool
 

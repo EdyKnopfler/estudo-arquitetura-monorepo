@@ -1,12 +1,13 @@
 server:
-  port: 8083
+  port: ${RESERVAS_EXTERNO_VOO_PORT:8083}
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/externo_voo
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/externo_voo
     hikari:
       pool-name: ExternoVooPool
 
 internal-backend:
   clients:
-    um-id-bem-looooooongo-para-ambiente-dev-sistema-voo: um-segredo-bem-looooooongo-para-ambiente-dev-sistema-voo
+    - client-id: ${RESERVAS_EXTERNO_VOO_ID:reservasExternoVooId}
+      client-secret: ${RESERVAS_EXTERNO_VOO_SECRET:reservasExternoVooSecret}

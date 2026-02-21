@@ -7,9 +7,9 @@ spring:
       enabled: true
 
   datasource:
-    # url: jdbc:postgresql://localhost:5432/...
-    username: app
-    password: app
+    # url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/...
+    username: ${DB_USER:app}
+    password: ${DB_PASSWORD:app}
     driver-class-name: org.postgresql.Driver
 
     hikari:
@@ -29,8 +29,8 @@ spring:
 
     show-sql: true
 
-# em dev!
 sagas:
-  rabbithost: localhost
-  rabbituser: cueio
-  rabbitpassword: cueio
+  rabbithost: ${BROKER_HOST:localhost}
+  rabbitport: ${BROKER_PORT:5672}
+  rabbituser: ${BROKER_USER:cueio}
+  rabbitpassword: ${BROKER_PASSWORD:cueio}
