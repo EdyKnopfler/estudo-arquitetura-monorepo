@@ -33,7 +33,7 @@ public class ReservasService {
         UUID idExterno = servicoExterno.criar(idCliente);
 
         return transactionTemplate.execute(status -> {
-            Reserva novaReserva = new Reserva(idExterno);
+            Reserva novaReserva = new Reserva(null, idExterno);
             repositorio.save(novaReserva);
             return new ReservaDTO(novaReserva.getId(), novaReserva.getIdExterno());
         });
