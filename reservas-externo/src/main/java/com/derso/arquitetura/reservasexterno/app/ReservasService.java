@@ -2,6 +2,7 @@ package com.derso.arquitetura.reservasexterno.app;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Random;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -20,10 +21,17 @@ public class ReservasService {
     private static final Duration TEMPO_MAXIMO = Duration.ofMinutes(15);
 
     private final ReservasRepository repositorio;
+    private final Random random = new Random();
 
     // INTRODUZIMOS ALGUMA "ENTROPIA" PARA OS SERVIÇOS INTERNOS TRATAREM
     private void seraQueVaiFalhar() {
-        if (Math.random() < CHANCE_FALHA) {
+        if (random.nextDouble() < CHANCE_FALHA) {
+            try {
+                // Simula latência antes de um erro (comum em serviços reais)
+                Thread.sleep(random.nextLong(100, 500));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
             throw new FalhaAleatoriaException();
         }
     }

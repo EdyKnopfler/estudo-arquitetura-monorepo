@@ -2,6 +2,15 @@
 
 Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulando pagamento, reserva de hoteis e voos em serviços separados.
 
+---
+
+### 📌 **Análise de Arquitetura**
+Confira a análise detalhada e sugestões de melhorias para este projeto em: [melhorias.md](./melhorias.md).
+
+Até não tomei muito puxão de orelha do Gemini... Já tenho atividade para as férias :)
+
+---
+
 ## **TODO** 
 
 * Encaixar e conectar todos os serviços (isso **demora**!)

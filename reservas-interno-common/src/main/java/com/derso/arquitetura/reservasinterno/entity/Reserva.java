@@ -29,8 +29,8 @@ public class Reserva {
     @Column(name = "id_externo")
     private UUID idExterno;
 
-    public Reserva(UUID idExterno) {
-        this.id = UUID.randomUUID();
+    public Reserva(UUID id, UUID idExterno) {
+        this.id = id != null ? id : UUID.randomUUID();
         this.idExterno = idExterno;
     }
     
