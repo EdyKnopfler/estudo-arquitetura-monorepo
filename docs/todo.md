@@ -4,7 +4,7 @@ Este arquivo complementa o checklist de features do [README.md](../README.md) (q
 
 ## Bloqueadores para a SAGA funcionar ponta a ponta
 
-- [ ] **Handler de negócio da SAGA é stub.** `ReservasSagas` (`reservas-interno-sagas`) só imprime a mensagem recebida. Precisa chamar `ReservasService`/repositório para confirmar ou cancelar a reserva, e lançar exceção para acionar compensação quando falhar. Ver [saga-choreography.md](saga-choreography.md).
+- [ ] **Handler de negócio da SAGA é stub.** `ReservasSagas` (`reservas-interno/.../sagas/ReservasSagas.java`) só imprime a mensagem recebida. Precisa chamar `ReservasService`/repositório para confirmar ou cancelar a reserva, e lançar exceção para acionar compensação quando falhar. Ver [saga-choreography.md](saga-choreography.md).
 - [ ] **Módulo `pagamento-interno-sagas` não existe.** Não há nada publicando a primeira mensagem na fila `pagamento` — é o início de toda a cadeia. `docker-compose.yml` já tem o comentário `# TODO serviço SAGAS de pagamento (interno)`.
 - [ ] **Webhook de pagamento é um método vazio.** `PagamentoInternoController.webhookServicoExterno()` (`pagamento-interno-web`) não faz nada. Quando implementado, é o ponto de maior risco de bug de segurança/idempotência do projeto, por ser acionado por callback externo — merece validação de assinatura/origem e proteção contra reprocessamento antes de publicar na fila de SAGA.
 - [ ] **`sessaocompra-web` como árbitro ainda não está ligada aos outros serviços.** `SessaoCompraController.iniciarPagamento` e trechos de `atualizarEstadoCompra` têm TODOs explícitos para as chamadas que fariam o papel de árbitro de fato (ver comentários no próprio controller).
@@ -17,12 +17,13 @@ Este arquivo complementa o checklist de features do [README.md](../README.md) (q
 ## Hygiene / housekeeping
 
 - [ ] `.env` está commitado no git com credenciais de dev (ver [security-and-auth.md](security-and-auth.md)). Trocar para `.env.example` versionado + `.env` real no `.gitignore`.
-- [ ] Arquivo órfão `reservas-interno-web/Dockerfile copy` (nome literal "Dockerfile copy") — parece sobra de edição, candidato a remoção.
+- [x] ~~Arquivo órfão `reservas-interno-web/Dockerfile copy`~~ — resolvido de graça pela unificação de `reservas-interno` (o diretório antigo, e o arquivo órfão junto, deixaram de existir).
 - [ ] Sem reconexão automática de `Connection`/`Channel` do RabbitMQ em `sagas-common` — uma queda de broker provavelmente exige restart manual da instância consumidora (não há listener de shutdown/retry).
 
 ## Refactor planejado (sessão futura dedicada)
 
-- [ ] **Unificar `-common`/`-web`/`-sagas` de cada domínio (reservas, pagamento) num único artefato**, com o papel (REST vs. consumidor de fila) escolhido por profile/config em runtime, nos moldes do que já é feito para hotel/voo. Decisão tomada e justificada em [module-boundaries.md](module-boundaries.md#3-artefato-único-com-dois-entrypoints-escaláveis-por-configuração--direção-escolhida-para-o-próximo-refactor) — é um refactor grande, não um ajuste pontual, então merece sessão própria em vez de ser feito incrementalmente junto de outra tarefa.
+- [x] ~~Unificar `-common`/`-web`/`-sagas` de reservas num único artefato~~ — feito, ver `reservas-interno` e [deploy-roles-by-profile.md](deploy-roles-by-profile.md).
+- [ ] **Fazer o mesmo para pagamento**: unificar `pagamento-interno-{common,web}` (e o `-sagas` que ainda não existe) num único artefato, com o papel (REST vs. consumidor de fila) escolhido por profile/config em runtime. Decisão e mecanismo documentados em [module-boundaries.md](module-boundaries.md#3-artefato-único-com-dois-entrypoints-escaláveis-por-configuração--concluído-para-reservas) e [deploy-roles-by-profile.md](deploy-roles-by-profile.md) — é um refactor grande, não um ajuste pontual, então merece sessão própria em vez de ser feito incrementalmente junto de outra tarefa.
 
 ## Decisões em aberto (não são bugs, são pontos a revisitar)
 

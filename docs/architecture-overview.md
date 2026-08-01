@@ -18,24 +18,30 @@ Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (1
 | `sessaocompra-timeout` | job agendado, cancela sessões expiradas | — (sem porta web) | db |
 | `reservas-externo` (profile `hotel`) | simulador instável do fornecedor de hotel | 8082 | db |
 | `reservas-externo` (profile `voo`) | simulador instável do fornecedor de voo | 8083 | db |
-| `reservas-interno-web` (profile `hotel`) | REST de pré-reserva de hotel | 8084 | db |
-| `reservas-interno-web` (profile `voo`) | REST de pré-reserva de voo | 8085 | db |
-| `reservas-interno-sagas` (profile `hotel`) | consumidor de fila `hotel` | — | db, broker |
-| `reservas-interno-sagas` (profile `voo`) | consumidor de fila `voo` | — | db, broker |
+| `reservas-interno` (profile `hotel,web`) | REST de pré-reserva de hotel | 8084 | db |
+| `reservas-interno` (profile `voo,web`) | REST de pré-reserva de voo | 8085 | db |
+| `reservas-interno` (profile `hotel,sagas`) | consumidor de fila `hotel` | — | db, broker |
+| `reservas-interno` (profile `voo,sagas`) | consumidor de fila `voo` | — | db, broker |
 | `pagamento-externo` | simulador instável de gateway de pagamento | 8086 | db |
 | `pagamento-interno-web` | REST de pagamento + webhook | 8087 | db |
 | `pagamento-interno-sagas` | **não existe ainda** — ver [todo.md](todo.md) | — | — |
 
-`reservas-externo`, `reservas-interno-web` e `reservas-interno-sagas` são o **mesmo artefato** rodando duas vezes com `SPRING_PROFILES_ACTIVE=hotel` ou `voo`, cada instância com seu próprio database e fila.
+`reservas-externo` e `reservas-interno` são o **mesmo artefato** (cada um o seu) rodando várias vezes com `SPRING_PROFILES_ACTIVE` combinando domínio (`hotel`/`voo`) — e, no caso de `reservas-interno`, também papel (`web`/`sagas`) — cada instância com seu próprio database/fila.
+
+## Interno x externo
+
+- **`-interno`**: controle de reservas no nível da **agência de viagens** — é quem participa da cadeia da SAGA e decide confirmar ou cancelar. Chama o `-externo` correspondente via REST (client-id/secret) pra efetivar a reserva do lado de fora.
+- **`-externo`**: simula o **fornecedor real** (a companhia aérea, a rede de hotel) sendo chamado. Não participa da coreografia da SAGA — só responde a quem o chama, com falha e latência aleatórias propositais (chaos engineering — ver `ReservasService.seraQueVaiFalhar()` em `reservas-externo`).
 
 ## Padrão de módulos por domínio
 
-Reservas e pagamento repetem a mesma receita (ver também [module-boundaries.md](module-boundaries.md)):
+Pagamento ainda segue a receita original (ver também [module-boundaries.md](module-boundaries.md)):
 
 - **`-common`**: entidades JPA + regra de negócio + repositório. Biblioteca Maven, não é deployável sozinha.
 - **`-web`**: expõe REST, depende do `-common` correspondente.
-- **`-sagas`**: escuta fila de entrada e publica na próxima, depende do `-common`.
-- **`-externo`**: simula o fornecedor real, com falha e latência aleatórias propositais (chaos engineering — ver `ReservasService.seraQueVaiFalhar()` em `reservas-externo`).
+- **`-sagas`**: escuta fila de entrada e publica na próxima, depende do `-common` (**ainda não existe** pra pagamento).
+
+Reservas já passou pelo refactor descrito em [module-boundaries.md](module-boundaries.md#3-artefato-único-com-dois-entrypoints-escaláveis-por-configuração--concluído-para-reservas): os três papéis (`-common`/`-web`/`-sagas`) viraram um artefato único, `reservas-interno`, com o papel (REST vs. fila) escolhido por profile Spring em runtime — ver [deploy-roles-by-profile.md](deploy-roles-by-profile.md) pro mecanismo.
 
 Bibliotecas transversais, usadas por praticamente todo `-web`/`-externo`:
 
@@ -49,10 +55,10 @@ flowchart LR
   C[Cliente] -->|login| clientes
   clientes -->|JWT| C
   C -->|JWT| sessaocompra-web
-  C -->|pré-reserva| reservas-interno-web-hotel
-  C -->|pré-reserva| reservas-interno-web-voo
-  reservas-interno-web-hotel -->|client-id/secret REST| reservas-externo-hotel
-  reservas-interno-web-voo -->|client-id/secret REST| reservas-externo-voo
+  C -->|pré-reserva| reservas-interno-hotel-web
+  C -->|pré-reserva| reservas-interno-voo-web
+  reservas-interno-hotel-web -->|client-id/secret REST| reservas-externo-hotel
+  reservas-interno-voo-web -->|client-id/secret REST| reservas-externo-voo
   C -->|pagar| pagamento-interno-web
   pagamento-interno-web -->|client-id/secret REST| pagamento-externo
   pagamento-externo -.webhook.-> pagamento-interno-web
@@ -65,8 +71,8 @@ flowchart LR
   end
 
   pagamento-interno-web -.TODO: publicar em Qpag.-> Qpag
-  Qhotel -.consome.-> reservas-interno-sagas-hotel
-  Qvoo -.consome.-> reservas-interno-sagas-voo
+  Qhotel -.consome.-> reservas-interno-hotel-sagas
+  Qvoo -.consome.-> reservas-interno-voo-sagas
 ```
 
 Pontos de ligação que ainda são TODO no código (não apenas na intenção) estão detalhados em [todo.md](todo.md) — em especial, `sessaocompra-web` está desenhada como "árbitro" (deveria ser chamada pelos outros serviços para mudar de estado, sem ela mesma orquestrar), mas as chamadas que fariam essa ligação ainda não existem.

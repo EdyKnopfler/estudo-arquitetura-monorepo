@@ -16,9 +16,7 @@
     <module>sessaocompra-timeout</module>
     <module>clientes</module>
     <module>reservas-externo</module>
-    <module>reservas-interno-common</module>
-    <module>reservas-interno-web</module>
-    <module>reservas-interno-sagas</module>
+    <module>reservas-interno</module>
     <module>pagamento-externo</module>
     <module>pagamento-interno-common</module>
     <module>pagamento-interno-web</module>

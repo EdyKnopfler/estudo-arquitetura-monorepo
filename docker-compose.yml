@@ -12,7 +12,7 @@ services:
       - "${DB_PORT}:${DB_PORT}"
     volumes:
       - ./databases.sql:/docker-entrypoint-initdb.d/databases.sql:ro
-      - ./pgdata:/var/lib/postgresql/18/docker
+      - pgdata:/var/lib/postgresql/18/docker
 
   broker:
     image: rabbitmq:4.2.2-management-alpine
@@ -20,7 +20,7 @@ services:
       - "${BROKER_PORT}:${BROKER_PORT}"
       - "${BROKER_PORT_WEB}:${BROKER_PORT_WEB}"
     volumes:
-      - ./rabbitmqdata:/var/lib/rabbitmq/mnesia/
+      - rabbitmqdata:/var/lib/rabbitmq/mnesia/
     environment:
       RABBITMQ_NODE_PORT: ${BROKER_PORT}
       RABBITMQ_DEFAULT_USER: ${BROKER_USER}
@@ -88,29 +88,29 @@ services:
     depends_on:
       - db
   
-  reservas-interno-web-hotel:
+  reservas-interno-hotel-web:
     build:
       context: .
-      dockerfile: reservas-interno-web/Dockerfile
+      dockerfile: reservas-interno/Dockerfile
     env_file:
       - .env
     ports:
       - "${RESERVAS_INTERNO_WEB_HOTEL_PORT}:${RESERVAS_INTERNO_WEB_HOTEL_PORT}"
     environment:
-      SPRING_PROFILES_ACTIVE: hotel
+      SPRING_PROFILES_ACTIVE: hotel,web
     depends_on:
       - db
 
-  reservas-interno-web-voo:
+  reservas-interno-voo-web:
     build:
       context: .
-      dockerfile: reservas-interno-web/Dockerfile
+      dockerfile: reservas-interno/Dockerfile
     env_file:
       - .env
     ports:
       - "${RESERVAS_INTERNO_WEB_VOO_PORT}:${RESERVAS_INTERNO_WEB_VOO_PORT}"
     environment:
-      SPRING_PROFILES_ACTIVE: voo
+      SPRING_PROFILES_ACTIVE: voo,web
     depends_on:
       - db
 
@@ -126,26 +126,26 @@ services:
       - db
 
   # Serviços SAGAS
-  reservas-interno-sagas-hotel:
+  reservas-interno-hotel-sagas:
     build:
       context: .
-      dockerfile: reservas-interno-sagas/Dockerfile
+      dockerfile: reservas-interno/Dockerfile
     env_file:
       - .env
     environment:
-      SPRING_PROFILES_ACTIVE: hotel
+      SPRING_PROFILES_ACTIVE: hotel,sagas
     depends_on:
       - db
       - broker
-  
-  reservas-interno-sagas-voo:
+
+  reservas-interno-voo-sagas:
     build:
       context: .
-      dockerfile: reservas-interno-sagas/Dockerfile
+      dockerfile: reservas-interno/Dockerfile
     env_file:
       - .env
     environment:
-      SPRING_PROFILES_ACTIVE: voo
+      SPRING_PROFILES_ACTIVE: voo,sagas
     depends_on:
       - db
       - broker
@@ -161,3 +161,10 @@ services:
       - .env
     depends_on:
       - db
+
+volumes:
+  # Volumes nomeados (não bind mount): o dado fica dentro do storage do Docker,
+  # não num diretório do host — evita depender de permissão/uid do host pra montar,
+  # o que muda conforme o backend (dockerd nativo como root vs. proxy do Docker Desktop).
+  pgdata:
+  rabbitmqdata:

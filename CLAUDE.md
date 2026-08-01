@@ -4,15 +4,15 @@ Monorepo de estudo simulando uma agência de viagens com transação distribuíd
 
 ## Stack
 
-Java 25 (virtual threads), Spring Boot 4.0.1, Maven multi-módulo (13 módulos + parent POM), Postgres 18.1 (1 database por bounded context) + Flyway, RabbitMQ 4.2.2 (cliente Java cru), Docker Compose. Rodar local: `docker-compose up` (usa `.env` na raiz).
+Java 25 (virtual threads), Spring Boot 4.0.1, Maven multi-módulo (11 módulos + parent POM), Postgres 18.1 (1 database por bounded context) + Flyway, RabbitMQ 4.2.2 (cliente Java cru), Docker Compose. Rodar local: `docker-compose up` (usa `.env` na raiz).
 
 ## Módulos
 
-`clientes` · `sessaocompra-{common,web,timeout}` · `reservas-{interno-common,interno-web,interno-sagas,externo}` (cada um roda 2x via profile `hotel`/`voo`) · `pagamento-{interno-common,interno-web,externo}` · `web-base` e `sagas-common` (bibliotecas transversais). Mapa completo, portas e diagrama de fluxo: [docs/architecture-overview.md](docs/architecture-overview.md).
+`clientes` · `sessaocompra-{common,web,timeout}` · `reservas-{interno,externo}` (cada um roda 2x via profile `hotel`/`voo`; `reservas-interno` roda ainda 2x por papel via profile `web`/`sagas`) · `pagamento-{interno-common,interno-web,externo}` · `web-base` e `sagas-common` (bibliotecas transversais). Mapa completo, portas e diagrama de fluxo: [docs/architecture-overview.md](docs/architecture-overview.md).
 
 ## Decisões arquiteturais
 
-- **Estado atual: regra de negócio em bibliotecas `-common`, consumidas por unidades de deploy separadas (`-web` REST e `-sagas` fila).** **Refactor planejado (sessão futura dedicada):** unificar `-common`/`-web`/`-sagas` de cada domínio num artefato só, com o papel (web vs. fila) escolhido por profile/config em runtime — a independência de deploy que a separação atual promete só vale para mudanças que não tocam o `-common`, então o ganho real (escalar contagem de instância) é preservado sem o custo de coordenar três módulos. Raciocínio completo em [docs/module-boundaries.md](docs/module-boundaries.md).
+- **`reservas-interno` já unifica `-common`/`-web`/`-sagas` num artefato só**, com o papel (web vs. fila) escolhido por profile Spring em runtime (`@Profile("web")`/`@Profile("sagas")`) — a independência de deploy que a separação em três módulos prometia só valia para mudanças que não tocam o `-common`, então o ganho real (escalar contagem de instância) foi preservado sem o custo de coordenar três módulos. **`pagamento` ainda está no padrão antigo** (`-common` + `-web`, `-sagas` nem existe) — mesmo refactor pendente pra uma sessão futura dedicada. Raciocínio completo em [docs/module-boundaries.md](docs/module-boundaries.md), mecanismo em [docs/deploy-roles-by-profile.md](docs/deploy-roles-by-profile.md).
 - **SAGA por coreografia, não orquestração central.** Cada serviço só conhece a fila anterior/próxima; erro no handler dispara republish automático de compensação (`tipo=DESFACA`) retroativo na cadeia — mecânica implementada em `sagas-common`, cadeia atual é `pagamento → hotel → voo`. Detalhe: [docs/saga-choreography.md](docs/saga-choreography.md).
 - **Database por bounded context**, mesmo quando `-web` e `-sagas` do mesmo domínio compartilham banco (são a mesma unidade lógica de negócio, só split por entrypoint/escala).
 - **Duas identidades de autenticação**: JWT para cliente final, client-id/secret por par de serviços internos. Detalhe e limitações conhecidas: [docs/security-and-auth.md](docs/security-and-auth.md).

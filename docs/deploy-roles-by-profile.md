@@ -1,6 +1,6 @@
 # Como escolher o papel (web vs. sagas) por profile
 
-Mecanismo de implementação para o refactor planejado em [module-boundaries.md](module-boundaries.md#3-artefato-único-com-dois-entrypoints-escaláveis-por-configuração--direção-escolhida-para-o-próximo-refactor): unificar `-common`/`-web`/`-sagas` de cada domínio num artefato só, escolhendo em runtime se a instância atende REST, fila, ou ambos.
+Mecanismo de implementação do refactor descrito em [module-boundaries.md](module-boundaries.md#3-artefato-único-com-dois-entrypoints-escaláveis-por-configuração--concluído-para-reservas): unificar `-common`/`-web`/`-sagas` de cada domínio num artefato só, escolhendo em runtime se a instância atende REST, fila, ou ambos. Já aplicado em `reservas-interno`; pendente em `pagamento-interno`.
 
 ## Profiles se combinam
 
@@ -64,8 +64,10 @@ Deixa o `docker-compose.yml` mais legível (`SPRING_PROFILES_ACTIVE: reservas-ho
 
 ## Checklist para o refactor
 
-- [ ] Todo `@RestController`/`@Service` hoje em `-web` ganha `@Profile("web")`.
-- [ ] Todo listener/`SmartLifecycle` hoje em `-sagas` ganha `@Profile("sagas")`, **junto com** a cadeia de `@Configuration` da qual depende (conexão/canal RabbitMQ).
-- [ ] `application-sagas.yaml` novo com `spring.main.web-application-type: none`.
-- [ ] Decidir se `application-web.yaml` chega a ser necessário (só se houver algo específico do papel web além do que já está em `application.yaml`/`application-<domínio>.yaml`).
-- [ ] Confirmar que rodar Flyway nos dois papéis é aceitável (schema precisa existir de qualquer forma; Flyway tem lock próprio contra corrida entre instâncias migrando ao mesmo tempo).
+**Aplicado em `reservas-interno`** — usar de roteiro de novo quando `pagamento-interno-sagas` for criado e `pagamento-interno-{common,web}` passarem pelo mesmo tratamento.
+
+- [x] Todo `@RestController`/`@Service` hoje em `-web` ganha `@Profile("web")`.
+- [x] Todo listener/`SmartLifecycle` hoje em `-sagas` ganha `@Profile("sagas")`, **junto com** a cadeia de `@Configuration` da qual depende (conexão/canal RabbitMQ) — em vez de anotar `RabbitConfig` direto (o que vazaria a convenção de profile pra dentro da lib `sagas-common`), a gate ficou numa classe-ponte só do lado do consumidor: `@Configuration @Profile("sagas") @Import({SagasJacksonConfig.class, RabbitConfig.class, SagasMessaging.class})`. Funciona porque `@Profile` é avaliado antes do `@Import` ser processado.
+- [x] `application-sagas.yaml` novo com `spring.main.web-application-type: none`.
+- [x] Decidir se `application-web.yaml` chega a ser necessário (só se houver algo específico do papel web além do que já está em `application.yaml`/`application-<domínio>.yaml`) — não foi necessário; porta é domínio-específica e ficou nos arquivos `application-hotel.yaml`/`application-voo.yaml`.
+- [x] Confirmar que rodar Flyway nos dois papéis é aceitável (schema precisa existir de qualquer forma; Flyway tem lock próprio contra corrida entre instâncias migrando ao mesmo tempo).
