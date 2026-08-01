@@ -5,9 +5,7 @@ Testando arquitetura para sistema (simplificado) de Agência de Viagens, simulan
 ---
 
 ### 📌 **Análise de Arquitetura**
-Confira a análise detalhada e sugestões de melhorias para este projeto em: [melhorias.md](./melhorias.md).
-
-Até não tomei muito puxão de orelha do Gemini... Já tenho atividade para as férias :)
+Confira o resumo das decisões arquiteturais em [CLAUDE.md](./CLAUDE.md) e o detalhamento por tópico em [docs/](./docs/README.md).
 
 ---
 

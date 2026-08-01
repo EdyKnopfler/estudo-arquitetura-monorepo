@@ -1,0 +1,37 @@
+# Fronteiras de módulo: por que a regra de negócio está em `-common`
+
+## Decisão atual
+
+A regra de negócio de cada domínio (reservas, pagamento) vive num módulo `-common` (ex.: `reservas-interno-common`), que é uma **biblioteca Maven** — não um deployável — consumida como dependência compilada por dois artefatos deployáveis separados:
+
+- `-web`: recebe requisição HTTP e chama o serviço do `-common`.
+- `-sagas`: recebe mensagem de fila e (quando implementado) chama o mesmo serviço do `-common`.
+
+Motivação (do autor do projeto): permitir escalar entrypoint HTTP e entrypoint de fila **independentemente**, já que a carga de cada um pode ter perfil muito diferente (rajada de requisição web vs. throughput de fila). A decisão foi tomada deliberadamente sem medir ainda a carga real de cada lado — a intenção é observar isso rodando, não resolver por adivinhação. Essa é uma postura válida para um projeto de estudo: o objetivo aqui é justamente aprender o trade-off na prática.
+
+## O custo dessa escolha
+
+O preço de dividir em dois deployáveis compartilhando uma biblioteca de domínio é o **acoplamento de build/deploy**: `-web` e `-sagas` do mesmo domínio dependem da mesma versão compilada do `-common`, incluindo a entidade `@Entity` JPA (ex.: `Reserva` em `reservas-interno-common/entity/Reserva.java`). Uma mudança de schema ou de assinatura de serviço no `-common` obriga recompilar e redeployar os dois módulos juntos — o que reduz parte do ganho de tê-los como unidades separadas.
+
+**Importante — isso não é um problema de serialização.** Checando o código: nenhum `@Entity` é devolvido como corpo de request/response HTTP em nenhum controller (todos usam DTO — `ReservaDTO`, `CriacaoReservaResponse`, `PagamentoResponseDTO`, etc.), e a mensagem da SAGA (`SagasMessaging`) já é um `Map<String, Object>` genérico, não uma entidade serializada. O acoplamento é só em memória/import Java dentro do `-common`: o `ReservasService` manipula a entidade `Reserva` diretamente, e é esse `.jar` compilado que `-web` e `-sagas` compartilham. Como os dois já apontam para o mesmo database (`interno_hotel`/`interno_voo`), esse acoplamento de build é bem mais estreito do que um "shared kernel" entre bounded contexts de verdade — é dois processos da mesma unidade lógica de negócio precisando recompilar juntos, não dois domínios diferentes vazando estrutura interna um pro outro.
+
+Vale notar que, hoje, `-web` e `-sagas` do mesmo domínio **já compartilham o mesmo database** (ex.: `reservas-interno-web-hotel` e `reservas-interno-sagas-hotel` apontam para `interno_hotel`). Ou seja, na prática eles já são a mesma "unidade lógica de negócio" com um único dono de dados — a separação em dois processos é uma fronteira de **escala/deploy**, não uma fronteira de bounded context de fato. Isso é relevante porque muda a urgência do problema: acoplar dois processos que já compartilham banco é bem menos grave do que acoplar dois bounded contexts diferentes.
+
+## Alternativas
+
+### 1. Hexagonal dentro do `-common` — avaliado e descartado por ora
+Dividir `-common` em `domain` (POJOs/interfaces puros, sem Spring/JPA) + `infrastructure` (implementação JPA/HTTP) foi a sugestão original da análise anterior. Decisão, depois de checar o tamanho real do código: **não vale a pena agora**. `pagamento-interno-common` inteiro é uma entidade de um campo (`id`) e um service de 5 linhas; `reservas-interno-common` soma 163 linhas ao todo. Nesse tamanho, POJO + `@Entity` + mapper é boilerplate puro, não ganho de clareza — e também **não resolveria** o acoplamento de deploy entre `-web` e `-sagas`, já que os dois continuariam importando a mesma versão compilada do domínio de qualquer forma.
+
+Os candidatos reais a "ficar grande" seriam os fornecedores externos de verdade (hotel/voo/pagamento reais) — aqui eles são só simulados (`-externo`), então não há um segundo adapter de infraestrutura para justificar a interface ainda. Revisitar quando: (a) a regra de negócio de algum `-common` deixar de ser trivial, ou (b) surgir necessidade real de testar a regra de negócio sem subir Spring/JPA.
+
+### 2. Contrato explícito para a mensagem da SAGA (evolução do que já existe, não correção)
+A mensagem hoje é um `Map<String, Object>` genérico (`SagasMessaging`) — nenhuma entidade trafega nela, então não há o problema de "vazar estrutura de banco pela fila" que a análise anterior antecipava. O que falta é o inverso: um contrato **tipado** pouco definido ainda (só o campo `tipo` é usado hoje). Quando os handlers de negócio forem implementados (ver [saga-choreography.md](saga-choreography.md)), vale desenhar essa mensagem como um DTO próprio da fila (ex.: id de correlação da sessão de compra + ids de reserva), não reaproveitar a entidade JPA nem o DTO de REST — são contratos com motivos de mudança diferentes.
+
+### 3. Artefato único com dois entrypoints, escaláveis por configuração — **direção escolhida para o próximo refactor**
+Em vez de três módulos deployáveis (`-web`, `-sagas`) puxando um `-common`, ter **um único artefato** por domínio com controller REST e listener de fila no mesmo processo, e decidir por configuração/profile qual entrypoint fica ativo em cada instância — por exemplo `spring.main.web-application-type=none` para uma instância "só fila", e desabilitar o listener (`autoStartup=false`) numa instância "só web". O projeto já faz algo parecido para hotel/voo (mesmo jar, profile diferente); a ideia é estender o mesmo princípio a um profile de **papel** (web vs. sagas), não só de **domínio** (hotel vs. voo).
+
+Vantagem: zero acoplamento de versão de biblioteca entre entrypoints, porque não há dois artefatos — é o mesmo build. Escala continua independente (sobe N instâncias-web e M instâncias-fila do mesmo jar, processos separados). Desvantagem: perde a possibilidade de ter pipelines de release/rollback totalmente independentes por entrypoint, e o jar fica um pouco mais "gordo" (carrega dependências de ambos os mundos mesmo quando só um está ativo).
+
+**Por que esta é a direção escolhida, não só "uma opção":** a independência de deploy que a separação em três módulos promete só existe de fato para mudança que não toca a regra de negócio compartilhada — qualquer alteração no `-common` já força redeploy conjunto de `-web` e `-sagas` de qualquer forma, módulos separados ou não. O único ganho real e permanente da separação atual é escalar contagem de instância independentemente (N web, M fila) — e esse ganho a alternativa 3 entrega igual, com processos separados de qualquer jeito, sem o custo de coordenar três módulos Maven a cada mudança. Ou seja: mesmo benefício, bem menos fricção de código. O `melhorias.md` original media custo/benefício sem esse detalhe; foi essa lacuna que fez a balança pender pra cá.
+
+Refactor grande, planejado para uma sessão futura dedicada — não é um TODO pontual, é a reestruturação de `-common`/`-web`/`-sagas` de cada domínio num módulo só.
