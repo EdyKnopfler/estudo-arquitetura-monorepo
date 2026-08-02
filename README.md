@@ -9,6 +9,56 @@ Confira o resumo das decisões arquiteturais em [CLAUDE.md](./CLAUDE.md) e o det
 
 ---
 
+## Como funciona
+
+### Estados de uma sessão de compra
+
+```mermaid
+stateDiagram-v2
+    [*] --> INICIADA: cliente cria a sessão
+
+    INICIADA --> EFETUANDO_PAGAMENTO: reservas completas,\npagamento iniciado
+    INICIADA --> CANCELANDO: timeout (reservas\nnão completadas a tempo)
+
+    EFETUANDO_PAGAMENTO --> VIAGEM_RESERVADA: SAGA completa\n(pagamento + hotel + voo confirmados)
+    EFETUANDO_PAGAMENTO --> INICIADA: SAGA falhou em qualquer etapa\n(compensação completa, timer resetado)
+    EFETUANDO_PAGAMENTO --> CANCELANDO: timeout (pagamento iniciado,\nnunca confirmado)
+
+    CANCELANDO --> CANCELADA: pré-reservas desfeitas
+    CANCELANDO --> FALHA_CANCELAMENTO: erro ao desfazer
+
+    VIAGEM_RESERVADA --> [*]
+    CANCELADA --> [*]
+    FALHA_CANCELAMENTO --> [*]
+```
+
+### SAGA disparada a partir do webhook de pagamento
+
+```mermaid
+flowchart TD
+  WH[["webhook pagamento"]]
+  WH -->|"sucesso: EXECUTE"| Qpag
+  WH -.->|"falha: DESFACA"| Qsc
+
+  Qpag[["fila: pagamento"]] --> Qhotel
+  Qhotel[["fila: hotel"]] --> Qvoo
+  Qvoo[["fila: voo"]] --> Qsc
+
+  Qsc[["fila: sessaocompra"]]
+
+  Qsc -.->|"DESFACA, se sessaocompra falhar"| Qvoo
+  Qvoo -.->|compensação| Qhotel
+  Qhotel -.->|compensação| Qpag
+  Qpag -.->|"compensação (estorno)"| Qsc
+
+  Qsc -->|"tipo=EXECUTE"| CONF["sessaocompra confirma:<br/>VIAGEM_RESERVADA"]
+  Qsc -.->|"tipo=DESFACA"| REV["sessaocompra reverte:<br/>volta pra INICIADA"]
+```
+
+Desenho completo (inclui o que já está implementado vs. planejado) em [docs/purchase-flow-design.md](docs/purchase-flow-design.md); mecânica de fila já implementada (`pagamento → hotel → voo`) em [docs/saga-choreography.md](docs/saga-choreography.md).
+
+---
+
 ## **TODO** 
 
 * Encaixar e conectar todos os serviços (isso **demora**!)
@@ -16,7 +66,7 @@ Confira o resumo das decisões arquiteturais em [CLAUDE.md](./CLAUDE.md) e o det
 * Preencher as regras de negócio
   * _Vai ficar divertido fazendo isso com testes integrados_
 * **(FEITO)** Contêineres Docker para os serviços
-* Desenhar alguns diagramas para ilustrar como funcionam os serviços e a coreografia SAGAS
+* **(FEITO)** Desenhar alguns diagramas para ilustrar como funcionam os serviços e a coreografia SAGAS
 * Documentar inicialização e amostras de uso (quando estiver funcional)
 
 ## Módulos
@@ -26,20 +76,23 @@ Confira o resumo das decisões arquiteturais em [CLAUDE.md](./CLAUDE.md) e o det
 * **pagamento-interno**: centraliza a lógica de negócio dos pagamentos; papel REST (webhook para o serviço externo comunicar confirmação/recusa) ou SAGAS (a confirmação de um pagamento envia mensagens para os sistemas de reservas realizarem a confirmação; a instância fica observando a fila pra estornar pagamentos em caso de erro nas reservas) escolhido por profile
 * **reservas-externo:** simula serviços externos _instáveis_ para teste da arquitetura; não precisa implementar lógica completa
 * **reservas-interno**: centraliza a lógica de negócio das reservas de voo e hotel; papel REST (interface web para reservas) ou SAGAS (responde a eventos de pagamento e erros para confirmação/cancelamento) escolhido por profile — deve haver ao menos uma instância de cada papel para voos e uma para hotel
-* **sessaocompra:** centraliza a lógica de negócio das sessões de compra (bloqueios de consistência); papel REST (interface web onde o cliente informa as pré-reservas e o sistema de pagamentos notifica para confirmação) ou TIMEOUT (job agendado que invalida sessões de compra não confirmadas, expiradas) escolhido por profile
+* **sessaocompra:** centraliza a lógica de negócio das sessões de compra (bloqueios de consistência) e é o único ponto de contato do front ("porteiro") — orquestra as pré-reservas em `reservas-interno` por trás. Três papéis por profile: REST (interface web), TIMEOUT (dois jobs agendados: sessão sem reservas completas, e pagamento iniciado sem confirmação) e, no desenho planejado, fila (confirma/reverte a partir do resultado da SAGA — ver [docs/purchase-flow-design.md](docs/purchase-flow-design.md))
 * **web-base:** módulos reusados nos serviços web: tratamento de erros, tokens JWT, client id/client secret
 
 ### A fazer
 
-* [ ] **Timeout:** dispara sequência SAGAS de cancelamento
+Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, SAGA) está desenhado em [docs/purchase-flow-design.md](docs/purchase-flow-design.md) — os itens a seguir já refletem esse desenho, não o mecanismo antigo.
+
+* [ ] **Timeout:** libera as pré-reservas diretamente via REST em `reservas-interno` — não é uma sequência SAGAS, a SAGA só começa depois que o pagamento já foi confirmado
 
 * [ ] **Pagamentos**:
   * [ ] **web:** aciona o serviço externo, webhook de confirmação e erro
     * [ ] chama endpoints do serviço externo
-    * [ ] bate no serviço de sessões para modificar o estado (árbitro)
-    * [ ] dispara sequência SAGAS de confirmação a partir do webhook
+    * [ ] webhook sucesso: publica `EXECUTE` na fila `pagamento` (dispara a SAGA de confirmação)
+    * [ ] webhook falha: publica `DESFACA` direto na fila `sessaocompra` (nada a desfazer em hotel/voo/pagamento ainda)
   * [ ] **sagas:** eventos de confirmação e cancelamento
     * [ ] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
+    * [ ] início da cadeia (sem fila anterior própria) — só existe pra escutar compensação voltando de hotel/voo e repassar o estorno até `sessaocompra`
   * [X] **externo:** simula serviço externo, **introduz erros aleatórios**
     * [X] endpoints de pagamento e estorno, _devem falhar às vezes de propósito_
   * [ ] Testes integrados
@@ -48,12 +101,10 @@ Confira o resumo das decisões arquiteturais em [CLAUDE.md](./CLAUDE.md) e o det
     * [ ] Notificação de falha por outro serviço
 
 * [ ] **Hotel:**
-  * [X] **web:** interação com usuário (pré-reservas)
-    * [ ] bate no serviço de sessões para modificar o estado (árbitro)
+  * [X] **web:** interação com usuário (pré-reservas) — chamado por `sessaocompra`, não o inverso
     * [ ] chama endpoints do serviço externo
   * [ ] **sagas:** eventos de confirmação e cancelamento
     * [X] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
-    * [ ] bate no serviço de sessões para modificar o estado (árbitro)
     * [ ] chama endpoints do serviço externo
   * [X] **externo:** simula serviço externo, **introduz erros aleatórios**
     * [X] **pré-reserva:** cria reserva sem confirmação
@@ -66,13 +117,12 @@ Confira o resumo das decisões arquiteturais em [CLAUDE.md](./CLAUDE.md) e o det
     * [ ] Notificação de falha por outro serviço
 
 * [ ] **Voo:** para voos ida e volta, mesma estrutura de _Hotel_
-  * [X] **web:** interação com usuário (pré-reservas)
-    * [ ] bate no serviço de sessões para modificar o estado (árbitro)
+  * [X] **web:** interação com usuário (pré-reservas) — chamado por `sessaocompra`, não o inverso
     * [ ] chama endpoints do serviço externo
   * [ ] **sagas:** eventos de confirmação e cancelamento por timeout
     * [X] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
-    * [ ] bate no serviço de sessões para modificar o estado (árbitro)
     * [ ] chama endpoints do serviço externo
+    * [ ] fim da cadeia de sucesso: publica `EXECUTE` na fila `sessaocompra` (confirma a viagem); recebe `DESFACA` de volta se `sessaocompra` falhar ao confirmar
   * [X] **externo:** simula serviço externo, **introduz erros aleatórios**
     * [X] **pré-reserva:** cria reserva sem confirmação
     * [X] **confirmação:** confirma pré-reservas feitas _há menos de 15 minutos_

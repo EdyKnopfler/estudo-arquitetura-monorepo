@@ -44,3 +44,7 @@ Config real (`reservas-interno/src/main/resources/application-hotel.yaml` e `-vo
 - Não há campo de correlação/id de sessão de compra na mensagem ainda — quando o negócio for implementado, a mensagem provavelmente precisa carregar o id da `SessaoCompra` para o handler saber o que confirmar/cancelar.
 
 Ver [todo.md](todo.md) para a lista consolidada.
+
+## Extensão planejada — sessaocompra como bookend do anel
+
+Desenho ainda não implementado: dois nós novos (`confirma` depois de `voo`, `reverte` antes de `pagamento`) fariam `sessaocompra` participar do mesmo anel de coreografia, reaproveitando este mecanismo (handler lança exceção → compensação automática pra trás) em vez de um consumo de fila à parte. Detalhe e diagrama em [purchase-flow-design.md](purchase-flow-design.md).

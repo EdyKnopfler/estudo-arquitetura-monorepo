@@ -71,7 +71,7 @@ Deixa o `docker-compose.yml` mais legível (`SPRING_PROFILES_ACTIVE: reservas-ho
 
 ## Checklist para o refactor
 
-**Aplicado em `reservas-interno` e `pagamento-interno`.** Também aplicado em `sessaocompra`, com uma variação: como esse domínio não participa da coreografia SAGA, o segundo papel se chama `timeout` (não `sagas`) e não tem `SagasWiring`/dependência de `sagas-common` — é só `@Profile("timeout")` no `TimeoutTask` (`@Scheduled`) + `application-timeout.yaml` com `web-application-type: none`. Ver [module-boundaries.md](module-boundaries.md#3-artefato-único-com-dois-entrypoints-escaláveis-por-configuração--concluído-para-reservas-pagamento-e-sessão-de-compra).
+**Aplicado em `reservas-interno` e `pagamento-interno`.** Também aplicado em `sessaocompra`, com uma variação: como esse domínio não participa da coreografia SAGA, o segundo papel se chama `timeout` (não `sagas`) e não tem `SagasWiring`/dependência de `sagas-common` — é só `@Profile("timeout")` no `TimeoutTask` (`@Scheduled`) + `application-timeout.yaml` com `web-application-type: none`. Ver [module-boundaries.md](module-boundaries.md#3-artefato-único-com-dois-entrypoints-escaláveis-por-configuração--concluído-para-reservas-pagamento-e-sessão-de-compra). (Desenho ainda não implementado adiciona um papel de fila a `sessaocompra` — ver [purchase-flow-design.md](purchase-flow-design.md).)
 
 - [x] Todo `@RestController`/`@Service` hoje em `-web` ganha `@Profile("web")`.
 - [x] Todo listener/`SmartLifecycle` hoje em `-sagas` ganha `@Profile("sagas")`, **junto com** a cadeia de `@Configuration` da qual depende (conexão/canal RabbitMQ) — via a classe-ponte `SagasWiring` (ver seção acima), não anotando `sagas-common` diretamente.

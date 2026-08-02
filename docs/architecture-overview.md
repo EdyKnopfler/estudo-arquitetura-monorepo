@@ -70,7 +70,7 @@ flowchart LR
   Qvoo -.consome.-> reservas-interno-voo-sagas
 ```
 
-Pontos de ligação que ainda são TODO no código (não apenas na intenção) estão detalhados em [todo.md](todo.md) — em especial, `sessaocompra-web` está desenhada como "árbitro" (deveria ser chamada pelos outros serviços para mudar de estado, sem ela mesma orquestrar), mas as chamadas que fariam essa ligação ainda não existem.
+Pontos de ligação que ainda são TODO no código (não apenas na intenção) estão detalhados em [todo.md](todo.md) — em especial, `sessaocompra-web` está desenhada como "árbitro" (deveria ser chamada pelos outros serviços para mudar de estado, sem ela mesma orquestrar), mas as chamadas que fariam essa ligação ainda não existem. O desenho de como fechar essa ligação (endpoints incrementais por reserva, gate de completude, SAGA estendida até `sessaocompra`) está em [purchase-flow-design.md](purchase-flow-design.md).
 
 ## Convenção de configuração
 

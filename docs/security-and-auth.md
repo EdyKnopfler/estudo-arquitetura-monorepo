@@ -4,7 +4,7 @@ Duas identidades distintas, deliberadamente separadas — não misturar ao mexer
 
 ## JWT — cliente final
 
-`web-base/jwt/JwtService.java`: HMAC-SHA (`Keys.hmacShaKeyFor`, segredo via `jwt.secret`), expiração de 10 minutos, claims `id`/`email`/`userType`. Emitido por `clientes` (`AuthController`) após login. Hoje, **só o próprio `clientes` valida esse JWT** (`JwtAuthenticationFilter`, component-scan de `webbase.jwt`) pros seus outros endpoints — nenhum outro `-web` (`sessaocompra`, `reservas-interno`, `pagamento-interno`) importa esse filtro ainda. `sessaocompra` (profile `web`), por exemplo, não tem `SecurityConfiguration` nenhuma hoje — endpoint aberto, sem autenticação de cliente final.
+`web-base/jwt/JwtService.java`: HMAC-SHA (`Keys.hmacShaKeyFor`, segredo via `jwt.secret`), expiração de 10 minutos, claims `id`/`email`/`userType`. Emitido por `clientes` (`AuthController`) após login. Hoje, **só o próprio `clientes` valida esse JWT** (`JwtAuthenticationFilter`, component-scan de `webbase.jwt`) pros seus outros endpoints — nenhum outro `-web` (`sessaocompra`, `reservas-interno`, `pagamento-interno`) importa esse filtro ainda. `sessaocompra` (profile `web`), por exemplo, não tem `SecurityConfiguration` nenhuma hoje — endpoint aberto, sem autenticação de cliente final. Fica mais urgente de revisar se o desenho em [purchase-flow-design.md](purchase-flow-design.md) for implementado: `sessaocompra` passaria a ser o único ponto de contato do front, além de ganhar uma chamada HTTP nova (`sessaocompra` → `reservas-interno`) que ainda não tem client-id/secret configurado em nenhum dos dois lados.
 
 ## Client-ID/Secret — serviço a serviço
 
