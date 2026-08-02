@@ -2,7 +2,7 @@
 
 ## Stack
 
-Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (10 módulos + parent POM), Postgres 18.1 com Flyway, RabbitMQ 4.2.2 (cliente Java cru, não Spring AMQP), Docker Compose para orquestração local.
+Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (8 módulos + parent POM), Postgres 18.1 com Flyway, RabbitMQ 4.2.2 (cliente Java cru, não Spring AMQP), Docker Compose para orquestração local.
 
 ## Infra compartilhada
 
@@ -14,8 +14,8 @@ Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (1
 | Módulo | Papel | Porta padrão | Depende de |
 |---|---|---|---|
 | `clientes` | cadastro/login, emite JWT | 8081 | db |
-| `sessaocompra-web` | árbitro de estado da compra | 8080 | db |
-| `sessaocompra-timeout` | job agendado, cancela sessões expiradas | — (sem porta web) | db |
+| `sessaocompra` (profile `web`) | árbitro de estado da compra | 8080 | db |
+| `sessaocompra` (profile `timeout`) | job agendado, cancela sessões expiradas | — (sem porta web) | db |
 | `reservas-externo` (profile `hotel`) | simulador instável do fornecedor de hotel | 8082 | db |
 | `reservas-externo` (profile `voo`) | simulador instável do fornecedor de voo | 8083 | db |
 | `reservas-interno` (profile `hotel,web`) | REST de pré-reserva de hotel | 8084 | db |
@@ -35,7 +35,7 @@ Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (1
 
 ## Padrão de módulos por domínio
 
-Reservas e pagamento já passaram pelo refactor descrito em [module-boundaries.md](module-boundaries.md#3-artefato-único-com-dois-entrypoints-escaláveis-por-configuração--concluído-para-reservas-e-pagamento): os antigos módulos `-common`/`-web`/`-sagas` de cada domínio viraram um artefato único (`reservas-interno`, `pagamento-interno`), com o papel (REST vs. fila) escolhido por profile Spring em runtime — ver [deploy-roles-by-profile.md](deploy-roles-by-profile.md) pro mecanismo. Para pagamento, o papel `sagas` foi criado do zero nesse refactor (nunca tinha existido como módulo — ver [todo.md](todo.md)).
+Reservas, pagamento e sessão de compra já passaram pelo refactor descrito em [module-boundaries.md](module-boundaries.md#3-artefato-único-com-dois-entrypoints-escaláveis-por-configuração--concluído-para-reservas-pagamento-e-sessão-de-compra): os antigos módulos `-common`/`-web`/`-sagas` (ou `-timeout`) de cada domínio viraram um artefato único (`reservas-interno`, `pagamento-interno`, `sessaocompra`), com o papel escolhido por profile Spring em runtime — ver [deploy-roles-by-profile.md](deploy-roles-by-profile.md) pro mecanismo. Para pagamento, o papel `sagas` foi criado do zero (nunca tinha existido como módulo — ver [todo.md](todo.md)). `sessaocompra` é uma variação do mesmo mecanismo: não participa da coreografia SAGA, então o segundo papel não é `sagas`, é `timeout` (job `@Scheduled` que cancela sessões expiradas) — mesmo princípio (`@Profile`/`web-application-type: none`), sem depender de `sagas-common`.
 
 Bibliotecas transversais, usadas por praticamente todo `-web`/`-externo`:
 

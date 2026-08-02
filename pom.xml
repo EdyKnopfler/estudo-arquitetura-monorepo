@@ -11,9 +11,7 @@
   <modules>
     <module>web-base</module>
     <module>sagas-common</module>
-    <module>sessaocompra-common</module>
-    <module>sessaocompra-web</module>
-    <module>sessaocompra-timeout</module>
+    <module>sessaocompra</module>
     <module>clientes</module>
     <module>reservas-externo</module>
     <module>reservas-interno</module>

@@ -7,7 +7,7 @@ Implementação própria sobre o cliente Java cru do RabbitMQ (`com.rabbitmq.cli
 - `RabbitConfig` (`sagas-common`): abre uma única `Connection`/`Channel` por instância a partir de `sagas.rabbithost/port/user/password`.
 - `SagasMessaging` (`sagas-common`): declara exchanges/filas e implementa o protocolo de consumo/publicação.
 - `SagaMessageHandler`: interface funcional que cada serviço implementa com a lógica de negócio real (`handle(Map<String, Object> mensagem)`).
-- Cada `-sagas` (ex.: `reservas-interno-sagas/reservas/ReservasSagas.java`) é um `SmartLifecycle` que lê `sagas.estafila` / `sagas.filaanterior` / `sagas.proximafila` do `application-<profile>.yaml` e chama `SagasMessaging.configurarServico(...)` + `iniciarConsumo(...)`.
+- Cada papel `sagas` (ex.: `reservas-interno/.../sagas/ReservasSagas.java`, `pagamento-interno/.../sagas/PagamentoSagas.java`) é um `SmartLifecycle` que lê `sagas.estafila` / `sagas.filaanterior` / `sagas.proximafila` do `application-<profile>.yaml` e chama `SagasMessaging.configurarServico(...)` + `iniciarConsumo(...)`. Cada módulo unificado tem sua própria classe-ponte `SagasWiring` (`@Profile("sagas")` + `@Import`) pra trazer `RabbitConfig`/`SagasMessaging` de `sagas-common` sem acoplar o nome do profile à lib — ver [module-boundaries.md](module-boundaries.md).
 
 ## Protocolo de mensagem
 
@@ -30,15 +30,17 @@ Esse é o mecanismo mais elegante do projeto: o handler de negócio só precisa 
 pagamento → hotel → voo
 ```
 
-Config real (`reservas-interno-sagas/src/main/resources/application-hotel.yaml` e `-voo.yaml`):
+Config real (`reservas-interno/src/main/resources/application-hotel.yaml` e `-voo.yaml`):
 - `hotel`: `filaanterior: pagamento`, `proximafila: voo`
 - `voo`: `filaanterior: hotel`, sem `proximafila` (fim da cadeia)
 
+`pagamento-interno/src/main/resources/application-sagas.yaml`: `estafila: pagamento`, `proximafila: hotel`, sem `filaanterior` (início da cadeia — só existe pra escutar compensação vinda de volta de hotel/voo, não pra receber execução de alguém anterior).
+
 ## Status de implementação (importante — mecânica ≠ negócio)
 
-- A mecânica de fila (declarar, consumir, ack/nack, compensação) **funciona**.
-- O handler de negócio em `ReservasSagas` (`reservas-interno-sagas`) é um **stub**: só imprime a mensagem recebida (`// TODO fazer o tratamento no nível do negócio`). Nenhuma reserva é confirmada/cancelada a partir da fila ainda.
-- **Não existe módulo `pagamento-interno-sagas`** — não há nada publicando a primeira mensagem na fila `pagamento`. O `docker-compose.yml` tem o comentário explícito `# TODO serviço SAGAS de pagamento (interno)`.
+- A mecânica de fila (declarar, consumir, ack/nack, compensação) **funciona** — testada manualmente publicando direto nas filas via management UI do RabbitMQ: uma mensagem `{"tipo":1}` publicada em `hotel` é consumida e repassada corretamente até `voo`.
+- O handler de negócio em `ReservasSagas`/`PagamentoSagas` é um **stub**: só imprime a mensagem recebida (`// TODO fazer o tratamento no nível do negócio`). Nenhuma reserva/pagamento é confirmado/cancelado a partir da fila ainda — e, como o stub nunca lança exceção, hoje **não tem como o handler em si disparar uma compensação**; só dá pra forçar isso de fora publicando um corpo inválido (que falha no `decode()`, antes do handler rodar) — só que aí a mensagem já não existe pra ser republicada pra trás (`SagasMessaging` corretamente não compensa sem uma mensagem decodificada), então isso só demonstra o caminho de dead-letter, não a compensação retroativa de verdade. Validar o caminho de compensação com conteúdo de mensagem preservado só vai ser possível quando o handler tiver lógica real capaz de falhar (ou temporariamente forçando uma exceção só pra teste, sem commitar).
+- `pagamento-interno` já tem o papel `sagas` (desde a unificação dos módulos), então a fila `pagamento` tem consumidor — mas nada ainda publica a primeira mensagem nela: `PagamentoInternoController.webhookServicoExterno()` continua um método vazio (confirmado: chamar o webhook não gera mensagem nenhuma na fila).
 - Não há campo de correlação/id de sessão de compra na mensagem ainda — quando o negócio for implementado, a mensagem provavelmente precisa carregar o id da `SessaoCompra` para o handler saber o que confirmar/cancelar.
 
 Ver [todo.md](todo.md) para a lista consolidada.

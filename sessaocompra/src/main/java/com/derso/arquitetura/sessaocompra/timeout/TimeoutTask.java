@@ -1,0 +1,50 @@
+package com.derso.arquitetura.sessaocompra.timeout;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+
+import org.springframework.context.annotation.Profile;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import com.derso.arquitetura.sessaocompra.SessaoCompraRepository;
+import com.derso.arquitetura.sessaocompra.dto.CancelamentoDTO;
+import com.derso.arquitetura.sessaocompra.entity.SessaoCompraStatus;
+
+@Component
+@Profile("timeout")
+public class TimeoutTask {
+
+    private static final Duration TEMPO_MAXIMO = Duration.ofMinutes(15);
+    private static final int TAMANHO_LOTE = 100;
+
+    private final SessaoCompraRepository repositorio;
+
+    public TimeoutTask(SessaoCompraRepository repositorio) {
+        this.repositorio = repositorio;
+    }
+
+    @Scheduled(fixedDelayString = "PT1M")
+    public void processaTimeouts() {
+        List<CancelamentoDTO> expiradas;
+
+        do {
+            Instant referencia = Instant.now().minus(TEMPO_MAXIMO);
+            expiradas = repositorio.marcarLoteComoCancelando(TAMANHO_LOTE, referencia);
+
+            for (CancelamentoDTO sessao : expiradas) {
+                try {
+                    // TODO chamada aos serviços externos
+                    // voo.cancelar(sessao.idReservaVooIda());
+                    // hotel.cancelar(sessao.getReservaHotelId());
+                    // voo.cancelar(sessao.idReservaVooVolta());
+                    repositorio.marcarStatusCancelamento(sessao.id(), SessaoCompraStatus.CANCELADA);
+                } catch (Exception e) {
+                    repositorio.marcarStatusCancelamento(sessao.id(), SessaoCompraStatus.FALHA_CANCELAMENTO);
+                }
+            }
+        } while (expiradas.size() > 0);
+    }
+
+}

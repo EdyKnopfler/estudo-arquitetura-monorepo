@@ -1,6 +1,8 @@
 spring:
   main:
     web-application-type: none
+  flyway:
+    enabled: false # só o papel web migra; ver docs/todo.md
 
 sagas:
   estafila: pagamento

@@ -4,11 +4,11 @@ Duas identidades distintas, deliberadamente separadas — não misturar ao mexer
 
 ## JWT — cliente final
 
-`web-base/jwt/JwtService.java`: HMAC-SHA (`Keys.hmacShaKeyFor`, segredo via `jwt.secret`), expiração de 10 minutos, claims `id`/`email`/`userType`. Emitido por `clientes` (`AuthController`) após login. `JwtAuthenticationFilter` valida em cada `-web` que atende requisição de cliente final (ex.: `sessaocompra-web`).
+`web-base/jwt/JwtService.java`: HMAC-SHA (`Keys.hmacShaKeyFor`, segredo via `jwt.secret`), expiração de 10 minutos, claims `id`/`email`/`userType`. Emitido por `clientes` (`AuthController`) após login. Hoje, **só o próprio `clientes` valida esse JWT** (`JwtAuthenticationFilter`, component-scan de `webbase.jwt`) pros seus outros endpoints — nenhum outro `-web` (`sessaocompra`, `reservas-interno`, `pagamento-interno`) importa esse filtro ainda. `sessaocompra` (profile `web`), por exemplo, não tem `SecurityConfiguration` nenhuma hoje — endpoint aberto, sem autenticação de cliente final.
 
 ## Client-ID/Secret — serviço a serviço
 
-`web-base/internalclient/ClientSecretAuthFilter.java`: cada `-web` mantém um mapa `client-id → client-secret` (`InternalClientsConfig`, carregado de `internal-backend.clients` no `application-<profile>.yaml`). Quem chama envia `X-Client-Id`/`X-Client-Secret` nos headers; sem match exato, 401. Usado tanto para chamadas legítimas entre serviços internos (`reservas-interno-web` → `reservas-externo`) quanto para o webhook do `pagamento-externo` responder ao `pagamento-interno-web`.
+`web-base/internalclient/ClientSecretAuthFilter.java`: cada `-web` mantém um mapa `client-id → client-secret` (`InternalClientsConfig`, carregado de `internal-backend.clients` no `application-<profile>.yaml`). Quem chama envia `X-Client-Id`/`X-Client-Secret` nos headers; sem match exato, 401. Usado tanto para chamadas legítimas entre serviços internos (`reservas-interno` profile `web` → `reservas-externo`) quanto para o webhook do `pagamento-externo` responder ao `pagamento-interno` profile `web`.
 
 Cada par de serviços (chamador/chamado) tem client-id/secret próprios configurados nos dois lados — ver `external-backend.*` (para quem chama) e `internal-backend.clients` (para quem aceita) em cada `application-<profile>.yaml`.
 

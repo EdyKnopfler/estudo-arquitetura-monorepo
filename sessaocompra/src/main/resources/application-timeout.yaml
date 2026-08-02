@@ -1,5 +1,12 @@
 spring:
   main:
     web-application-type: none
+
   flyway:
     enabled: false # só o papel web migra; ver docs/todo.md
+
+  datasource:
+    hikari:
+      maximum-pool-size: 1
+      minimum-idle: 1
+      pool-name: TimeoutTaskPool

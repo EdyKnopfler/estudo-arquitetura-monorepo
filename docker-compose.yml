@@ -128,11 +128,13 @@ services:
   sessaocompra-web:
     build:
       context: .
-      dockerfile: sessaocompra-web/Dockerfile
+      dockerfile: sessaocompra/Dockerfile
     env_file:
       - .env
     ports:
       - "${SESSAO_COMPRA_WEB_PORT}:${SESSAO_COMPRA_WEB_PORT}"
+    environment:
+      SPRING_PROFILES_ACTIVE: web
     depends_on:
       - db
 
@@ -186,9 +188,11 @@ services:
   sessaocompra-timeout:
     build:
       context: .
-      dockerfile: sessaocompra-timeout/Dockerfile
+      dockerfile: sessaocompra/Dockerfile
     env_file:
       - .env
+    environment:
+      SPRING_PROFILES_ACTIVE: timeout
     depends_on:
       - db
 
