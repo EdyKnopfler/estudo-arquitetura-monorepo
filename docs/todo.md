@@ -10,6 +10,10 @@ Este arquivo complementa o checklist de features do [README.md](../README.md) (q
 - [ ] **`sessaocompra` (profile `web`) como árbitro ainda não está ligada aos outros serviços.** `SessaoCompraController.iniciarPagamento` e trechos de `atualizarEstadoCompra` têm TODOs explícitos para as chamadas que fariam o papel de árbitro de fato (ver comentários no próprio controller).
 - [ ] **Sem id de correlação na mensagem da SAGA.** A mensagem hoje só carrega `tipo` + o que o handler colocar. Antes de implementar os handlers de negócio, vale decidir que campo identifica a sessão de compra/reserva em toda a cadeia.
 
+## Avaliar padrão Outbox (candidato forte: pagamento)
+
+- [ ] **Avaliar Outbox no webhook de pagamento.** Confirmar pagamento no banco + publicar a 1ª mensagem da SAGA é um dual-write clássico. Decidir Outbox vs. `@Transactional` + retry quando o webhook for implementado.
+
 ## Testes
 
 - [ ] Cobertura de teste é essencialmente zero: todos os arquivos `*ApplicationTests.java` são o `contextLoads()` gerado pelo Spring Boot, nada além disso (confirmado por contagem de linhas). Os testes integrados já planejados no README (Requisição → Externo → Webhook; encaminha sucesso; notifica falha) ainda não existem em nenhum domínio.
