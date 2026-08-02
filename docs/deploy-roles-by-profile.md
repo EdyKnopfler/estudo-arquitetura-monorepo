@@ -1,6 +1,6 @@
 # Como escolher o papel (web vs. sagas) por profile
 
-Mecanismo de implementação do refactor descrito em [module-boundaries.md](module-boundaries.md#3-artefato-único-com-dois-entrypoints-escaláveis-por-configuração--concluído-para-reservas): unificar `-common`/`-web`/`-sagas` de cada domínio num artefato só, escolhendo em runtime se a instância atende REST, fila, ou ambos. Já aplicado em `reservas-interno`; pendente em `pagamento-interno`.
+Mecanismo de implementação do refactor descrito em [module-boundaries.md](module-boundaries.md#3-artefato-único-com-dois-entrypoints-escaláveis-por-configuração--concluído-para-reservas-e-pagamento): unificar `-common`/`-web`/`-sagas` de cada domínio num artefato só, escolhendo em runtime se a instância atende REST, fila, ou ambos. Já aplicado em `reservas-interno` e `pagamento-interno`.
 
 ## Profiles se combinam
 
@@ -31,13 +31,20 @@ public class ReservasSagas implements SmartLifecycle { ... }
 
 ## Pegadinha: propagar o profile pra cadeia de configuração inteira
 
-`@Profile` no componente "visível" não basta se ele depende de `@Configuration`/`@Bean` com efeito colateral na subida (abrir socket, criar pool). Exemplo real deste projeto: `RabbitConfig` (`sagas-common`) declara `Connection`/`Channel` sem `@Profile` — numa instância `web`-only isso abriria conexão com RabbitMQ à toa. Precisa do mesmo `@Profile("sagas")`:
+`@Profile` no componente "visível" não basta se ele depende de `@Configuration`/`@Bean` com efeito colateral na subida (abrir socket, criar pool). Exemplo real deste projeto: `RabbitConfig` (`sagas-common`) declara `Connection`/`Channel` sem `@Profile` — numa instância `web`-only isso abriria conexão com RabbitMQ à toa.
+
+**Decisão tomada:** não anotar `RabbitConfig` diretamente — isso vazaria a convenção de nome de profile (`"sagas"`) pra dentro de uma biblioteca (`sagas-common`) que deveria ser agnóstica a quem a consome. Em vez disso, cada módulo consumidor tem sua própria classe-ponte, só ela carrega o `@Profile`, e usa `@Import` pra trazer as classes da lib:
 
 ```java
+// com.derso.arquitetura.reservasinterno.sagas.SagasWiring
+// (mesma estrutura em com.derso.arquitetura.pagamentointerno.sagas.SagasWiring)
 @Configuration
 @Profile("sagas")
-public class RabbitConfig { ... }
+@Import({ SagasJacksonConfig.class, RabbitConfig.class, SagasMessaging.class })
+public class SagasWiring {}
 ```
+
+Funciona porque `@Profile` é um `@Conditional` avaliado pelo `ConfigurationClassParser` **antes** de processar `@Import` — se o profile não bate, a classe inteira (e tudo que ela importaria) é ignorada. `@Import` aceita `@Component` puro além de `@Configuration`, por isso dá pra importar `SagasMessaging` (que é `@Component`) junto com os dois `@Configuration`. Consequência prática: `com.derso.arquitetura.sagas` **não entra** no `@ComponentScan` do app (senão seria varrido incondicionalmente, contornando a gate) — a única porta de entrada pro pacote da lib passa a ser esse `@Import` explícito.
 
 ## Desligar o servidor web na instância só-fila
 
@@ -64,10 +71,12 @@ Deixa o `docker-compose.yml` mais legível (`SPRING_PROFILES_ACTIVE: reservas-ho
 
 ## Checklist para o refactor
 
-**Aplicado em `reservas-interno`** — usar de roteiro de novo quando `pagamento-interno-sagas` for criado e `pagamento-interno-{common,web}` passarem pelo mesmo tratamento.
+**Aplicado em `reservas-interno` e `pagamento-interno`.**
 
 - [x] Todo `@RestController`/`@Service` hoje em `-web` ganha `@Profile("web")`.
-- [x] Todo listener/`SmartLifecycle` hoje em `-sagas` ganha `@Profile("sagas")`, **junto com** a cadeia de `@Configuration` da qual depende (conexão/canal RabbitMQ) — em vez de anotar `RabbitConfig` direto (o que vazaria a convenção de profile pra dentro da lib `sagas-common`), a gate ficou numa classe-ponte só do lado do consumidor: `@Configuration @Profile("sagas") @Import({SagasJacksonConfig.class, RabbitConfig.class, SagasMessaging.class})`. Funciona porque `@Profile` é avaliado antes do `@Import` ser processado.
+- [x] Todo listener/`SmartLifecycle` hoje em `-sagas` ganha `@Profile("sagas")`, **junto com** a cadeia de `@Configuration` da qual depende (conexão/canal RabbitMQ) — via a classe-ponte `SagasWiring` (ver seção acima), não anotando `sagas-common` diretamente.
 - [x] `application-sagas.yaml` novo com `spring.main.web-application-type: none`.
-- [x] Decidir se `application-web.yaml` chega a ser necessário (só se houver algo específico do papel web além do que já está em `application.yaml`/`application-<domínio>.yaml`) — não foi necessário; porta é domínio-específica e ficou nos arquivos `application-hotel.yaml`/`application-voo.yaml`.
+- [x] Decidir se `application-web.yaml` chega a ser necessário (só se houver algo específico do papel web além do que já está em `application.yaml`/`application-<domínio>.yaml`) — não foi necessário em nenhum dos dois domínios.
 - [x] Confirmar que rodar Flyway nos dois papéis é aceitável (schema precisa existir de qualquer forma; Flyway tem lock próprio contra corrida entre instâncias migrando ao mesmo tempo).
+
+Pagamento não tem eixo de domínio (hotel/voo) — só o eixo de papel, então `SPRING_PROFILES_ACTIVE=web` / `SPRING_PROFILES_ACTIVE=sagas` direto, sem combinar com nada. A fiação da fila (`sagas.estafila`/`proximafila`, sem `filaanterior`) fica em `application-sagas.yaml` mesmo, não precisou de arquivo por domínio.

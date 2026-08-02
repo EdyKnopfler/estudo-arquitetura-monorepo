@@ -2,7 +2,7 @@
 
 ## Stack
 
-Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (13 módulos + parent POM), Postgres 18.1 com Flyway, RabbitMQ 4.2.2 (cliente Java cru, não Spring AMQP), Docker Compose para orquestração local.
+Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (10 módulos + parent POM), Postgres 18.1 com Flyway, RabbitMQ 4.2.2 (cliente Java cru, não Spring AMQP), Docker Compose para orquestração local.
 
 ## Infra compartilhada
 
@@ -23,10 +23,10 @@ Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (1
 | `reservas-interno` (profile `hotel,sagas`) | consumidor de fila `hotel` | — | db, broker |
 | `reservas-interno` (profile `voo,sagas`) | consumidor de fila `voo` | — | db, broker |
 | `pagamento-externo` | simulador instável de gateway de pagamento | 8086 | db |
-| `pagamento-interno-web` | REST de pagamento + webhook | 8087 | db |
-| `pagamento-interno-sagas` | **não existe ainda** — ver [todo.md](todo.md) | — | — |
+| `pagamento-interno` (profile `web`) | REST de pagamento + webhook | 8087 | db |
+| `pagamento-interno` (profile `sagas`) | consumidor de fila `pagamento` (início/fim da cadeia) | — | db, broker |
 
-`reservas-externo` e `reservas-interno` são o **mesmo artefato** (cada um o seu) rodando várias vezes com `SPRING_PROFILES_ACTIVE` combinando domínio (`hotel`/`voo`) — e, no caso de `reservas-interno`, também papel (`web`/`sagas`) — cada instância com seu próprio database/fila.
+`reservas-externo` e `reservas-interno` são o **mesmo artefato** (cada um o seu) rodando várias vezes com `SPRING_PROFILES_ACTIVE` combinando domínio (`hotel`/`voo`) — e, no caso de `reservas-interno`, também papel (`web`/`sagas`) — cada instância com seu próprio database/fila. `pagamento-interno` não tem eixo de domínio (só existe um pagamento), então só varia por papel (`web`/`sagas`).
 
 ## Interno x externo
 
@@ -35,13 +35,7 @@ Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (1
 
 ## Padrão de módulos por domínio
 
-Pagamento ainda segue a receita original (ver também [module-boundaries.md](module-boundaries.md)):
-
-- **`-common`**: entidades JPA + regra de negócio + repositório. Biblioteca Maven, não é deployável sozinha.
-- **`-web`**: expõe REST, depende do `-common` correspondente.
-- **`-sagas`**: escuta fila de entrada e publica na próxima, depende do `-common` (**ainda não existe** pra pagamento).
-
-Reservas já passou pelo refactor descrito em [module-boundaries.md](module-boundaries.md#3-artefato-único-com-dois-entrypoints-escaláveis-por-configuração--concluído-para-reservas): os três papéis (`-common`/`-web`/`-sagas`) viraram um artefato único, `reservas-interno`, com o papel (REST vs. fila) escolhido por profile Spring em runtime — ver [deploy-roles-by-profile.md](deploy-roles-by-profile.md) pro mecanismo.
+Reservas e pagamento já passaram pelo refactor descrito em [module-boundaries.md](module-boundaries.md#3-artefato-único-com-dois-entrypoints-escaláveis-por-configuração--concluído-para-reservas-e-pagamento): os antigos módulos `-common`/`-web`/`-sagas` de cada domínio viraram um artefato único (`reservas-interno`, `pagamento-interno`), com o papel (REST vs. fila) escolhido por profile Spring em runtime — ver [deploy-roles-by-profile.md](deploy-roles-by-profile.md) pro mecanismo. Para pagamento, o papel `sagas` foi criado do zero nesse refactor (nunca tinha existido como módulo — ver [todo.md](todo.md)).
 
 Bibliotecas transversais, usadas por praticamente todo `-web`/`-externo`:
 
@@ -71,6 +65,7 @@ flowchart LR
   end
 
   pagamento-interno-web -.TODO: publicar em Qpag.-> Qpag
+  Qpag -.consome.-> pagamento-interno-sagas
   Qhotel -.consome.-> reservas-interno-hotel-sagas
   Qvoo -.consome.-> reservas-interno-voo-sagas
 ```

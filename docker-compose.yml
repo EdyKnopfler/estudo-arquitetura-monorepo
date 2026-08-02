@@ -26,6 +26,15 @@ services:
       RABBITMQ_DEFAULT_USER: ${BROKER_USER}
       RABBITMQ_DEFAULT_PASS: ${BROKER_PASSWORD}
       RABBITMQ_DEFAULT_VHOST: /
+    healthcheck:
+      # RabbitMQ (Erlang VM + plugins) demora bem mais pra ficar pronto do que o container
+      # leva pra existir — sem isso, quem depende de "broker" sobe antes da hora e cai com
+      # "Connection refused" (ver docs/todo.md).
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
   # Simulação de serviços externos instáveis
   pagamento-externo:
@@ -80,11 +89,13 @@ services:
   pagamento-interno-web:
     build:
       context: .
-      dockerfile: pagamento-interno-web/Dockerfile
+      dockerfile: pagamento-interno/Dockerfile
     env_file:
       - .env
     ports:
       - "${PAGAMENTO_INTERNO_PORT}:${PAGAMENTO_INTERNO_PORT}"
+    environment:
+      SPRING_PROFILES_ACTIVE: web
     depends_on:
       - db
   
@@ -135,8 +146,11 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: hotel,sagas
     depends_on:
-      - db
-      - broker
+      db:
+        condition: service_started
+      broker:
+        condition: service_healthy
+    restart: on-failure
 
   reservas-interno-voo-sagas:
     build:
@@ -147,10 +161,26 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: voo,sagas
     depends_on:
-      - db
-      - broker
+      db:
+        condition: service_started
+      broker:
+        condition: service_healthy
+    restart: on-failure
 
-  # TODO serviço SAGAS de pagamento (interno)
+  pagamento-interno-sagas:
+    build:
+      context: .
+      dockerfile: pagamento-interno/Dockerfile
+    env_file:
+      - .env
+    environment:
+      SPRING_PROFILES_ACTIVE: sagas
+    depends_on:
+      db:
+        condition: service_started
+      broker:
+        condition: service_healthy
+    restart: on-failure
 
   # Timeout de limpeza de reservas não confirmadas
   sessaocompra-timeout:

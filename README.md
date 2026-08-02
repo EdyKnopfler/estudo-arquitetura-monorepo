@@ -23,9 +23,7 @@ Confira o resumo das decisões arquiteturais em [CLAUDE.md](./CLAUDE.md) e o det
 
 * **clientes:** cadastra e autentica clientes
 * **pagamento-externo**: simula serviço externo _instável_ de pagamento, com falhas, aceites e recusas; não precisa implementar lógica completa
-* **pagamento-interno-common**: centraliza a lógica de negócio dos pagamentos
-* **pagamento-interno-web**: interface web para a realização de pagamentos na aplicação; webhook para o serviço externo comunicar confirmação ou recusa de pagamentos
-* **pagamento-interno-sagas**: a confirmação de um pagamento envia mensagens para os sistemas de reservas realizarem a confirmação; ao menos uma instância deste serviço fica observando a fila para estornar pagamentos em caso de erro nas reservas
+* **pagamento-interno**: centraliza a lógica de negócio dos pagamentos; papel REST (webhook para o serviço externo comunicar confirmação/recusa) ou SAGAS (a confirmação de um pagamento envia mensagens para os sistemas de reservas realizarem a confirmação; a instância fica observando a fila pra estornar pagamentos em caso de erro nas reservas) escolhido por profile
 * **reservas-externo:** simula serviços externos _instáveis_ para teste da arquitetura; não precisa implementar lógica completa
 * **reservas-interno**: centraliza a lógica de negócio das reservas de voo e hotel; papel REST (interface web para reservas) ou SAGAS (responde a eventos de pagamento e erros para confirmação/cancelamento) escolhido por profile — deve haver ao menos uma instância de cada papel para voos e uma para hotel
 * **sessaocompra-common:** centraliza a lógica de negócio das sessões de compra. Implementa bloqueios de consistência.

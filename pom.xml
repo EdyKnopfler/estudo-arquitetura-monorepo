@@ -18,8 +18,7 @@
     <module>reservas-externo</module>
     <module>reservas-interno</module>
     <module>pagamento-externo</module>
-    <module>pagamento-interno-common</module>
-    <module>pagamento-interno-web</module>
+    <module>pagamento-interno</module>
   </modules>
 
   <dependencyManagement>
