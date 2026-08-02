@@ -15,14 +15,14 @@ Confira o resumo das decisões arquiteturais em [CLAUDE.md](./CLAUDE.md) e o det
 
 ```mermaid
 stateDiagram-v2
-    [*] --> INICIADA: cliente cria a sessão
+    [*] --> INICIADA: cria sessão
 
-    INICIADA --> EFETUANDO_PAGAMENTO: reservas completas,\npagamento iniciado
-    INICIADA --> CANCELANDO: timeout (reservas\nnão completadas a tempo)
+    INICIADA --> EFETUANDO_PAGAMENTO: reservas completas, pagamento iniciado
+    INICIADA --> CANCELANDO: timeout, reservas incompletas
 
-    EFETUANDO_PAGAMENTO --> VIAGEM_RESERVADA: SAGA completa\n(pagamento + hotel + voo confirmados)
-    EFETUANDO_PAGAMENTO --> INICIADA: SAGA falhou em qualquer etapa\n(compensação completa, timer resetado)
-    EFETUANDO_PAGAMENTO --> CANCELANDO: timeout (pagamento iniciado,\nnunca confirmado)
+    EFETUANDO_PAGAMENTO --> VIAGEM_RESERVADA: SAGA completa (pagamento + hotel + voo)
+    EFETUANDO_PAGAMENTO --> INICIADA: SAGA falhou, compensação completa
+    EFETUANDO_PAGAMENTO --> CANCELANDO: timeout, pagamento não confirmado
 
     CANCELANDO --> CANCELADA: pré-reservas desfeitas
     CANCELANDO --> FALHA_CANCELAMENTO: erro ao desfazer
@@ -37,22 +37,17 @@ stateDiagram-v2
 ```mermaid
 flowchart TD
   WH[["webhook pagamento"]]
-  WH -->|"sucesso: EXECUTE"| Qpag
-  WH -.->|"falha: DESFACA"| Qsc
+  WH -->|sucesso| PAGC["pagamento (confirmação)"]
+  WH -.->|falha| SCR["sessão compra (reversão)"]
 
-  Qpag[["fila: pagamento"]] --> Qhotel
-  Qhotel[["fila: hotel"]] --> Qvoo
-  Qvoo[["fila: voo"]] --> Qsc
+  PAGC -->|EXECUTE| HOT[hotel]
+  HOT -->|EXECUTE| VOO[voo]
+  VOO -->|EXECUTE| SCC["sessão compra (confirmação)"]
 
-  Qsc[["fila: sessaocompra"]]
-
-  Qsc -.->|"DESFACA, se sessaocompra falhar"| Qvoo
-  Qvoo -.->|compensação| Qhotel
-  Qhotel -.->|compensação| Qpag
-  Qpag -.->|"compensação (estorno)"| Qsc
-
-  Qsc -->|"tipo=EXECUTE"| CONF["sessaocompra confirma:<br/>VIAGEM_RESERVADA"]
-  Qsc -.->|"tipo=DESFACA"| REV["sessaocompra reverte:<br/>volta pra INICIADA"]
+  SCC -.->|"DESFACA, se falhar"| VOO
+  VOO -.->|DESFACA| HOT
+  HOT -.->|DESFACA| PAGE["pagamento (estorno)"]
+  PAGE -.->|DESFACA| SCR
 ```
 
 Desenho completo (inclui o que já está implementado vs. planejado) em [docs/purchase-flow-design.md](docs/purchase-flow-design.md); mecânica de fila já implementada (`pagamento → hotel → voo`) em [docs/saga-choreography.md](docs/saga-choreography.md).
