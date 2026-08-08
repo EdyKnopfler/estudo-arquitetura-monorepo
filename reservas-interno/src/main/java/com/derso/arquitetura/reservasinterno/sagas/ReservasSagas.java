@@ -47,7 +47,17 @@ public class ReservasSagas implements SmartLifecycle {
                 mensagem -> {
 
                     // TODO fazer o tratamento no nível do negócio
-                    System.out.println("Recebida mensagem: " + mensagem);
+                    double tipo = ((Number) mensagem.getOrDefault("tipo", SagasMessaging.EXECUTE)).doubleValue();
+                    Object rastreio = mensagem.get("rastreio");
+                    boolean fimDaCadeia = proximaFila == null;
+
+                    System.out.println("[" + estaFila + "] "
+                            + (tipo == SagasMessaging.EXECUTE ? "confirmando" : "cancelando")
+                            + " reserva — rastreio=" + rastreio);
+
+                    if (tipo == SagasMessaging.EXECUTE && fimDaCadeia) {
+                        throw new RuntimeException("[" + estaFila + "] falha simulada — rastreio=" + rastreio);
+                    }
 
                 }
             );

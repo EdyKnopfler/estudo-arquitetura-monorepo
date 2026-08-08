@@ -10,10 +10,10 @@ import com.derso.arquitetura.sagas.SagasMessaging;
 
 /**
  * Ponte pro sagas-common: a lib fica sem @Profile, agnóstica a quem a consome.
- * Só quem precisa da coreografia (papel "sagas") importa a conexão RabbitMQ.
+ * Papel "sagas" consome e publica; papel "web" só publica a 1ª mensagem no webhook.
  */
 @Configuration
-@Profile("sagas")
+@Profile({ "web", "sagas" })
 @Import({ SagasJacksonConfig.class, RabbitConfig.class, SagasMessaging.class })
 public class SagasWiring {
 }

@@ -54,6 +54,31 @@ Desenho completo (inclui o que já está implementado vs. planejado) em [docs/pu
 
 ---
 
+## DIA HISTÓRICO: amarramos o SAGAS :)
+
+Para rodar:
+
+```
+docker compose up -d --build db broker pagamento-interno-web pagamento-interno-sagas reservas-interno-hotel-sagas reservas-interno-voo-sagas
+
+curl -v -X POST http://localhost:8087/webhook -H "X-Client-Id: pagamentoExternoId" -H "X-Client-Secret: pagamentoExternoSecret" 2>&1 | tail -30
+
+docker compose logs -f
+```
+
+Você deverá ver a saída:
+
+```
+pagamento-interno-web-1         | [webhook] disparando SAGA rastreio=5c144d50-a3c7-4290-8333-981f20f3e6d6
+pagamento-interno-sagas-1       | [pagamento] confirmando cobrança — rastreio=5c144d50-a3c7-4290-8333-981f20f3e6d6
+reservas-interno-hotel-sagas-1  | [hotel] confirmando reserva — rastreio=5c144d50-a3c7-4290-8333-981f20f3e6d6
+reservas-interno-voo-sagas-1    | [voo] confirmando reserva — rastreio=5c144d50-a3c7-4290-8333-981f20f3e6d6
+reservas-interno-hotel-sagas-1  | [hotel] cancelando reserva — rastreio=5c144d50-a3c7-4290-8333-981f20f3e6d6
+pagamento-interno-sagas-1       | [pagamento] ESTORNANDO pagamento — rastreio=5c144d50-a3c7-4290-8333-981f20f3e6d6
+```
+
+---
+
 ## **TODO** 
 
 * Encaixar e conectar todos os serviços (isso **demora**!)

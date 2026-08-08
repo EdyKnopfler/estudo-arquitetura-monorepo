@@ -97,8 +97,11 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: web
     depends_on:
-      - db
-  
+      db:
+        condition: service_started
+      broker:
+        condition: service_healthy
+
   reservas-interno-hotel-web:
     build:
       context: .

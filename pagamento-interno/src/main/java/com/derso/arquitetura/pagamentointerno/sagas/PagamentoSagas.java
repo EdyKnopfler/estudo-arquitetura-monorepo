@@ -47,7 +47,14 @@ public class PagamentoSagas implements SmartLifecycle {
                 mensagem -> {
 
                     // TODO fazer o tratamento no nível do negócio
-                    System.out.println("Recebida mensagem: " + mensagem);
+                    double tipo = ((Number) mensagem.getOrDefault("tipo", SagasMessaging.EXECUTE)).doubleValue();
+                    Object rastreio = mensagem.get("rastreio");
+
+                    if (tipo == SagasMessaging.EXECUTE) {
+                        System.out.println("[pagamento] confirmando cobrança — rastreio=" + rastreio);
+                    } else {
+                        System.out.println("[pagamento] ESTORNANDO pagamento — rastreio=" + rastreio);
+                    }
 
                 }
             );
