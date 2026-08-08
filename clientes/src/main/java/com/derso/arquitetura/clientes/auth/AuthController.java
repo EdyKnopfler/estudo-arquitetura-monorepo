@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.derso.arquitetura.clientes.app.ClientesService;
-import com.derso.arquitetura.webbase.jwt.JwtService;
+import com.derso.arquitetura.webbase.jwt.JwtIssuerService;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +17,7 @@ import lombok.RequiredArgsConstructor;
 public class AuthController {
 
     private final ClientesService clientesService;
-    private final JwtService jwtService;
+    private final JwtIssuerService jwtIssuerService;
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@RequestBody @Valid LoginRequest dadosLogin) {
@@ -27,7 +27,7 @@ public class AuthController {
 
         return clientesService.validarLogin(dadosLogin.email(), dadosLogin.senha())
             .map(cliente -> ResponseEntity.ok(
-                new LoginResponse(jwtService.generateToken(cliente.id().toString(), cliente.email(), null), refreshToken)))
+                new LoginResponse(jwtIssuerService.generateToken(cliente.id().toString(), cliente.email(), null), refreshToken)))
             .orElse(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
     }
     

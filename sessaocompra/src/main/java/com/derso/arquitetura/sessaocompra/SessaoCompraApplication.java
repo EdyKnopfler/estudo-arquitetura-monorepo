@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableScheduling
-@ComponentScan(basePackages = {"com.derso.arquitetura.sessaocompra", "com.derso.arquitetura.webbase.config"})
+@ComponentScan(basePackages = {"com.derso.arquitetura.sessaocompra", "com.derso.arquitetura.webbase.config", "com.derso.arquitetura.webbase.jwt"})
 public class SessaoCompraApplication {
 
 	public static void main(String[] args) {

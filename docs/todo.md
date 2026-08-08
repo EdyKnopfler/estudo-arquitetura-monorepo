@@ -41,3 +41,6 @@ Este arquivo complementa o checklist de features do [README.md](../README.md) (q
 ## Decisões em aberto (não são bugs, são pontos a revisitar)
 
 - `basicQos(1)` limita cada instância de SAGA a processar uma mensagem por vez — teto de throughput conhecido, revisitar se/quando houver medição de carga real.
+- `JWT_PUBLIC_KEY`/`JWT_PRIVATE_KEY` no `.env`/`.env.clientes` não seguem o padrão `<SERVIÇO>_ID`/`_SECRET` do resto do arquivo (são infra compartilhada tipo `DB_HOST`, não credencial de um par específico) — considerar renomear pra algo tipo `CLIENTE_JWT_PUBLIC_KEY` se ficar confuso.
+- Defaults de `jwt.private-key`/`jwt.public-key` embutidos nos `application.yaml` (fallback pra rodar sem env var) duplicam o segredo que já está no `.env`/`.env.clientes` — avaliar remover e deixar obrigatório via env var, se não houver fluxo real de rodar sem Docker.
+- Debug remoto (JDWP) não está configurado no `docker-compose.yml` — falta `JAVA_TOOL_OPTIONS=-agentlib:jdwp=...` + porta exposta nos serviços `-web` pra debugar via attach do VSCode dentro do container.

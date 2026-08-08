@@ -81,6 +81,7 @@ services:
       dockerfile: clientes/Dockerfile
     env_file:
       - .env
+      - .env.clientes
     ports:
       - "${CLIENTES_PORT}:${CLIENTES_PORT}"
     depends_on:

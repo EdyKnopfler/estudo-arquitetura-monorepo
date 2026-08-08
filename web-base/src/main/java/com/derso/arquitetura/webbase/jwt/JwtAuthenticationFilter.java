@@ -19,10 +19,10 @@ import jakarta.servlet.http.HttpServletResponse;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    private final JwtService jwtService;
+    private final JwtValidatorService jwtValidatorService;
 
-    public JwtAuthenticationFilter(JwtService jwtService) {
-        this.jwtService = jwtService;
+    public JwtAuthenticationFilter(JwtValidatorService jwtValidatorService) {
+        this.jwtValidatorService = jwtValidatorService;
     }
 
     @Override
@@ -40,7 +40,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String token = header.substring(7);
 
-        Optional<Claims> optClaims = jwtService.validateToken(token);
+        Optional<Claims> optClaims = jwtValidatorService.validateToken(token);
 
         if (optClaims.isEmpty()) {
             chain.doFilter(request, response);

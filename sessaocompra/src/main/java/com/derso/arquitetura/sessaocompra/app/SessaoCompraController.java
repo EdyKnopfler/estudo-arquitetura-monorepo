@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -14,9 +15,9 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.derso.arquitetura.sessaocompra.SessaoCompraService;
-import com.derso.arquitetura.sessaocompra.app.dto.CriacaoSessaoRequest;
 import com.derso.arquitetura.sessaocompra.app.dto.CriacaoSessaoResponse;
 import com.derso.arquitetura.sessaocompra.dto.InteracaoDTO;
+import com.derso.arquitetura.webbase.jwt.UsuarioAutenticado;
 
 import lombok.RequiredArgsConstructor;
 
@@ -30,8 +31,8 @@ public class SessaoCompraController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public CriacaoSessaoResponse criar(@RequestBody CriacaoSessaoRequest dados) {
-        return new CriacaoSessaoResponse(service.criar(dados.idCliente()));
+    public CriacaoSessaoResponse criar(@AuthenticationPrincipal UsuarioAutenticado usuario) {
+        return new CriacaoSessaoResponse(service.criar(UUID.fromString(usuario.id())));
     }
 
     @PutMapping("/{id}")
