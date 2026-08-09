@@ -28,7 +28,7 @@ class SessaoCompraControllerOwnershipGuardTest {
             .filter(SessaoCompraControllerOwnershipGuardTest::recebeIdDeSessaoNoPath)
             .filter(m -> !ISENTOS_DE_OWNERSHIP.contains(m.getName()))
             .filter(m -> m.getAnnotation(PreAuthorize.class) == null)
-            .map(Method::getName)
+            .map(m -> m.getName())
             .toList();
 
         assertTrue(semProtecao.isEmpty(), "endpoints sem @PreAuthorize de ownership: " + semProtecao);

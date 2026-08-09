@@ -29,13 +29,13 @@ public class WebhookConfig {
 
         if (webhooks != null) {
             this.urlsById = webhooks.stream().collect(Collectors.toMap(
-                Webhook::getUrl, 
-                Webhook::getClientSecret
+                w -> w.getUrl(),
+                w -> w.getClientSecret()
             ));
 
             this.secretsById = webhooks.stream().collect(Collectors.toMap(
-                Webhook::getClientId, 
-                Webhook::getClientSecret
+                w -> w.getClientId(),
+                w -> w.getClientSecret()
             ));
         }
     }

@@ -24,8 +24,8 @@ public class InternalClientsConfig {
 
         if (clients != null) {
             this.clientsAsMap = clients.stream().collect(Collectors.toMap(
-                InternalClient::getClientId, 
-                InternalClient::getClientSecret
+                c -> c.getClientId(),
+                c -> c.getClientSecret()
             ));
         }
     }

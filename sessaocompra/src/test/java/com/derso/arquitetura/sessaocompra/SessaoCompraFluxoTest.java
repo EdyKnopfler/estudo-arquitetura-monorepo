@@ -19,7 +19,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Import;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.context.ActiveProfiles;
@@ -27,9 +27,6 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.derso.arquitetura.sessaocompra.app.dto.CriacaoSessaoResponse;
 import com.derso.arquitetura.sessaocompra.reservasinterno.ReservasInternoHotelClient;
@@ -37,19 +34,14 @@ import com.derso.arquitetura.sessaocompra.reservasinterno.ReservasInternoVooClie
 import com.derso.arquitetura.webbase.jwt.UsuarioAutenticado;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-// Fronteira real de teste = o próprio módulo sessaocompra: segurança, persistência e
-// transições de estado rodam de verdade (Postgres via Testcontainers); só reservas-interno
-// é mockado, porque é a única dependência que sai do processo.
+// Fronteira real de teste = o próprio módulo sessaocompra: segurança e persistência rodam de
+// verdade; só reservas-interno é mockado, porque é a única dependência que sai do processo.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("web")
 @TestPropertySource(properties = ChaveJwtTeste.JWT_PUBLIC_KEY_PROPERTY)
-@Testcontainers
+@Import(TestcontainersConfig.class)
 class SessaoCompraFluxoTest {
-
-    @Container
-    @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18.1");
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 

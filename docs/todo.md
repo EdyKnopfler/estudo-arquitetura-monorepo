@@ -19,6 +19,7 @@ Este arquivo complementa o checklist de features do [README.md](../README.md) (q
 ## Testes
 
 - [ ] Cobertura de teste é essencialmente zero: todos os arquivos `*ApplicationTests.java` são o `contextLoads()` gerado pelo Spring Boot, nada além disso (confirmado por contagem de linhas). Os testes integrados já planejados no README (Requisição → Externo → Webhook; encaminha sucesso; notifica falha) ainda não existem em nenhum domínio.
+- [ ] Testes automatizados para os módulos compartilhados (`sagas-common`, `web-base`) que já funcionam — hoje só validados indiretamente via módulos consumidores.
 
 ## Hygiene / housekeeping
 
