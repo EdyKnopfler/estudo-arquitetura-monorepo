@@ -3,104 +3,159 @@
     "configurations": [
         {
             "type": "java",
-            "name": "Sessão Compra: serviço web",
-            "request": "launch",
-            "mainClass": "com.derso.arquitetura.sessaocompra.SessaoCompraApplication",
-            "projectName": "sessaocompra-web"
-        },
-        {
-            "type": "java",
-            "name": "Sessão Compra: serviço timeouts",
-            "request": "launch",
-            "mainClass": "com.derso.arquitetura.timeout.TimeoutApplication",
-            "projectName": "sessaocompra-timeout"
-        },
-        {
-            "type": "java",
-            "name": "Clientes",
-            "request": "launch",
-            "mainClass": "com.derso.arquitetura.clientes.ClientesApplication",
-            "projectName": "clientes"
-        },
-        {
-            "type": "java",
-            "name": "Serviço interno: Hotel (web)",
-            "request": "launch",
-            "mainClass": "com.derso.arquitetura.reservasinterno.ReservasInternoApplication",
-            "projectName": "reservas-interno-web",
-            "env": {
-                "SPRING_PROFILES_ACTIVE": "hotel"
+            "name": "Sessão Compra: serviço web (attach Docker)",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 9080,
+            "projectName": "sessaocompra",
+            "stepFilters": {
+                "skipClasses": ["$JDK", "javax.*", "jakarta.*", "org.springframework.*", "org.apache.*", "net.sf.cglib.*", "net.bytebuddy.*", "org.hibernate.*", "ch.qos.logback.*", "org.slf4j.*", "org.jboss.logging.*", "com.fasterxml.jackson.*", "com.zaxxer.hikari.*", "org.postgresql.*"],
+                "skipSynthetics": true,
+                "skipStaticInitializers": true
             }
         },
         {
             "type": "java",
-            "name": "Serviço interno: Hotel (SAGAS)",
-            "request": "launch",
-            "mainClass": "com.derso.arquitetura.reservasinternosagas.ReservasInternoSagasApplication",
-            "projectName": "reservas-interno-sagas",
-            "env": {
-                "SPRING_PROFILES_ACTIVE": "hotel"
+            "name": "Sessão Compra: serviço timeouts (attach Docker)",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 9091,
+            "projectName": "sessaocompra",
+            "stepFilters": {
+                "skipClasses": ["$JDK", "javax.*", "jakarta.*", "org.springframework.*", "org.apache.*", "net.sf.cglib.*", "net.bytebuddy.*", "org.hibernate.*", "ch.qos.logback.*", "org.slf4j.*", "org.jboss.logging.*", "com.fasterxml.jackson.*", "com.zaxxer.hikari.*", "org.postgresql.*"],
+                "skipSynthetics": true,
+                "skipStaticInitializers": true
             }
         },
         {
             "type": "java",
-            "name": "Serviço interno: Voo (web)",
-            "request": "launch",
-            "mainClass": "com.derso.arquitetura.reservasinterno.ReservasInternoApplication",
-            "projectName": "reservas-interno-web",
-            "env": {
-                "SPRING_PROFILES_ACTIVE": "voo"
+            "name": "Clientes (attach Docker)",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 9081,
+            "projectName": "clientes",
+            "stepFilters": {
+                "skipClasses": ["$JDK", "javax.*", "jakarta.*", "org.springframework.*", "org.apache.*", "net.sf.cglib.*", "net.bytebuddy.*", "org.hibernate.*", "ch.qos.logback.*", "org.slf4j.*", "org.jboss.logging.*", "com.fasterxml.jackson.*", "com.zaxxer.hikari.*", "org.postgresql.*"],
+                "skipSynthetics": true,
+                "skipStaticInitializers": true
             }
         },
         {
             "type": "java",
-            "name": "Serviço interno: Voo (SAGAS)",
-            "request": "launch",
-            "mainClass": "com.derso.arquitetura.reservasinternosagas.ReservasInternoSagasApplication",
-            "projectName": "reservas-interno-sagas",
-            "env": {
-                "SPRING_PROFILES_ACTIVE": "voo"
+            "name": "Serviço interno: Hotel (web) (attach Docker)",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 9084,
+            "projectName": "reservas-interno",
+            "stepFilters": {
+                "skipClasses": ["$JDK", "javax.*", "jakarta.*", "org.springframework.*", "org.apache.*", "net.sf.cglib.*", "net.bytebuddy.*", "org.hibernate.*", "ch.qos.logback.*", "org.slf4j.*", "org.jboss.logging.*", "com.fasterxml.jackson.*", "com.zaxxer.hikari.*", "org.postgresql.*"],
+                "skipSynthetics": true,
+                "skipStaticInitializers": true
             }
         },
         {
             "type": "java",
-            "name": "Serviço externo: Hotel",
-            "request": "launch",
-            "mainClass": "com.derso.arquitetura.reservasexterno.ReservasExternoApplication",
+            "name": "Serviço interno: Hotel (SAGAS) (attach Docker)",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 9088,
+            "projectName": "reservas-interno",
+            "stepFilters": {
+                "skipClasses": ["$JDK", "javax.*", "jakarta.*", "org.springframework.*", "org.apache.*", "net.sf.cglib.*", "net.bytebuddy.*", "org.hibernate.*", "ch.qos.logback.*", "org.slf4j.*", "org.jboss.logging.*", "com.fasterxml.jackson.*", "com.zaxxer.hikari.*", "org.postgresql.*"],
+                "skipSynthetics": true,
+                "skipStaticInitializers": true
+            }
+        },
+        {
+            "type": "java",
+            "name": "Serviço interno: Voo (web) (attach Docker)",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 9085,
+            "projectName": "reservas-interno",
+            "stepFilters": {
+                "skipClasses": ["$JDK", "javax.*", "jakarta.*", "org.springframework.*", "org.apache.*", "net.sf.cglib.*", "net.bytebuddy.*", "org.hibernate.*", "ch.qos.logback.*", "org.slf4j.*", "org.jboss.logging.*", "com.fasterxml.jackson.*", "com.zaxxer.hikari.*", "org.postgresql.*"],
+                "skipSynthetics": true,
+                "skipStaticInitializers": true
+            }
+        },
+        {
+            "type": "java",
+            "name": "Serviço interno: Voo (SAGAS) (attach Docker)",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 9089,
+            "projectName": "reservas-interno",
+            "stepFilters": {
+                "skipClasses": ["$JDK", "javax.*", "jakarta.*", "org.springframework.*", "org.apache.*", "net.sf.cglib.*", "net.bytebuddy.*", "org.hibernate.*", "ch.qos.logback.*", "org.slf4j.*", "org.jboss.logging.*", "com.fasterxml.jackson.*", "com.zaxxer.hikari.*", "org.postgresql.*"],
+                "skipSynthetics": true,
+                "skipStaticInitializers": true
+            }
+        },
+        {
+            "type": "java",
+            "name": "Serviço externo: Hotel (attach Docker)",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 9082,
             "projectName": "reservas-externo",
-            "env": {
-                "SPRING_PROFILES_ACTIVE": "hotel"
+            "stepFilters": {
+                "skipClasses": ["$JDK", "javax.*", "jakarta.*", "org.springframework.*", "org.apache.*", "net.sf.cglib.*", "net.bytebuddy.*", "org.hibernate.*", "ch.qos.logback.*", "org.slf4j.*", "org.jboss.logging.*", "com.fasterxml.jackson.*", "com.zaxxer.hikari.*", "org.postgresql.*"],
+                "skipSynthetics": true,
+                "skipStaticInitializers": true
             }
         },
         {
             "type": "java",
-            "name": "Serviço externo: Voo",
-            "request": "launch",
-            "mainClass": "com.derso.arquitetura.reservasexterno.ReservasExternoApplication",
+            "name": "Serviço externo: Voo (attach Docker)",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 9083,
             "projectName": "reservas-externo",
-            "env": {
-                "SPRING_PROFILES_ACTIVE": "voo"
+            "stepFilters": {
+                "skipClasses": ["$JDK", "javax.*", "jakarta.*", "org.springframework.*", "org.apache.*", "net.sf.cglib.*", "net.bytebuddy.*", "org.hibernate.*", "ch.qos.logback.*", "org.slf4j.*", "org.jboss.logging.*", "com.fasterxml.jackson.*", "com.zaxxer.hikari.*", "org.postgresql.*"],
+                "skipSynthetics": true,
+                "skipStaticInitializers": true
             }
         },
         {
             "type": "java",
-            "name": "Serviço externo: Pagamento",
-            "request": "launch",
-            "mainClass": "com.derso.arquitetura.pagamentoexterno.PagamentoExternoApplication",
-            "projectName": "pagamento-externo"
+            "name": "Serviço externo: Pagamento (attach Docker)",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 9086,
+            "projectName": "pagamento-externo",
+            "stepFilters": {
+                "skipClasses": ["$JDK", "javax.*", "jakarta.*", "org.springframework.*", "org.apache.*", "net.sf.cglib.*", "net.bytebuddy.*", "org.hibernate.*", "ch.qos.logback.*", "org.slf4j.*", "org.jboss.logging.*", "com.fasterxml.jackson.*", "com.zaxxer.hikari.*", "org.postgresql.*"],
+                "skipSynthetics": true,
+                "skipStaticInitializers": true
+            }
         },
         {
             "type": "java",
-            "name": "Serviço interno: Pagamento (web)",
-            "request": "launch",
-            "mainClass": "com.derso.arquitetura.pagamentointerno.PagamentoInternoWebApplication",
-            "projectName": "pagamento-interno-web"
+            "name": "Serviço interno: Pagamento (web) (attach Docker)",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 9087,
+            "projectName": "pagamento-interno",
+            "stepFilters": {
+                "skipClasses": ["$JDK", "javax.*", "jakarta.*", "org.springframework.*", "org.apache.*", "net.sf.cglib.*", "net.bytebuddy.*", "org.hibernate.*", "ch.qos.logback.*", "org.slf4j.*", "org.jboss.logging.*", "com.fasterxml.jackson.*", "com.zaxxer.hikari.*", "org.postgresql.*"],
+                "skipSynthetics": true,
+                "skipStaticInitializers": true
+            }
         },
         {
             "type": "java",
-            "name": "Current File",
-            "request": "launch",
-            "mainClass": "${file}"
+            "name": "Serviço interno: Pagamento (SAGAS) (attach Docker)",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 9090,
+            "projectName": "pagamento-interno",
+            "stepFilters": {
+                "skipClasses": ["$JDK", "javax.*", "jakarta.*", "org.springframework.*", "org.apache.*", "net.sf.cglib.*", "net.bytebuddy.*", "org.hibernate.*", "ch.qos.logback.*", "org.slf4j.*", "org.jboss.logging.*", "com.fasterxml.jackson.*", "com.zaxxer.hikari.*", "org.postgresql.*"],
+                "skipSynthetics": true,
+                "skipStaticInitializers": true
+            }
         }
     ]
 }

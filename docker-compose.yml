@@ -16,6 +16,8 @@ services:
 
   broker:
     image: rabbitmq:4.2.2-management-alpine
+    # fixa o nodename do mnesia, evita lixo acumulado a cada recriação
+    hostname: ${BROKER_HOST}
     ports:
       - "${BROKER_PORT}:${BROKER_PORT}"
       - "${BROKER_PORT_WEB}:${BROKER_PORT_WEB}"
@@ -45,9 +47,12 @@ services:
       - .env
     ports:
       - "${PAGAMENTO_EXTERNO_PORT}:${PAGAMENTO_EXTERNO_PORT}"
+      - "${PAGAMENTO_EXTERNO_DEBUG_PORT}:${PAGAMENTO_EXTERNO_DEBUG_PORT}"
+    environment:
+      JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:${PAGAMENTO_EXTERNO_DEBUG_PORT}
     depends_on:
       - db
-  
+
   reservas-externo-hotel:
     build:
       context: .
@@ -56,11 +61,13 @@ services:
       - .env
     ports:
       - "${RESERVAS_EXTERNO_HOTEL_PORT}:${RESERVAS_EXTERNO_HOTEL_PORT}"
+      - "${RESERVAS_EXTERNO_HOTEL_DEBUG_PORT}:${RESERVAS_EXTERNO_HOTEL_DEBUG_PORT}"
     environment:
       SPRING_PROFILES_ACTIVE: hotel
+      JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:${RESERVAS_EXTERNO_HOTEL_DEBUG_PORT}
     depends_on:
       - db
-  
+
   reservas-externo-voo:
     build:
       context: .
@@ -69,8 +76,10 @@ services:
       - .env
     ports:
       - "${RESERVAS_EXTERNO_VOO_PORT}:${RESERVAS_EXTERNO_VOO_PORT}"
+      - "${RESERVAS_EXTERNO_VOO_DEBUG_PORT}:${RESERVAS_EXTERNO_VOO_DEBUG_PORT}"
     environment:
       SPRING_PROFILES_ACTIVE: voo
+      JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:${RESERVAS_EXTERNO_VOO_DEBUG_PORT}
     depends_on:
       - db
 
@@ -84,6 +93,9 @@ services:
       - .env.clientes
     ports:
       - "${CLIENTES_PORT}:${CLIENTES_PORT}"
+      - "${CLIENTES_DEBUG_PORT}:${CLIENTES_DEBUG_PORT}"
+    environment:
+      JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:${CLIENTES_DEBUG_PORT}
     depends_on:
       - db
 
@@ -95,8 +107,10 @@ services:
       - .env
     ports:
       - "${PAGAMENTO_INTERNO_PORT}:${PAGAMENTO_INTERNO_PORT}"
+      - "${PAGAMENTO_INTERNO_DEBUG_PORT}:${PAGAMENTO_INTERNO_DEBUG_PORT}"
     environment:
       SPRING_PROFILES_ACTIVE: web
+      JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:${PAGAMENTO_INTERNO_DEBUG_PORT}
     depends_on:
       db:
         condition: service_started
@@ -111,8 +125,10 @@ services:
       - .env
     ports:
       - "${RESERVAS_INTERNO_WEB_HOTEL_PORT}:${RESERVAS_INTERNO_WEB_HOTEL_PORT}"
+      - "${RESERVAS_INTERNO_WEB_HOTEL_DEBUG_PORT}:${RESERVAS_INTERNO_WEB_HOTEL_DEBUG_PORT}"
     environment:
       SPRING_PROFILES_ACTIVE: hotel,web
+      JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:${RESERVAS_INTERNO_WEB_HOTEL_DEBUG_PORT}
     depends_on:
       - db
 
@@ -124,8 +140,10 @@ services:
       - .env
     ports:
       - "${RESERVAS_INTERNO_WEB_VOO_PORT}:${RESERVAS_INTERNO_WEB_VOO_PORT}"
+      - "${RESERVAS_INTERNO_WEB_VOO_DEBUG_PORT}:${RESERVAS_INTERNO_WEB_VOO_DEBUG_PORT}"
     environment:
       SPRING_PROFILES_ACTIVE: voo,web
+      JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:${RESERVAS_INTERNO_WEB_VOO_DEBUG_PORT}
     depends_on:
       - db
 
@@ -137,8 +155,10 @@ services:
       - .env
     ports:
       - "${SESSAO_COMPRA_WEB_PORT}:${SESSAO_COMPRA_WEB_PORT}"
+      - "${SESSAO_COMPRA_WEB_DEBUG_PORT}:${SESSAO_COMPRA_WEB_DEBUG_PORT}"
     environment:
       SPRING_PROFILES_ACTIVE: web
+      JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:${SESSAO_COMPRA_WEB_DEBUG_PORT}
     depends_on:
       - db
 
@@ -149,8 +169,11 @@ services:
       dockerfile: reservas-interno/Dockerfile
     env_file:
       - .env
+    ports:
+      - "${RESERVAS_INTERNO_HOTEL_SAGAS_DEBUG_PORT}:${RESERVAS_INTERNO_HOTEL_SAGAS_DEBUG_PORT}"
     environment:
       SPRING_PROFILES_ACTIVE: hotel,sagas
+      JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:${RESERVAS_INTERNO_HOTEL_SAGAS_DEBUG_PORT}
     depends_on:
       db:
         condition: service_started
@@ -164,8 +187,11 @@ services:
       dockerfile: reservas-interno/Dockerfile
     env_file:
       - .env
+    ports:
+      - "${RESERVAS_INTERNO_VOO_SAGAS_DEBUG_PORT}:${RESERVAS_INTERNO_VOO_SAGAS_DEBUG_PORT}"
     environment:
       SPRING_PROFILES_ACTIVE: voo,sagas
+      JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:${RESERVAS_INTERNO_VOO_SAGAS_DEBUG_PORT}
     depends_on:
       db:
         condition: service_started
@@ -179,8 +205,11 @@ services:
       dockerfile: pagamento-interno/Dockerfile
     env_file:
       - .env
+    ports:
+      - "${PAGAMENTO_INTERNO_SAGAS_DEBUG_PORT}:${PAGAMENTO_INTERNO_SAGAS_DEBUG_PORT}"
     environment:
       SPRING_PROFILES_ACTIVE: sagas
+      JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:${PAGAMENTO_INTERNO_SAGAS_DEBUG_PORT}
     depends_on:
       db:
         condition: service_started
@@ -195,8 +224,11 @@ services:
       dockerfile: sessaocompra/Dockerfile
     env_file:
       - .env
+    ports:
+      - "${SESSAO_COMPRA_TIMEOUT_DEBUG_PORT}:${SESSAO_COMPRA_TIMEOUT_DEBUG_PORT}"
     environment:
       SPRING_PROFILES_ACTIVE: timeout
+      JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:${SESSAO_COMPRA_TIMEOUT_DEBUG_PORT}
     depends_on:
       - db
 
