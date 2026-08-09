@@ -38,3 +38,13 @@ spring:
 
 jwt:
   public-key: ${JWT_PUBLIC_KEY}
+
+reservas-interno-hotel:
+  url: http://${RESERVAS_INTERNO_WEB_HOTEL_HOST:localhost}:${RESERVAS_INTERNO_WEB_HOTEL_PORT:8084}
+  client-id: ${RESERVAS_INTERNO_WEB_HOTEL_ID:reservasInternoHotelId}
+  client-secret: ${RESERVAS_INTERNO_WEB_HOTEL_SECRET:reservasInternoHotelSecret}
+
+reservas-interno-voo:
+  url: http://${RESERVAS_INTERNO_WEB_VOO_HOST:localhost}:${RESERVAS_INTERNO_WEB_VOO_PORT:8085}
+  client-id: ${RESERVAS_INTERNO_WEB_VOO_ID:reservasInternoVooId}
+  client-secret: ${RESERVAS_INTERNO_WEB_VOO_SECRET:reservasInternoVooSecret}

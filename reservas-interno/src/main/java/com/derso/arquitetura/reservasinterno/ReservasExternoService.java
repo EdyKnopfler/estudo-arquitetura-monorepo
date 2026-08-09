@@ -36,6 +36,14 @@ public class ReservasExternoService {
     return responseData.idReserva();
   }
 
+  // Melhor esforço — ver ReservasService.trocarReserva / docs/purchase-flow-design.md.
+  public void cancelar(UUID idExterno) {
+    restClient.delete()
+        .uri("/reservas/{id}", idExterno)
+        .retrieve()
+        .toBodilessEntity();
+  }
+
   private <TReq, TRes> TRes novoRequest(String finalDaUrl, TReq requestData, Class<TRes> responseClass) {
     return restClient.post()
         .uri("/reservas" + finalDaUrl)

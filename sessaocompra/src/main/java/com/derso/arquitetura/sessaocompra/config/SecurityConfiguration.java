@@ -3,6 +3,7 @@ package com.derso.arquitetura.sessaocompra.config;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -14,6 +15,7 @@ import com.derso.arquitetura.webbase.jwt.JwtAuthenticationFilter;
 // Só o papel "web" expõe HTTP; o papel "timeout" roda com web-application-type: none.
 @Configuration
 @Profile("web")
+@EnableMethodSecurity
 public class SecurityConfiguration {
 
     @Bean

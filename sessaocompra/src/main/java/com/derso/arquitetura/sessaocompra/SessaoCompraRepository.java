@@ -16,25 +16,34 @@ import com.derso.arquitetura.sessaocompra.entity.SessaoCompraStatus;
 
 public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID> {
 
+    boolean existsByIdAndIdCustomer(UUID id, UUID idCustomer);
+
     @Modifying
     @Query("""
         UPDATE SessaoCompra s
-        SET
-            s.idCustomer = :idCustomer,
-            s.idReservaVooIda = :idReservaVooIda,
-            s.idReservaHotel = :idReservaHotel,
-            s.idReservaVooVolta = :idReservaVooVolta
+        SET s.idReservaHotel = :idReservaHotel
         WHERE s.id = :idSessao
-            AND (s.idCustomer IS NULL OR s.idCustomer = :idCustomer)
             AND s.status = 'INICIADA'
     """)
-    int updateSessaoInteracaoCompra(
-        @Param("idSessao") UUID idSessao,
-        @Param("idCustomer") UUID idCustomer,
-        @Param("idReservaVooIda") UUID idReservaVooIda,
-        @Param("idReservaHotel") UUID idReservaHotel,
-        @Param("idReservaVooVolta") UUID idReservaVooVolta
-    );
+    int atualizarHotel(@Param("idSessao") UUID idSessao, @Param("idReservaHotel") UUID idReservaHotel);
+
+    @Modifying
+    @Query("""
+        UPDATE SessaoCompra s
+        SET s.idReservaVooIda = :idReservaVooIda
+        WHERE s.id = :idSessao
+            AND s.status = 'INICIADA'
+    """)
+    int atualizarVooIda(@Param("idSessao") UUID idSessao, @Param("idReservaVooIda") UUID idReservaVooIda);
+
+    @Modifying
+    @Query("""
+        UPDATE SessaoCompra s
+        SET s.idReservaVooVolta = :idReservaVooVolta
+        WHERE s.id = :idSessao
+            AND s.status = 'INICIADA'
+    """)
+    int atualizarVooVolta(@Param("idSessao") UUID idSessao, @Param("idReservaVooVolta") UUID idReservaVooVolta);
 
     @Modifying
     @Query("""
@@ -43,6 +52,9 @@ public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID
             s.status = 'EFETUANDO_PAGAMENTO'
         WHERE s.id = :idSessao
             AND s.status = 'INICIADA'
+            AND s.idReservaVooIda IS NOT NULL
+            AND s.idReservaHotel IS NOT NULL
+            AND s.idReservaVooVolta IS NOT NULL
     """)
     int iniciarPagamento(@Param("idSessao") UUID id);
 

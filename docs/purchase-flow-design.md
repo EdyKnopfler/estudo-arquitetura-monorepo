@@ -1,14 +1,14 @@
 # Fluxo de compra — desenho (não implementado)
 
-Resultado de uma sessão de arquitetura (2026-08-02) sobre como `sessaocompra` amarra pré-reservas, pagamento e a SAGA. **Nada abaixo está implementado** — é o desenho para a próxima sessão de implementação. Complementa [saga-choreography.md](saga-choreography.md) (mecânica já implementada) e [todo.md](todo.md) (lacunas atuais).
+Resultado de uma sessão de arquitetura (2026-08-02) sobre como `sessaocompra` amarra pré-reservas, pagamento e a SAGA. **A seção "Interação do usuário" abaixo (até o disparo do pagamento) está implementada** (sessão de 2026-08-09) — falta só a "SAGA estendida" mais abaixo, que continua desenho. Complementa [saga-choreography.md](saga-choreography.md) (mecânica já implementada) e [todo.md](todo.md) (lacunas atuais).
 
 ## Interação do usuário
 
-1. Informa/atualiza `idCliente` na sessão (login em `clientes`, depois grava na sessão).
-2. Reserva hotel e voo(s), em qualquer ordem — cada reserva passa por um endpoint dedicado em `sessaocompra` (um por tipo, não um update genérico com os campos juntos), que internamente chama `reservas-interno` e grava só aquele ID.
-3. Dispara pagamento — só deve ser permitido quando todas as reservas exigidas estiverem preenchidas (gate de completude ainda não existe em `iniciarPagamento`).
+Implementado em `SessaoCompraController`/`SessaoCompraService`/`SessaoCompraRepository` (código é a fonte de verdade pro mecanismo). Decisões de negócio por trás:
 
-`sessaocompra` é o único ponto de contato do front — front nunca fala direto com `reservas-interno`/`pagamento-interno` ("porteiro do front-end"), evitando que o front precise carregar estado entre chamadas.
+1. `idCliente` vem do JWT só na criação da sessão, nunca de update posterior. Cliente pode ter **múltiplas sessões simultâneas** (decisão deliberada, não uma-por-cliente); ownership por sessão via `@PreAuthorize` (ver [security-and-auth.md](security-and-auth.md)).
+2. Re-seleção de item já escolhido faz troca de verdade (não cria e ignora a antiga): adquire a nova antes de liberar a antiga, nunca ao contrário — evita deixar o cliente sem nada se a nova falhar. Liberação da antiga é melhor esforço; o timeout do próprio `reservas-externo` é a rede de segurança.
+3. `sessaocompra` é o único ponto de contato do front ("porteiro") — front nunca fala direto com `reservas-interno`/`pagamento-interno`, nem sabe os ids de reserva.
 
 ## Dois timeouts
 
@@ -46,12 +46,14 @@ flowchart LR
 
 ## O que isso desbloqueia / próximos passos
 
-- Endpoints incrementais em `SessaoCompraController` por tipo de reserva (substituindo `updateSessaoInteracaoCompra`, que hoje faz `SET` dos 4 campos de uma vez só).
-- Gate de completude em `iniciarPagamento` (checar as 3 colunas de reserva preenchidas antes de mudar pra `EFETUANDO_PAGAMENTO`).
+- ~~Endpoints incrementais por tipo de reserva~~ — feito.
+- ~~Gate de completude em `iniciarPagamento`~~ — feito.
+- ~~Client-id/secret `sessaocompra` → `reservas-interno`~~ — feito, reaproveitando credenciais existentes (ver [security-and-auth.md](security-and-auth.md)).
+- ~~`SecurityConfiguration`/`@PreAuthorize` em `sessaocompra`~~ — feito.
+- ~~Endpoint de troca em `reservas-interno`~~ — feito, ver item 2 acima.
 - `TimeoutPagamentoTask` + coluna de timestamp do início do pagamento.
 - Payload da mensagem SAGA com id de correlação.
-- Fila nova `sessaocompra` + handler único (branch por `tipo`), com `voo.proximafila` e `pagamento.filaanterior` apontando pra ela — sem plumbing nova, só configuração + handler.
-- Capacidade de publish no profile `web` de `pagamento-interno` (hoje só `sagas` publica) — necessária tanto pro webhook de sucesso (publicar `EXECUTE` em `pagamento`, já pendente em [todo.md](todo.md)) quanto pro de falha (publicar `DESFACA` direto em `sessaocompra`).
-- Client-id/secret novo para a chamada HTTP `sessaocompra` → `reservas-interno` (relação que não existe hoje — ver [security-and-auth.md](security-and-auth.md)).
-- Revisitar a ausência de `SecurityConfiguration`/JWT em `sessaocompra` agora que ela vira o único ponto de contato do front, não só mais um serviço interno.
-- Implementação real dos handlers de negócio em `ReservasSagas`/`PagamentoSagas` — pré-requisito, já listado em [todo.md](todo.md).
+- Fila nova `sessaocompra` + handler único (branch por `tipo`), `voo.proximafila`/`pagamento.filaanterior` apontando pra ela.
+- Capacidade de publish no profile `web` de `pagamento-interno` (hoje só `sagas` publica) — necessária pro webhook de sucesso e de falha.
+- Implementação real dos handlers de negócio em `ReservasSagas`/`PagamentoSagas` (ver [todo.md](todo.md)).
+- Ordem de start-up `sessaocompra-web` × `reservas-interno-*-web` no `docker-compose.yml` (checar ciclo em `depends_on`).

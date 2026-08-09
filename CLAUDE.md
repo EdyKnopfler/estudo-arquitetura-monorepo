@@ -18,6 +18,16 @@ Java 25 (virtual threads), Spring Boot 4.0.1, Maven multi-módulo (8 módulos + 
 - **Duas identidades de autenticação**: JWT para cliente final, client-id/secret por par de serviços internos. Detalhe e limitações conhecidas: [docs/security-and-auth.md](docs/security-and-auth.md).
 - **Chaos engineering nos simuladores `-externo`**: falha e latência aleatórias propositais (`CHANCE_FALHA`), para exercitar os caminhos de compensação da SAGA.
 
+## Convenções de escrita (código e docs)
+
+- Comentário no código: só o que não é óbvio lendo o código (armadilha, invariante, motivo de workaround) — curto, de preferência uma linha
+  - se o porquê já está em `docs/`, aponta pra lá em vez de reexplicar
+- Documentação em `docs/`:
+  - desenho ainda não implementado: detalhe completo (é a única fonte de verdade nesse momento)
+  - depois de implementado: código vira fonte de verdade do *como*; a doc encolhe pro *porquê* (decisão de negócio/projeto, armadilhas encontradas)
+  - cada fato mora num lugar só — duplicar entre código e doc(s) tende a ficar desatualizado
+- Escrita em geral (docs, TODOs, mensagens): bullets aninhados e frases curtas em vez de parágrafo denso
+
 ## Pendências
 
 A mecânica de infraestrutura (filas, auth, config) está mais madura que a regra de negócio que deveria carregar. Destaques: handlers da SAGA ainda são stub (só logam), webhook de pagamento é método vazio (nem confirma pagamento nem publica a primeira mensagem da SAGA), cobertura de teste é ~zero. Lista completa e categorizada: [docs/todo.md](docs/todo.md). Checklist de features por domínio (hotel/voo/pagamento): [README.md](README.md).

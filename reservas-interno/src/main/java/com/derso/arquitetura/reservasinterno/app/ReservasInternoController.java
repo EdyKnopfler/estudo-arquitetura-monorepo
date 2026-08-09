@@ -1,8 +1,12 @@
 package com.derso.arquitetura.reservasinterno.app;
 
+import java.util.UUID;
+
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -27,6 +31,11 @@ public class ReservasInternoController {
     @ResponseStatus(HttpStatus.CREATED)
     public ReservaDTO criar(@RequestBody @Valid CriarReservaRequest dados) {
         return servico.criarReserva(dados.idCliente());
+    }
+
+    @PutMapping("/{id}/trocar")
+    public ReservaDTO trocar(@PathVariable("id") UUID id, @RequestBody @Valid CriarReservaRequest dados) {
+        return servico.trocarReserva(id, dados.idCliente());
     }
 
 }
