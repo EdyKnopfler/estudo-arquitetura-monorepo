@@ -12,8 +12,10 @@ import org.springframework.stereotype.Component;
 import lombok.Getter;
 import lombok.Setter;
 
+// prefixo "internal-backend" porque é onde o application.yaml declara este bloco (junto de
+// "clients", quem pode chamar este serviço) — não "webhooks" isolado, que não bate com o YAML
 @Component
-@ConfigurationProperties(prefix = "webhooks")
+@ConfigurationProperties(prefix = "internal-backend")
 public class WebhookConfig {
 
     private List<Webhook> webhooks = new ArrayList<>();
@@ -29,8 +31,8 @@ public class WebhookConfig {
 
         if (webhooks != null) {
             this.urlsById = webhooks.stream().collect(Collectors.toMap(
-                w -> w.getUrl(),
-                w -> w.getClientSecret()
+                w -> w.getClientId(),
+                w -> w.getUrl()
             ));
 
             this.secretsById = webhooks.stream().collect(Collectors.toMap(
