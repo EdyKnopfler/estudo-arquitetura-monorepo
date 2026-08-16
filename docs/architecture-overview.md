@@ -35,7 +35,7 @@ Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (8
 
 ## Padrão de módulos por domínio
 
-Reservas, pagamento e sessão de compra já passaram pelo refactor descrito em [module-boundaries.md](module-boundaries.md#3-artefato-único-com-dois-entrypoints-escaláveis-por-configuração--concluído-para-reservas-pagamento-e-sessão-de-compra): os antigos módulos `-common`/`-web`/`-sagas` (ou `-timeout`) de cada domínio viraram um artefato único (`reservas-interno`, `pagamento-interno`, `sessaocompra`), com o papel escolhido por profile Spring em runtime — ver [deploy-roles-by-profile.md](deploy-roles-by-profile.md) pro mecanismo. Para pagamento, o papel `sagas` foi criado do zero (nunca tinha existido como módulo — ver [todo.md](todo.md)). `sessaocompra` é uma variação do mesmo mecanismo: não participa da coreografia SAGA, então o segundo papel não é `sagas`, é `timeout` (job `@Scheduled` que cancela sessões expiradas) — mesmo princípio (`@Profile`/`web-application-type: none`), sem depender de `sagas-common`.
+Reservas, pagamento e sessão de compra são cada um um artefato único por domínio (`reservas-interno`, `pagamento-interno`, `sessaocompra`), com controller REST e listener de fila no mesmo processo — o papel ativo em cada instância é escolhido por profile Spring em runtime, ver [deploy-roles-by-profile.md](deploy-roles-by-profile.md) pro mecanismo. `sessaocompra` é uma variação: não participa da coreografia SAGA, então o segundo papel não é `sagas`, é `timeout` (job `@Scheduled` que cancela sessões expiradas) — mesmo princípio (`@Profile`/`web-application-type: none`), sem depender de `sagas-common`.
 
 Bibliotecas transversais, usadas por praticamente todo `-web`/`-externo`:
 

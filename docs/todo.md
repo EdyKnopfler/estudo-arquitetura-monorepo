@@ -32,7 +32,7 @@ Este arquivo complementa o checklist de features do [README.md](../README.md) (q
 ## Refactor planejado (sessão futura dedicada)
 
 - [x] ~~Unificar `-common`/`-web`/`-sagas` de reservas num único artefato~~ — feito, ver `reservas-interno` e [deploy-roles-by-profile.md](deploy-roles-by-profile.md).
-- [x] ~~Fazer o mesmo para pagamento~~ — feito, ver `pagamento-interno`. O papel `sagas` foi criado do zero (nunca existira como módulo). Decisão e mecanismo documentados em [module-boundaries.md](module-boundaries.md#3-artefato-único-com-dois-entrypoints-escaláveis-por-configuração--concluído-para-reservas-pagamento-e-sessão-de-compra) e [deploy-roles-by-profile.md](deploy-roles-by-profile.md).
+- [x] ~~Fazer o mesmo para pagamento~~ — feito, ver `pagamento-interno`. O papel `sagas` foi criado do zero (nunca existira como módulo). Mecanismo documentado em [deploy-roles-by-profile.md](deploy-roles-by-profile.md).
 - [x] ~~Fazer o mesmo para sessão de compra~~ — feito, ver `sessaocompra`. Variação: não tem papel `sagas` (não participa da coreografia), o segundo papel é `timeout` (`TimeoutTask` com `@Profile("timeout")`), sem depender de `sagas-common`. De quebra, corrigiu o pacote `com.derso.arquitetura.timeout`/`com.derso.treinohotel.timeout` (nome legado) pra `com.derso.arquitetura.sessaocompra.timeout`, consistente com o resto do domínio.
 
 ## Verificação manual da coreografia — feita em 2026-08-02 e 2026-08-08

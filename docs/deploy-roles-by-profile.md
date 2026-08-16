@@ -1,10 +1,10 @@
 # Como escolher o papel (web vs. sagas) por profile
 
-Mecanismo de implementação do refactor descrito em [module-boundaries.md](module-boundaries.md#3-artefato-único-com-dois-entrypoints-escaláveis-por-configuração--concluído-para-reservas-pagamento-e-sessão-de-compra): unificar `-common`/`-web`/`-sagas` de cada domínio num artefato só, escolhendo em runtime se a instância atende REST, fila, ou ambos. Já aplicado em `reservas-interno` e `pagamento-interno`.
+Cada domínio (`reservas-interno`, `pagamento-interno`, `sessaocompra`) é um artefato único com controller REST e listener de fila no mesmo processo; qual entrypoint fica ativo em cada instância é decidido em runtime por profile Spring.
 
 ## Profiles se combinam
 
-`SPRING_PROFILES_ACTIVE` aceita lista separada por vírgula. Hoje o projeto já usa profile pra domínio (`hotel`/`voo`); o refactor adiciona um segundo eixo ortogonal, papel (`web`/`sagas`), ativado junto:
+`SPRING_PROFILES_ACTIVE` aceita lista separada por vírgula. O projeto usa profile pra domínio (`hotel`/`voo`) e, ortogonalmente, pra papel (`web`/`sagas`), ativados juntos:
 
 ```
 SPRING_PROFILES_ACTIVE=hotel,web    # instância REST de hotel
@@ -13,7 +13,7 @@ SPRING_PROFILES_ACTIVE=voo,web
 SPRING_PROFILES_ACTIVE=voo,sagas
 ```
 
-Arquivo novo por papel: `application-web.yaml` / `application-sagas.yaml`, ao lado dos `application-hotel.yaml` / `application-voo.yaml` que já existem.
+Arquivo por papel: `application-web.yaml` / `application-sagas.yaml`, ao lado dos `application-hotel.yaml` / `application-voo.yaml` de domínio.
 
 ## `@Profile` controla quais beans existem
 
@@ -69,14 +69,12 @@ spring:
 
 Deixa o `docker-compose.yml` mais legível (`SPRING_PROFILES_ACTIVE: reservas-hotel-web`), sem mudar a mecânica.
 
-## Checklist para o refactor
+## Aplicado em cada domínio
 
-**Aplicado em `reservas-interno` e `pagamento-interno`.** Também aplicado em `sessaocompra`, com uma variação: como esse domínio não participa da coreografia SAGA, o segundo papel se chama `timeout` (não `sagas`) e não tem `SagasWiring`/dependência de `sagas-common` — é só `@Profile("timeout")` no `TimeoutTask` (`@Scheduled`) + `application-timeout.yaml` com `web-application-type: none`. Ver [module-boundaries.md](module-boundaries.md#3-artefato-único-com-dois-entrypoints-escaláveis-por-configuração--concluído-para-reservas-pagamento-e-sessão-de-compra). (Desenho ainda não implementado adiciona um papel de fila a `sessaocompra` — ver [purchase-flow-design.md](purchase-flow-design.md).)
+`reservas-interno` e `pagamento-interno`: todo `@RestController`/`@Service` do papel REST leva `@Profile("web")`; todo listener/`SmartLifecycle` do papel fila leva `@Profile("sagas")`, junto com a cadeia de `@Configuration` da qual depende — via a classe-ponte `SagasWiring` (ver seção acima). `application-sagas.yaml` seta `spring.main.web-application-type: none`; não foi necessário um `application-web.yaml` em nenhum dos dois domínios (nada específico do papel web além do que já está em `application.yaml`/`application-<domínio>.yaml`).
 
-- [x] Todo `@RestController`/`@Service` hoje em `-web` ganha `@Profile("web")`.
-- [x] Todo listener/`SmartLifecycle` hoje em `-sagas` ganha `@Profile("sagas")`, **junto com** a cadeia de `@Configuration` da qual depende (conexão/canal RabbitMQ) — via a classe-ponte `SagasWiring` (ver seção acima), não anotando `sagas-common` diretamente.
-- [x] `application-sagas.yaml` novo com `spring.main.web-application-type: none`.
-- [x] Decidir se `application-web.yaml` chega a ser necessário (só se houver algo específico do papel web além do que já está em `application.yaml`/`application-<domínio>.yaml`) — não foi necessário em nenhum dos dois domínios.
-- [x] **Desligar Flyway em todo profile que não seja `web`** (`spring.flyway.enabled: false` em `application-sagas.yaml`/`application-timeout.yaml`). Testamos rodar Flyway nos dois papéis primeiro — funcionava, mas era regressão: antes do refactor, só `-web` tinha Flyway como dependência. Achamos o problema de fato em `sessaocompra-timeout` (pool pequeno herdado do módulo antigo, Flyway precisa de 2 conexões simultâneas e travava contra si mesmo); em `reservas-interno`/`pagamento-interno` não travou só porque o pool nunca foi reduzido pro papel `sagas` — o risco existia igual, mascarado. Ver [todo.md](todo.md).
+`sessaocompra` segue o mesmo mecanismo com uma variação: como esse domínio não participa da coreografia SAGA, o segundo papel se chama `timeout` (não `sagas`) e não tem `SagasWiring`/dependência de `sagas-common` — é só `@Profile("timeout")` no `TimeoutTask` (`@Scheduled`) + `application-timeout.yaml` com `web-application-type: none`. (Desenho ainda não implementado adiciona um papel de fila a `sessaocompra` — ver [purchase-flow-design.md](purchase-flow-design.md).)
+
+**Flyway roda só no profile `web`**: `spring.flyway.enabled: false` explícito em `application-sagas.yaml`/`application-timeout.yaml` dos três domínios. Non-óbvio: Flyway precisa de 2 conexões simultâneas pra coordenação de lock durante a migration — com múltiplas instâncias de um profile não-web tentando migrar ao mesmo tempo (e pool pequeno, como em `sessaocompra-timeout`), elas travam entre si até estourar timeout.
 
 Pagamento não tem eixo de domínio (hotel/voo) — só o eixo de papel, então `SPRING_PROFILES_ACTIVE=web` / `SPRING_PROFILES_ACTIVE=sagas` direto, sem combinar com nada. A fiação da fila (`sagas.estafila`/`proximafila`, sem `filaanterior`) fica em `application-sagas.yaml` mesmo, não precisou de arquivo por domínio.

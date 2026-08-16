@@ -7,7 +7,7 @@ Implementação própria sobre o cliente Java cru do RabbitMQ (`com.rabbitmq.cli
 - `RabbitConfig` (`sagas-common`): abre uma única `Connection`/`Channel` por instância a partir de `sagas.rabbithost/port/user/password`.
 - `SagasMessaging` (`sagas-common`): declara exchanges/filas e implementa o protocolo de consumo/publicação.
 - `SagaMessageHandler`: interface funcional que cada serviço implementa com a lógica de negócio real (`handle(Map<String, Object> mensagem)`).
-- Cada papel `sagas` (ex.: `reservas-interno/.../sagas/ReservasSagas.java`, `pagamento-interno/.../sagas/PagamentoSagas.java`) é um `SmartLifecycle` que lê `sagas.estafila` / `sagas.filaanterior` / `sagas.proximafila` do `application-<profile>.yaml` e chama `SagasMessaging.configurarServico(...)` + `iniciarConsumo(...)`. Cada módulo unificado tem sua própria classe-ponte `SagasWiring` (`@Profile("sagas")` + `@Import`) pra trazer `RabbitConfig`/`SagasMessaging` de `sagas-common` sem acoplar o nome do profile à lib — ver [module-boundaries.md](module-boundaries.md).
+- Cada papel `sagas` (ex.: `reservas-interno/.../sagas/ReservasSagas.java`, `pagamento-interno/.../sagas/PagamentoSagas.java`) é um `SmartLifecycle` que lê `sagas.estafila` / `sagas.filaanterior` / `sagas.proximafila` do `application-<profile>.yaml` e chama `SagasMessaging.configurarServico(...)` + `iniciarConsumo(...)`. Cada módulo tem sua própria classe-ponte `SagasWiring` (`@Profile("sagas")` + `@Import`) pra trazer `RabbitConfig`/`SagasMessaging` de `sagas-common` sem acoplar o nome do profile à lib — ver [deploy-roles-by-profile.md](deploy-roles-by-profile.md).
 
 ## Protocolo de mensagem
 
