@@ -7,7 +7,6 @@ import java.util.Optional;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import io.jsonwebtoken.Claims;
@@ -16,7 +15,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-@Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtValidatorService jwtValidatorService;
@@ -48,8 +46,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         Claims claims = optClaims.get();
-        UsuarioAutenticado dadosUsuario = new UsuarioAutenticado(
-            claims.get("id").toString(), claims.get("email").toString());
+        Object id = claims.get("id");
+        Object email = claims.get("email");
+
+        // claims ausentes = token de formato inesperado; trata como token inválido (mesmo
+        // caminho de optClaims.isEmpty() acima) em vez de estourar NPE
+        if (id == null || email == null) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        UsuarioAutenticado dadosUsuario = new UsuarioAutenticado(id.toString(), email.toString());
         Authentication auth = new UsernamePasswordAuthenticationToken(dadosUsuario, null, Collections.emptyList());
         SecurityContextHolder.getContext().setAuthentication(auth);
         chain.doFilter(request, response);

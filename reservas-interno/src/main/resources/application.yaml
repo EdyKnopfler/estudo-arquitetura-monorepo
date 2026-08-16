@@ -33,6 +33,9 @@ spring:
     enabled: true
     validate-on-migrate: true
 
+security:
+  auth-type: client-secret
+
 sagas:
   rabbithost: ${BROKER_HOST:localhost}
   rabbitport: ${BROKER_PORT:5672}

@@ -1,18 +1,19 @@
 package com.derso.arquitetura.clientes.config;
 
+import java.util.List;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.DefaultSecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-import com.derso.arquitetura.webbase.jwt.JwtAuthenticationFilter;
+import com.derso.arquitetura.webbase.security.RotaPublica;
 
-import static org.springframework.http.HttpMethod.POST;
-
+// A SecurityFilterChain em si (tipo de auth, filtro) é montada em web-base
+// (WebSecurityAutoConfiguration), escolhida via security.auth-type no application.yaml — este
+// arquivo só sobra pro que é específico deste serviço: o encoder de senha e quais rotas são
+// públicas (decisão do endpoint, não de ambiente — por isso em código, não em yaml).
 @Configuration
 public class SecurityConfiguration {
 
@@ -22,18 +23,11 @@ public class SecurityConfiguration {
     }
 
     @Bean
-    protected DefaultSecurityFilterChain configure(HttpSecurity http, JwtAuthenticationFilter jwtFilter) throws Exception {
-        return http
-            .csrf(csrf -> csrf.disable())
-            .cors(cors -> cors.disable())
-            .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(POST, "/login").permitAll()
-                .requestMatchers(POST, "/clientes").permitAll()
-                .anyRequest().authenticated())
-            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
-            .build();
+    public List<RotaPublica> rotasPublicas() {
+        return List.of(
+            new RotaPublica(HttpMethod.POST, "/login"),
+            new RotaPublica(HttpMethod.POST, "/clientes")
+        );
     }
-    
+
 }

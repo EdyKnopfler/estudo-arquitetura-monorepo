@@ -8,6 +8,7 @@ Detalhamento por tópico. O [CLAUDE.md](../CLAUDE.md) na raiz traz o resumo exec
 - [module-boundaries.md](module-boundaries.md) — organização interna da regra de negócio (`reservas-interno`/`pagamento-interno`) e alternativas avaliadas (hexagonal, contrato tipado da SAGA)
 - [deploy-roles-by-profile.md](deploy-roles-by-profile.md) — como o papel (web vs. sagas) de cada módulo é escolhido por profile Spring, mecanismo e pegadinhas
 - [security-and-auth.md](security-and-auth.md) — JWT, client-id/secret entre serviços, limitações conhecidas
+- [web-base-hardening.md](web-base-hardening.md) — decisões de segurança do `web-base`: wiring da `SecurityFilterChain`, validação de JWT (`iss`/`kid`), client-secret, tratamento de erro — o que existe e por quê
 - [testing-strategy.md](testing-strategy.md) — Testcontainers vs. serviços já no ar (`docker-compose up`), quando usar cada um
 - [todo.md](todo.md) — lacunas técnicas encontradas em revisão de arquitetura (complementa o checklist de features do [README.md](../README.md))
 

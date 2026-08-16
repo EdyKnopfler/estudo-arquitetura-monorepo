@@ -32,3 +32,6 @@ spring:
   flyway:
     enabled: true
     validate-on-migrate: true
+
+security:
+  auth-type: client-secret

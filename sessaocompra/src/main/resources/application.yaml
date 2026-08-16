@@ -37,7 +37,13 @@ spring:
     validate-on-migrate: true
 
 jwt:
-  public-key: ${JWT_PUBLIC_KEY}
+  trusted-issuers:
+    - kid: ${JWT_KID:clientes-1}
+      issuer: ${JWT_ISSUER:clientes}
+      public-key: ${JWT_PUBLIC_KEY}
+
+security:
+  auth-type: jwt
 
 reservas-interno-hotel:
   url: http://${RESERVAS_INTERNO_WEB_HOTEL_HOST:localhost}:${RESERVAS_INTERNO_WEB_HOTEL_PORT:8084}

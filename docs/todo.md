@@ -19,7 +19,8 @@ Este arquivo complementa o checklist de features do [README.md](../README.md) (q
 ## Testes
 
 - [ ] Cobertura de teste é essencialmente zero: todos os arquivos `*ApplicationTests.java` são o `contextLoads()` gerado pelo Spring Boot, nada além disso (confirmado por contagem de linhas). Os testes integrados já planejados no README (Requisição → Externo → Webhook; encaminha sucesso; notifica falha) ainda não existem em nenhum domínio.
-- [ ] Testes automatizados para os módulos compartilhados (`sagas-common`, `web-base`) que já funcionam — hoje só validados indiretamente via módulos consumidores.
+- [x] ~~Testes automatizados para `web-base`~~ — 31 testes cobrindo `JwtAuthenticationFilter`, `ClientSecretAuthFilter`, `JwtIssuerService`/`JwtValidatorService`, `InternalClientsConfig`, `TrataErros`. Achados e o que ainda falta (design de `iss`/`aud`/`kid`, refactor do wiring): [web-base-hardening.md](web-base-hardening.md).
+- [ ] Testes automatizados para `sagas-common` — ainda zero, só validado indiretamente via módulos consumidores.
 
 ## Hygiene / housekeeping
 

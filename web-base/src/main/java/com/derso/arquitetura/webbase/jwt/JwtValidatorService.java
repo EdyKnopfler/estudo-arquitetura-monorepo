@@ -1,47 +1,41 @@
 package com.derso.arquitetura.webbase.jwt;
 
-import java.security.KeyFactory;
 import java.security.PublicKey;
-import java.security.spec.X509EncodedKeySpec;
-import java.util.Base64;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
-
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 
-@Service
 public class JwtValidatorService {
 
-    private final PublicKey key;
+    private final Map<String, PublicKey> chavesPorKid;
+    private final Map<String, String> emissorEsperadoPorKid;
 
-    public JwtValidatorService(@Value("${jwt.public-key}") String publicKeyBase64) {
-        this.key = parsePublicKey(publicKeyBase64);
+    public JwtValidatorService(TrustedJwtIssuersConfig config) {
+        this.chavesPorKid = config.getChavesPorKid();
+        this.emissorEsperadoPorKid = config.getEmissorEsperadoPorKid();
     }
 
     public Optional<Claims> validateToken(String token) {
         try {
-            return Optional.of(
-                Jwts.parser()
-                    .verifyWith(key)
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload()
-            );
+            var jws = Jwts.parser()
+                .keyLocator(header -> chavesPorKid.get(header.get("kid")))
+                .build()
+                .parseSignedClaims(token);
+
+            String kid = (String) jws.getHeader().get("kid");
+            Claims claims = jws.getPayload();
+
+            if (!Objects.equals(emissorEsperadoPorKid.get(kid), claims.getIssuer())) {
+                return Optional.empty();
+            }
+
+            return Optional.of(claims);
         } catch (JwtException | IllegalArgumentException e) {
             return Optional.empty();
-        }
-    }
-
-    private static PublicKey parsePublicKey(String base64) {
-        try {
-            byte[] decoded = Base64.getDecoder().decode(base64);
-            return KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(decoded));
-        } catch (Exception e) {
-            throw new IllegalStateException("Chave pública JWT inválida", e);
         }
     }
 

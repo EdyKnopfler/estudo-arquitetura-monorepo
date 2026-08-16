@@ -9,6 +9,9 @@ spring:
     virtual:
       enabled: true
 
+security:
+  auth-type: client-secret
+
 # Clientes aceitos
 internal-backend:
   clients:

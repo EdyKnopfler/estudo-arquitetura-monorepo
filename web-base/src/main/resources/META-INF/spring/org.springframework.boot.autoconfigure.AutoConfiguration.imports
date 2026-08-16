@@ -1,0 +1,3 @@
+com.derso.arquitetura.webbase.config.ErrorHandlingAutoConfiguration
+com.derso.arquitetura.webbase.jwt.JwtAutoConfiguration
+com.derso.arquitetura.webbase.security.WebSecurityAutoConfiguration

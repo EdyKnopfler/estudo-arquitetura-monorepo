@@ -42,6 +42,9 @@ sagas:
   rabbituser: ${BROKER_USER:cueio}
   rabbitpassword: ${BROKER_PASSWORD:cueio}
 
+security:
+  auth-type: client-secret
+
 # para ACEITAR requisições
 internal-backend:
   clients:

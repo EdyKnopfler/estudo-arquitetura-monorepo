@@ -38,4 +38,12 @@ spring:
 
 jwt:
   private-key: ${JWT_PRIVATE_KEY}
-  public-key: ${JWT_PUBLIC_KEY}
+  kid: ${JWT_KID:clientes-1}
+  issuer: ${JWT_ISSUER:clientes}
+  trusted-issuers:
+    - kid: ${JWT_KID:clientes-1}
+      issuer: ${JWT_ISSUER:clientes}
+      public-key: ${JWT_PUBLIC_KEY}
+
+security:
+  auth-type: jwt

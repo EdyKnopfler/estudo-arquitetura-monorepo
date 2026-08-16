@@ -4,7 +4,9 @@ Duas identidades distintas, deliberadamente separadas — não misturar ao mexer
 
 ## JWT — cliente final
 
-`web-base/jwt/JwtService.java`: HMAC-SHA (`Keys.hmacShaKeyFor`, segredo via `jwt.secret`), expiração de 10 minutos, claims `id`/`email`/`userType`. Emitido por `clientes` (`AuthController`) após login. `clientes` e `sessaocompra` (profile `web`) validam esse JWT (`JwtAuthenticationFilter`, component-scan de `webbase.jwt`) — `reservas-interno` e `pagamento-interno` ainda não importam esse filtro, porque não são chamados pelo front (só client-id/secret, ver seção seguinte). `sessaocompra` é o único ponto de contato do front ("porteiro": ela mesma chama `reservas-interno` internamente, front nunca fala direto com esses serviços — ver [purchase-flow-design.md](purchase-flow-design.md)).
+`web-base/jwt/JwtIssuerService.java`+`JwtValidatorService.java`: RSA assimétrico (RS256), expiração de 10 minutos, claims `id`/`email`/`userType`/`iss`, `kid` no header. Emitido por `clientes` (`AuthController`) após login. `clientes` e `sessaocompra` (profile `web`) validam esse JWT (`JwtAuthenticationFilter`, component-scan de `webbase.jwt`) — `reservas-interno` e `pagamento-interno` ainda não importam esse filtro, porque não são chamados pelo front (só client-id/secret, ver seção seguinte). `sessaocompra` é o único ponto de contato do front ("porteiro": ela mesma chama `reservas-interno` internamente, front nunca fala direto com esses serviços — ver [purchase-flow-design.md](purchase-flow-design.md)).
+
+**Validação não assume "é tudo meu, confio"**: `JwtValidatorService` resolve a chave pelo `kid` do header (parte do que é assinado — um `kid` forjado só faz a verificação falhar contra a chave errada) via `TrustedJwtIssuersConfig` (`jwt.trusted-issuers`, uma lista de `{kid, issuer, public-key}` por serviço), e só aceita o token se o `iss` do payload bater com o emissor esperado *para aquele kid específico* — pega até o caso de token assinado pela chave certa mas alegando ser de outro emissor. Hoje só existe um emissor (`clientes`), mas o design já suporta múltiplas chaves/emissores confiados sem mudar código, só config. `aud` foi deliberadamente deixado de fora: `clientes` e `sessaocompra` validam o mesmo token por design (não é confusão a fechar) — ver [web-base-hardening.md](web-base-hardening.md#2-jwt-issaud-kid).
 
 ### Ownership por sessão — `@PreAuthorize` como aspecto
 
@@ -22,9 +24,9 @@ Cada par de serviços (chamador/chamado) tem client-id/secret próprios configur
 
 ## Tratamento de erro
 
-`web-base/config/TrataErros.java` é um `@RestControllerAdvice` global usado por todos os `-web`. Mapeia `EntityNotFoundException`→404, `BusinessException`→409, `MethodArgumentNotValidException`→400 com mensagens de campo, e qualquer outra `Exception`→500 **devolvendo `e.getMessage()` no corpo**.
+`web-base/config/TrataErros.java` é um `@RestControllerAdvice` global usado por todos os `-web`. Mapeia `EntityNotFoundException`→404, `BusinessException`→409, `MethodArgumentNotValidException`/`ConstraintViolationException`→400 com mensagens de campo, `AccessDeniedException`/`UsuarioInvalidoException`→403, e qualquer outra `Exception`→500 — logada via SLF4J, devolvendo mensagem genérica ao cliente (não o `e.getMessage()` cru, que podia vazar detalhe interno tipo erro de SQL). Todos os handlers padronizados em `ErroDTO`.
 
 ## Limitações conhecidas (aceitáveis para estudo local, não levar adiante sem revisar)
 
-- `ClientSecretAuthFilter` compara segredo com `String.equals()` — não é constant-time, então tecnicamente vulnerável a timing attack. Sem gravidade em ambiente local, mas não copiar para algo real sem trocar por comparação constant-time.
-- O handler genérico de exceção devolve `e.getMessage()` cru — pode vazar detalhes internos (mensagem de SQL, etc.) para quem chama a API.
+- Client-secret sem rate limit — `ClientSecretAuthFilter` responde 401 sem nenhum limite de tentativas por IP/client-id. Fora de escopo do `web-base` (é infra de borda, não lógica de autenticação em si).
+- `aud` não é validado no JWT — `clientes` e `sessaocompra` aceitam o mesmo token por design (ver seção JWT acima), então não é uma lacuna ativa hoje, mas também não há proteção caso surja um segundo tipo de token com público-alvo diferente.

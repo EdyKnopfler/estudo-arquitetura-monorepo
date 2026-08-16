@@ -1,12 +1,13 @@
 package com.derso.arquitetura.webbase.internalclient;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
 
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import jakarta.servlet.FilterChain;
@@ -14,7 +15,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-@Component
 public class ClientSecretAuthFilter extends OncePerRequestFilter {
 
     private final Map<String, String> clientIdsAndSecrets;
@@ -34,7 +34,7 @@ public class ClientSecretAuthFilter extends OncePerRequestFilter {
 
         if (!(
             id != null && secret != null &&
-            clientIdsAndSecrets.containsKey(id) && clientIdsAndSecrets.get(id).equals(secret)
+            clientIdsAndSecrets.containsKey(id) && secretsMatch(clientIdsAndSecrets.get(id), secret)
         )) {
             res.setStatus(401);
             return;
@@ -43,6 +43,15 @@ public class ClientSecretAuthFilter extends OncePerRequestFilter {
         var auth = new UsernamePasswordAuthenticationToken(id, null, List.of());
         SecurityContextHolder.getContext().setAuthentication(auth);
         chain.doFilter(req, res);
+    }
+
+    // constant-time: String.equals() sai no primeiro byte diferente, vaza quanto do secret
+    // acertou via timing
+    private static boolean secretsMatch(String expected, String actual) {
+        return MessageDigest.isEqual(
+            expected.getBytes(StandardCharsets.UTF_8),
+            actual.getBytes(StandardCharsets.UTF_8)
+        );
     }
 }
 

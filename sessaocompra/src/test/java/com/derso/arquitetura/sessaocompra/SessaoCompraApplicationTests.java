@@ -8,7 +8,11 @@ import org.springframework.test.context.TestPropertySource;
 
 @SpringBootTest
 @ActiveProfiles("web")
-@TestPropertySource(properties = ChaveJwtTeste.JWT_PUBLIC_KEY_PROPERTY)
+@TestPropertySource(properties = {
+    ChaveJwtTeste.JWT_KID_PROPERTY,
+    ChaveJwtTeste.JWT_ISSUER_PROPERTY,
+    ChaveJwtTeste.JWT_PUBLIC_KEY_PROPERTY
+})
 @Import(TestcontainersConfig.class)
 class SessaoCompraApplicationTests {
 
