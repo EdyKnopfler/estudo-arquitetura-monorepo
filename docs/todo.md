@@ -23,7 +23,7 @@ Este arquivo complementa o checklist de features do [README.md](../README.md) (q
 
 ## Hygiene / housekeeping
 
-- [ ] `.env` está commitado no git com credenciais de dev (ver [security-and-auth.md](security-and-auth.md)). Trocar para `.env.example` versionado + `.env` real no `.gitignore`.
+- [x] ~~`.env` está commitado no git com credenciais de dev.~~ — `.env`/`.env.clientes` viraram `.env.example`/`.env.clientes.example` versionados; reais fora do índice via `.gitignore` (`.env*` / `!.env*.example`, cobre automaticamente qualquer `.env.<serviço>` futuro sem editar o padrão). Histórico não foi reescrito — decisão consciente, são credenciais de dev descartáveis.
 - [x] ~~Arquivo órfão `reservas-interno-web/Dockerfile copy`~~ — resolvido de graça pela unificação de `reservas-interno` (o diretório antigo, e o arquivo órfão junto, deixaram de existir).
 - [x] ~~`pagamento-interno-web/application.yaml` tinha placeholder malformado~~ — `${FRONT_END_ID}:frontEndId}` (faltava o `:` dentro das chaves) e `FRONT_END_ID`/`FRONT_END_SECRET` não estavam no `.env`, então a aplicação não subia (placeholder não resolvido). Corrigido pra `${FRONT_END_ID:frontEndId}` na migração pra `pagamento-interno`.
 - [ ] Sem reconexão automática de `Connection`/`Channel` do RabbitMQ em `sagas-common` — uma queda de broker provavelmente exige restart manual da instância consumidora (não há listener de shutdown/retry).

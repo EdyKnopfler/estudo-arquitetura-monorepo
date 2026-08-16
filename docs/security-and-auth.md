@@ -28,4 +28,3 @@ Cada par de serviços (chamador/chamado) tem client-id/secret próprios configur
 
 - `ClientSecretAuthFilter` compara segredo com `String.equals()` — não é constant-time, então tecnicamente vulnerável a timing attack. Sem gravidade em ambiente local, mas não copiar para algo real sem trocar por comparação constant-time.
 - O handler genérico de exceção devolve `e.getMessage()` cru — pode vazar detalhes internos (mensagem de SQL, etc.) para quem chama a API.
-- `.env` com credenciais de dev está commitado no repositório (`git ls-files` confirma). São segredos descartáveis (`tanto_faz_so_pra_dev`), mas o ideal a partir de agora é versionar só um `.env.example` e manter `.env` real fora do git.
