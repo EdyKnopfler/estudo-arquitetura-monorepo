@@ -5,8 +5,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Profile;
 
 import com.derso.arquitetura.sagas.RabbitConfig;
-import com.derso.arquitetura.sagas.SagasJacksonConfig;
-import com.derso.arquitetura.sagas.SagasMessaging;
+import com.derso.arquitetura.sagas.JacksonConfig;
+import com.derso.arquitetura.sagas.Messaging;
 
 /**
  * Ponte pro sagas-common: a lib fica sem @Profile, agnóstica a quem a consome.
@@ -14,6 +14,6 @@ import com.derso.arquitetura.sagas.SagasMessaging;
  */
 @Configuration
 @Profile({ "web", "sagas" })
-@Import({ SagasJacksonConfig.class, RabbitConfig.class, SagasMessaging.class })
+@Import({ JacksonConfig.class, RabbitConfig.class, Messaging.class })
 public class SagasWiring {
 }

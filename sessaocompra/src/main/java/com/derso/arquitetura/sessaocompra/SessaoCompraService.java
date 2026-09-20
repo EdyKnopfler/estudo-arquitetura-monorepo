@@ -101,6 +101,10 @@ public class SessaoCompraService {
         }
     }
 
+    // TODO chamar pagamento-interno aqui (não existe cliente nenhum hoje) pra criar a linha em `pagamentos`
+    // com idSessaoCompra + idReservaHotel/idReservaVooIda/idReservaVooVolta (só ids internos — idExterno
+    // não sai de reservas-interno, ver docs/purchase-flow-design.md#payload-da-mensagem-da-saga) — é o que
+    // deixa PagamentoInternoController.webhookServicoExterno() montar a mensagem completa da SAGA depois.
     @Transactional
     public void iniciarPagamento(UUID id) {
         if (repositorio.iniciarPagamento(id) > 0) {

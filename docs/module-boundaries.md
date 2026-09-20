@@ -14,4 +14,4 @@ Os candidatos reais a "ficar grande" seriam os fornecedores externos de verdade 
 
 ## Contrato tipado para a mensagem da SAGA — ainda por fazer
 
-A mensagem hoje é um `Map<String, Object>` genérico (`SagasMessaging`) — nenhuma entidade trafega nela, só o campo `tipo` é usado. Quando os handlers de negócio forem implementados (ver [saga-choreography.md](saga-choreography.md)), vale desenhar essa mensagem como um DTO próprio da fila (ex.: id de correlação da sessão de compra + ids de reserva), não reaproveitar a entidade JPA nem o DTO de REST — são contratos com motivos de mudança diferentes.
+A mensagem hoje é um `Map<String, Object>` genérico (`Messaging`) — nenhuma entidade trafega nela, só o campo `tipo` é usado. Quando os handlers de negócio forem implementados (ver [saga-choreography.md](saga-choreography.md)), vale desenhar essa mensagem como um DTO próprio da fila (ex.: id de correlação da sessão de compra + ids de reserva), não reaproveitar a entidade JPA nem o DTO de REST — são contratos com motivos de mudança diferentes.

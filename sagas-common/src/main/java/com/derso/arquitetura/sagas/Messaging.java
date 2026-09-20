@@ -10,7 +10,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 @Component
-public class SagasMessaging {
+public class Messaging {
 
     public static final String ERRORS_EXCHANGE = "errors_exchange";
     public static final String ERRORS_ROUTING_KEY = "errors";
@@ -23,7 +23,7 @@ public class SagasMessaging {
     private final Channel channel;
     private volatile String consumerTag;
 
-    public SagasMessaging(ObjectMapper objectMapper, Channel channel) throws IOException {
+    public Messaging(ObjectMapper objectMapper, Channel channel) throws IOException {
         this.objectMapper = objectMapper;
         this.channel = channel;
     }
@@ -54,23 +54,25 @@ public class SagasMessaging {
             String filaEsteServico,
             Optional<String> filaServicoAnterior,
             Optional<String> filaProximoServico,
-            SagaMessageHandler handler
+            MessageHandler handler
     ) throws IOException {
         DeliverCallback callback = (consumerTag, delivery) -> {
 
             Map<String, Object> mensagem = null;
+            ResultadoHandler resultado = null;
             Exception erro = null;
 
             try {
                 mensagem = decode(delivery.getBody());
                 mensagem.putIfAbsent("tipo", EXECUTE);
-                handler.handle(mensagem);
+                resultado = handler.handle(mensagem);
             } catch (Exception e) {
                 erro = e;
             }
 
             long tag = delivery.getEnvelope().getDeliveryTag();
 
+            // erro não capturado pelo handler (bug/falha sistêmica) — sempre nack+dlq+compensação, não passa pelo ResultadoHandler
             if (erro != null) {
                 channel.basicNack(tag, false, false);
 
@@ -78,22 +80,25 @@ public class SagasMessaging {
                     mensagem.put("tipo", DESFACA);
                     publicar(filaServicoAnterior.get(), mensagem);
                 }
-            } else {
-                channel.basicAck(tag, false);
+                return;
+            }
 
-                Objects.requireNonNull(mensagem, "mensagem decodificada não pode ser nula quando não há erro");
+            Objects.requireNonNull(resultado, "handler deve retornar um ResultadoHandler quando não lança exceção");
 
-                double tipo = ((Number) mensagem
-                        .getOrDefault("tipo", EXECUTE))
-                        .doubleValue();
+            switch (resultado.retornoBroker()) {
+                case ACK -> channel.basicAck(tag, false);
+                case NACK_DLQ -> channel.basicNack(tag, false, false);
+            }
 
-                Optional<String> filaDestino = (tipo == EXECUTE)
-                        ? filaProximoServico
-                        : filaServicoAnterior;
+            Optional<String> filaDestino = switch (resultado.encaminhamento()) {
+                case PARA_FRENTE -> filaProximoServico;
+                case PARA_TRAS -> filaServicoAnterior;
+                case NENHUM -> Optional.empty();
+            };
 
-                if (filaDestino.isPresent()) {
-                    publicar(filaDestino.get(), mensagem);
-                }
+            if (filaDestino.isPresent()) {
+                mensagem.put("tipo", resultado.encaminhamento() == Encaminhamento.PARA_FRENTE ? EXECUTE : DESFACA);
+                publicar(filaDestino.get(), mensagem);
             }
         };
 

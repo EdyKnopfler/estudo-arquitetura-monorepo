@@ -36,6 +36,15 @@ public class ReservasExternoService {
     return responseData.idReserva();
   }
 
+  // Não-idempotente (WHERE confirmado=false do lado de lá) — ver docs/purchase-flow-design.md.
+  // Não engole exceção: quem chama precisa distinguir 404 (falha de negócio) de qualquer outra falha (infra/timeout/ambígua).
+  public void confirmar(UUID idExterno) {
+    restClient.put()
+        .uri("/reservas/confirmar/{id}", idExterno)
+        .retrieve()
+        .toBodilessEntity();
+  }
+
   // Melhor esforço — ver ReservasService.trocarReserva / docs/purchase-flow-design.md.
   public void cancelar(UUID idExterno) {
     restClient.delete()

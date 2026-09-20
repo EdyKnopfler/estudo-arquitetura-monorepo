@@ -17,4 +17,10 @@ public class Pagamento {
     @Column(nullable = false, updatable = false)
     private UUID id;
 
+    @Column(name = "id_externo", nullable = false, updatable = false)
+    private UUID idExterno;
+
+    // TODO campos de correlação pro payload da mensagem da SAGA (idSessaoCompra, idReservaHotel,
+    // idReservaVooIda, idReservaVooVolta) — ver migration e docs/purchase-flow-design.md#payload-da-mensagem-da-saga.
+
 }

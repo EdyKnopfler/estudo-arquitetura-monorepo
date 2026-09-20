@@ -40,11 +40,11 @@ public class ReservasSagas implements SmartLifecycle { ... }
 // (mesma estrutura em com.derso.arquitetura.pagamentointerno.sagas.SagasWiring)
 @Configuration
 @Profile("sagas")
-@Import({ SagasJacksonConfig.class, RabbitConfig.class, SagasMessaging.class })
+@Import({ JacksonConfig.class, RabbitConfig.class, Messaging.class })
 public class SagasWiring {}
 ```
 
-Funciona porque `@Profile` é um `@Conditional` avaliado pelo `ConfigurationClassParser` **antes** de processar `@Import` — se o profile não bate, a classe inteira (e tudo que ela importaria) é ignorada. `@Import` aceita `@Component` puro além de `@Configuration`, por isso dá pra importar `SagasMessaging` (que é `@Component`) junto com os dois `@Configuration`. Consequência prática: `com.derso.arquitetura.sagas` **não entra** no `@ComponentScan` do app (senão seria varrido incondicionalmente, contornando a gate) — a única porta de entrada pro pacote da lib passa a ser esse `@Import` explícito.
+Funciona porque `@Profile` é um `@Conditional` avaliado pelo `ConfigurationClassParser` **antes** de processar `@Import` — se o profile não bate, a classe inteira (e tudo que ela importaria) é ignorada. `@Import` aceita `@Component` puro além de `@Configuration`, por isso dá pra importar `Messaging` (que é `@Component`) junto com os dois `@Configuration`. Consequência prática: `com.derso.arquitetura.sagas` **não entra** no `@ComponentScan` do app (senão seria varrido incondicionalmente, contornando a gate) — a única porta de entrada pro pacote da lib passa a ser esse `@Import` explícito.
 
 ## Desligar o servidor web na instância só-fila
 

@@ -28,6 +28,8 @@ public class WebhookService {
 
         boolean recusado = Math.random() < PagamentoExternoApplication.CHANCE_FALHA;
 
+        // TODO WebhookRequestDTO precisa carregar idTransacao também — já temos o valor aqui (parâmetro
+        // deste método), só falta repassar. Ver docs/purchase-flow-design.md#payload-da-mensagem-da-saga.
         WebhookRequestDTO requestData = new WebhookRequestDTO(recusado ? "recusado" : "OK");
 
         restClient.post()
