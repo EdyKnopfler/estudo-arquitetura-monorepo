@@ -45,11 +45,15 @@ public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID
     """)
     int atualizarVooVolta(@Param("idSessao") UUID idSessao, @Param("idReservaVooVolta") UUID idReservaVooVolta);
 
+    // CRIANDO_PAGAMENTO = fase síncrona (esta chamada + PagamentoInternoClient.criar), curta e sob
+    // nosso controle — travar aqui por mais que alguns segundos é bug/infra, nunca demora legítima
+    // do usuário. Só vira EFETUANDO_PAGAMENTO depois do /efetuar responder (pagamentoCriado abaixo),
+    // que é quando a espera passa a ser pelo usuário/webhook — ver docs/purchase-flow-design.md.
     @Modifying
     @Query("""
         UPDATE SessaoCompra s
         SET
-            s.status = 'EFETUANDO_PAGAMENTO'
+            s.status = 'CRIANDO_PAGAMENTO'
         WHERE s.id = :idSessao
             AND s.status = 'INICIADA'
             AND s.idReservaVooIda IS NOT NULL
@@ -57,6 +61,31 @@ public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID
             AND s.idReservaVooVolta IS NOT NULL
     """)
     int iniciarPagamento(@Param("idSessao") UUID id);
+
+    // Reversão da transição acima — chamada `pagamento-interno` falhou antes de qualquer efeito
+    // colateral existir (linha em `pagamentos` só é salva depois do `/efetuar` responder, ver
+    // PagamentoService.criarPagamento) — não é dual-write, é só desfazer o próprio status local.
+    @Modifying
+    @Query("""
+        UPDATE SessaoCompra s
+        SET
+            s.status = 'INICIADA'
+        WHERE s.id = :idSessao
+            AND s.status = 'CRIANDO_PAGAMENTO'
+    """)
+    int reverterPagamento(@Param("idSessao") UUID id);
+
+    // pagamento-interno confirmou a criação (id_externo já existe do lado de lá) — a partir daqui
+    // a espera é pelo usuário interagir no serviço externo + retorno do webhook, não mais por nós.
+    @Modifying
+    @Query("""
+        UPDATE SessaoCompra s
+        SET
+            s.status = 'EFETUANDO_PAGAMENTO'
+        WHERE s.id = :idSessao
+            AND s.status = 'CRIANDO_PAGAMENTO'
+    """)
+    int pagamentoCriado(@Param("idSessao") UUID id);
 
     @Modifying
     @Query("""

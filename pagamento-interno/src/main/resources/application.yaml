@@ -46,15 +46,25 @@ security:
   auth-type: client-secret
 
 # para ACEITAR requisições
+# nota: PAGAMENTO_EXTERNO_ID é reaproveitado nas duas direções da MESMA relação bidirecional
+# (mesmo padrão de reservas-interno/reservas-externo, um par por relação): é a identidade que
+# pagamento-interno usa pra chamar POST /efetuar (external-backend abaixo) E a que volta como
+# X-Client-Id quando pagamento-externo chama nosso /webhook — WebhookService.enviarResposta
+# (pagamento-externo) ecoa de volta o MESMO client-id/secret de quem chamou /efetuar ("mesmo
+# segredo" no comentário de lá), não uma identidade própria fixa. Ver application.yaml de
+# pagamento-externo (internal-backend.webhooks). PAGAMENTO_INTERNO_ID/SECRET ficaram órfãos
+# depois dessa correção (nada mais referencia) — removidos do .env.
 internal-backend:
   clients:
     - client-id: ${FRONT_END_ID:frontEndId}
       client-secret: ${FRONT_END_SECRET:frontEndSecret}
     - client-id: ${PAGAMENTO_EXTERNO_ID:pagamentoExternoId}
       client-secret: ${PAGAMENTO_EXTERNO_SECRET:pagamentoExternoSecret}
+    - client-id: ${SESSAO_COMPRA_ID:sessaoCompraId}
+      client-secret: ${SESSAO_COMPRA_SECRET:sessaoCompraSecret}
 
-# para SOLICITAR ao serviço externo (que por coincidência usa a mesma chave em dev)
+# para SOLICITAR ao serviço externo — mesmo par que pagamento-externo aceita em internal-backend.clients lá
 external-backend:
   url: http://${PAGAMENTO_EXTERNO_HOST:localhost}:${PAGAMENTO_EXTERNO_PORT:8086}
-  client-id: ${PAGAMENTO_INTERNO_ID:pagamentoInternoId}
-  client-secret: ${PAGAMENTO_INTERNO_SECRET:pagamentoInternoSecret}
+  client-id: ${PAGAMENTO_EXTERNO_ID:pagamentoExternoId}
+  client-secret: ${PAGAMENTO_EXTERNO_SECRET:pagamentoExternoSecret}

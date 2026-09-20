@@ -6,10 +6,18 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.context.annotation.Profile;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.derso.arquitetura.pagamentointerno.PagamentoService;
+import com.derso.arquitetura.pagamentointerno.dto.CriarPagamentoRequest;
+import com.derso.arquitetura.pagamentointerno.dto.PagamentoDTO;
 import com.derso.arquitetura.sagas.Messaging;
+
+import jakarta.validation.Valid;
 
 @RestController
 @Profile("web")
@@ -18,10 +26,21 @@ public class PagamentoInternoController {
     private static final String FILA_PAGAMENTO = "pagamento";
 
     private final Messaging sagas;
+    private final PagamentoService servico;
 
-    public PagamentoInternoController(Messaging sagas) throws IOException {
+    public PagamentoInternoController(Messaging sagas, PagamentoService servico) throws IOException {
         this.sagas = sagas;
+        this.servico = servico;
         sagas.configurarServico(FILA_PAGAMENTO, Optional.empty(), Optional.empty());
+    }
+
+    // Chamada por sessaocompra.iniciarPagamento — ver docs/purchase-flow-design.md#payload-da-mensagem-da-saga.
+    @PostMapping("/pagamentos")
+    @ResponseStatus(HttpStatus.CREATED)
+    public PagamentoDTO criar(@RequestBody @Valid CriarPagamentoRequest dados) {
+        return servico.criarPagamento(
+            dados.idSessaoCompra(), dados.idReservaHotel(), dados.idReservaVooIda(), dados.idReservaVooVolta()
+        );
     }
 
     // TODO corpo do webhook hoje é vazio — precisa receber idTransacao+status (WebhookRequestDTO em

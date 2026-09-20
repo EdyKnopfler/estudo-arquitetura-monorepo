@@ -29,13 +29,15 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import com.derso.arquitetura.sessaocompra.app.dto.CriacaoSessaoResponse;
+import com.derso.arquitetura.sessaocompra.pagamentointerno.PagamentoInternoClient;
 import com.derso.arquitetura.sessaocompra.reservasinterno.ReservasInternoHotelClient;
 import com.derso.arquitetura.sessaocompra.reservasinterno.ReservasInternoVooClient;
 import com.derso.arquitetura.webbase.jwt.UsuarioAutenticado;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-// Fronteira real de teste = o próprio módulo sessaocompra: segurança e persistência rodam de
-// verdade; só reservas-interno é mockado, porque é a única dependência que sai do processo.
+// Escolha local deste teste: reservas-interno é mockado porque aqui o foco é segurança/persistência
+// de sessaocompra, não a chamada HTTP em si. Não é regra do projeto — teste de integração cross-serviço
+// de verdade (dois processos reais se comunicando) tem valor próprio e cabe noutro teste, sem mockar nada.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("web")
@@ -58,12 +60,16 @@ class SessaoCompraFluxoTest {
     @MockitoBean
     private ReservasInternoVooClient vooClient;
 
+    @MockitoBean
+    private PagamentoInternoClient pagamentoInternoClient;
+
     @BeforeEach
     void mockaReservasInterno() {
         when(hotelClient.criar(any())).thenAnswer(invocation -> UUID.randomUUID());
         when(hotelClient.trocar(any(), any())).thenAnswer(invocation -> UUID.randomUUID());
         when(vooClient.criar(any())).thenAnswer(invocation -> UUID.randomUUID());
         when(vooClient.trocar(any(), any())).thenAnswer(invocation -> UUID.randomUUID());
+        // pagamentoInternoClient.criar é void — no-op padrão do Mockito já simula sucesso.
     }
 
     @Test

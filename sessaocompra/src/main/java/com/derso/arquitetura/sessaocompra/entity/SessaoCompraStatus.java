@@ -3,6 +3,7 @@ package com.derso.arquitetura.sessaocompra.entity;
 public enum SessaoCompraStatus {
 
     INICIADA,
+    CRIANDO_PAGAMENTO,
     EFETUANDO_PAGAMENTO,
     PAGAMENTO_EFETUADO,
     VIAGEM_RESERVADA,

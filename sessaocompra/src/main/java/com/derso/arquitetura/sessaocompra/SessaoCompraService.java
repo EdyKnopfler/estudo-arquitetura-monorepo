@@ -2,6 +2,8 @@ package com.derso.arquitetura.sessaocompra;
 
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -9,6 +11,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.derso.arquitetura.sessaocompra.entity.SessaoCompra;
 import com.derso.arquitetura.sessaocompra.entity.SessaoCompraStatus;
+import com.derso.arquitetura.sessaocompra.pagamentointerno.PagamentoInternoClient;
 import com.derso.arquitetura.sessaocompra.reservasinterno.ReservasInternoHotelClient;
 import com.derso.arquitetura.sessaocompra.reservasinterno.ReservasInternoVooClient;
 import com.derso.arquitetura.webbase.config.BusinessException;
@@ -18,20 +21,25 @@ import jakarta.persistence.EntityNotFoundException;
 @Service
 public class SessaoCompraService {
 
+    private static final Logger log = LoggerFactory.getLogger(SessaoCompraService.class);
+
     private final SessaoCompraRepository repositorio;
     private final ReservasInternoHotelClient reservasInternoHotelClient;
     private final ReservasInternoVooClient reservasInternoVooClient;
+    private final PagamentoInternoClient pagamentoInternoClient;
     private final TransactionTemplate transactionTemplate;
 
     public SessaoCompraService(
         SessaoCompraRepository repositorio,
         ReservasInternoHotelClient reservasInternoHotelClient,
         ReservasInternoVooClient reservasInternoVooClient,
+        PagamentoInternoClient pagamentoInternoClient,
         PlatformTransactionManager transactionManager
     ) {
         this.repositorio = repositorio;
         this.reservasInternoHotelClient = reservasInternoHotelClient;
         this.reservasInternoVooClient = reservasInternoVooClient;
+        this.pagamentoInternoClient = pagamentoInternoClient;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -101,24 +109,36 @@ public class SessaoCompraService {
         }
     }
 
-    // TODO chamar pagamento-interno aqui (não existe cliente nenhum hoje) pra criar a linha em `pagamentos`
-    // com idSessaoCompra + idReservaHotel/idReservaVooIda/idReservaVooVolta (só ids internos — idExterno
-    // não sai de reservas-interno, ver docs/purchase-flow-design.md#payload-da-mensagem-da-saga) — é o que
-    // deixa PagamentoInternoController.webhookServicoExterno() montar a mensagem completa da SAGA depois.
-    @Transactional
+    // Nunca chamar pagamento-interno dentro de transação (mesma convenção de reservas-interno acima).
+    // Sem outbox aqui: a linha em `pagamentos` só é salva depois do `/efetuar` responder (ver
+    // PagamentoService.criarPagamento), então uma falha nesta chamada não deixa nenhum efeito
+    // colateral em pagamento-interno pra compensar — só reverte o próprio status local e devolve
+    // a falha pro front-end tentar de novo.
     public void iniciarPagamento(UUID id) {
-        if (repositorio.iniciarPagamento(id) > 0) {
-            return;
+        int linhas = transactionTemplate.execute(status -> repositorio.iniciarPagamento(id));
+        if (linhas == 0) {
+            SessaoCompra sessao = repositorio.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Sessão de compra não encontrada: " + id));
+
+            if (sessao.getStatus() != SessaoCompraStatus.INICIADA) {
+                throw new BusinessException("Sessão de compra não está mais aceitando alterações: " + sessao.getStatus());
+            }
+
+            throw new BusinessException("Sessão de compra incompleta: faltam reservas de hotel e/ou voo");
         }
 
         SessaoCompra sessao = repositorio.findById(id)
             .orElseThrow(() -> new EntityNotFoundException("Sessão de compra não encontrada: " + id));
 
-        if (sessao.getStatus() != SessaoCompraStatus.INICIADA) {
-            throw new BusinessException("Sessão de compra não está mais aceitando alterações: " + sessao.getStatus());
+        try {
+            pagamentoInternoClient.criar(id, sessao.getIdReservaHotel(), sessao.getIdReservaVooIda(), sessao.getIdReservaVooVolta());
+        } catch (Exception e) {
+            log.warn("Falha ao iniciar pagamento para sessão {}, revertendo status", id, e);
+            transactionTemplate.execute(status -> repositorio.reverterPagamento(id));
+            throw new BusinessException("Falha ao iniciar pagamento, tente novamente");
         }
 
-        throw new BusinessException("Sessão de compra incompleta: faltam reservas de hotel e/ou voo");
+        transactionTemplate.execute(status -> repositorio.pagamentoCriado(id));
     }
 
     @Transactional

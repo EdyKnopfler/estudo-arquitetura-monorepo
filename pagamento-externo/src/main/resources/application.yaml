@@ -17,7 +17,13 @@ internal-backend:
   clients:
     - client-id: ${PAGAMENTO_EXTERNO_ID:pagamentoExternoId}
       client-secret: ${PAGAMENTO_EXTERNO_SECRET:pagamentoExternoSecret}
+  # WebhookService.enviarResposta ecoa de volta o MESMO client-id/secret de quem chamou /efetuar
+  # (idCliente = authentication.getPrincipal(), "mesmo segredo" no comentário do WebhookService) —
+  # então a chave de lookup aqui tem que ser a identidade REAL do chamador, não um nome fixo à
+  # parte. Hoje só existe um chamador real (pagamento-interno, autenticado como PAGAMENTO_EXTERNO_ID
+  # via external-backend.client-id de lá) — daí o mesmo par aqui. Ver nota em application.yaml de
+  # pagamento-interno.
   webhooks:
     - url: http://${PAGAMENTO_INTERNO_HOST:localhost}:${PAGAMENTO_INTERNO_PORT:8087}/webhook
-      client-id: ${PAGAMENTO_INTERNO_ID:pagamentoInternoId}
-      client-secret: ${PAGAMENTO_INTERNO_SECRET:pagamentoInternoSecret}
+      client-id: ${PAGAMENTO_EXTERNO_ID:pagamentoExternoId}
+      client-secret: ${PAGAMENTO_EXTERNO_SECRET:pagamentoExternoSecret}

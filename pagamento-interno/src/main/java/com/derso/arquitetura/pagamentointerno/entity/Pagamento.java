@@ -6,11 +6,14 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "pagamentos")
 @Getter
+@NoArgsConstructor(access = AccessLevel.PACKAGE)
 public class Pagamento {
 
     @Id
@@ -20,7 +23,25 @@ public class Pagamento {
     @Column(name = "id_externo", nullable = false, updatable = false)
     private UUID idExterno;
 
-    // TODO campos de correlação pro payload da mensagem da SAGA (idSessaoCompra, idReservaHotel,
-    // idReservaVooIda, idReservaVooVolta) — ver migration e docs/purchase-flow-design.md#payload-da-mensagem-da-saga.
+    @Column(name = "id_sessao_compra", nullable = false, updatable = false)
+    private UUID idSessaoCompra;
+
+    @Column(name = "id_reserva_hotel", nullable = false, updatable = false)
+    private UUID idReservaHotel;
+
+    @Column(name = "id_reserva_voo_ida", nullable = false, updatable = false)
+    private UUID idReservaVooIda;
+
+    @Column(name = "id_reserva_voo_volta", nullable = false, updatable = false)
+    private UUID idReservaVooVolta;
+
+    public Pagamento(UUID idExterno, UUID idSessaoCompra, UUID idReservaHotel, UUID idReservaVooIda, UUID idReservaVooVolta) {
+        this.id = UUID.randomUUID();
+        this.idExterno = idExterno;
+        this.idSessaoCompra = idSessaoCompra;
+        this.idReservaHotel = idReservaHotel;
+        this.idReservaVooIda = idReservaVooIda;
+        this.idReservaVooVolta = idReservaVooVolta;
+    }
 
 }

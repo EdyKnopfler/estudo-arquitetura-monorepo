@@ -54,14 +54,7 @@ public class SessaoCompraController {
     @PutMapping("/{id}/iniciando-pagamento")
     @PreAuthorize("@sessaoOwnership.pertence(#id, authentication)")
     public void iniciarPagamento(@PathVariable("id") UUID id) {
-
-        // TODO clientId para o serviço de Pagamentos
-        // Ainda decidindo quem chama quem, a ideia é de que este serviço não fique agarrado coordenando.
-        // Deve somente ser chamado para arbitrar.
-
         service.iniciarPagamento(id);
-
-        // TODO ativar serviço de pagamento
     }
 
     // Sem @PreAuthorize de propósito: este endpoint é candidato a virar consumidor de fila SAGA
