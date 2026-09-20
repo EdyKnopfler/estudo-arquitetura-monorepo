@@ -12,9 +12,17 @@ Este arquivo complementa o checklist de features do [README.md](../README.md) (q
 - [ ] **Ordem de start-up entre `sessaocompra-web` e `reservas-interno-{hotel,voo}-web` não está garantida no `docker-compose.yml`.** `sessaocompra` agora chama `reservas-interno` via HTTP; falta `depends_on` (checar se introduz ciclo com os serviços já existentes) — por ora assume-se que sobem saudáveis antes da primeira chamada.
 - [x] ~~Sem id de correlação na mensagem da SAGA.~~ — campo `rastreio` (UUID gerado no webhook) agora viaja em toda a mensagem e é logado em cada elo. **Nuance:** é só um id opaco de rastreio de fluxo, ainda não é o id da `SessaoCompra`/reserva — quando o negócio real for implementado, os handlers provavelmente vão precisar de mais contexto (qual sessão/reserva afetar), não só esse rastreio.
 
-## Avaliar padrão Outbox (candidato forte: pagamento)
+## Dual-write pagamento/reservas (outbox por serviço descartado — ver desenho)
 
-- [ ] **Avaliar Outbox no webhook de pagamento.** Confirmar pagamento no banco + publicar a 1ª mensagem da SAGA é um dual-write clássico. Decidir Outbox vs. `@Transactional` + retry quando o webhook for implementado.
+- [ ] **Avaliar Outbox no webhook de pagamento.** Confirmar pagamento no banco + publicar a 1ª mensagem da SAGA é um dual-write clássico. Decidir Outbox vs. `@Transactional` + retry quando o webhook for implementado. **Ordem:** depois do item de reservas abaixo — esse expõe a versão geral do problema (dual-write contra sistema externo não-idempotente), o outbox do webhook é um caso mais estreito do mesmo tema.
+- [ ] **Robustez do passo de confirmar/reverter `Reserva` em `reservas-interno`.** Desenho fechado (axiomas do `reservas-externo`, esboço de arquitetura) em [purchase-flow-design.md](purchase-flow-design.md). Quebra em:
+  - [ ] Endpoint de consulta de estado (`consultar`) em `reservas-externo` — desambigua timeout/falha de infra sem exigir idempotência do lado de lá.
+  - [ ] Endpoint `desconfirmar`/estorno em `reservas-externo` — falta pra reverter uma `Reserva` já confirmada.
+  - [ ] `SagasMessaging`: novo desfecho "erro tratado (negócio)" → ack + publica pra trás, sem passar pela DLQ.
+  - [ ] `SagasMessaging`: novo desfecho "ack puro, sem publish" — falha em obter resposta do externo; resolução fica pra task.
+  - [ ] Status de intenção + contador de tentativas em `Reserva` (nomes em aberto) — transição idempotente (`WHERE` aceita estado anterior e o alvo).
+  - [ ] Task de retentativa: acha reservas em intenção, resolve via `consultar`, publica a sequência SAGA pra frente/trás — marca status terminal *depois* de publicar, não antes (retry seguro se cair no meio, downstream já tolera duplicata). Ao estourar o limite de tentativas: publica manualmente na fila de erros (mensagem original já foi ackeada, não tem nack pra dar).
+  - [ ] Handler de negócio em `ReservasSagas` usando esse fluxo.
 
 ## Testes
 

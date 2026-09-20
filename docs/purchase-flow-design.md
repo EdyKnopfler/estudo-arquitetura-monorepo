@@ -44,6 +44,35 @@ flowchart LR
 - **Mecanismo de fiação — reaproveita `proximafila`/`filaanterior`, não precisa de "dois nós" de verdade.** Os dois pontos de contato do diagrama colapsam numa única fila nova (`sessaocompra`), porque o protocolo já resolve isso: configurar `proximafila: sessaocompra` em `voo` (hoje sem `proximafila`, fim da cadeia) e `filaanterior: sessaocompra` em `pagamento` (hoje sem `filaanterior`, início da cadeia) é suficiente — `SagasMessaging.iniciarConsumo` já publica em `filaProximoServico` no caminho `EXECUTE` e em `filaServicoAnterior` no caminho `DESFACA` (ver [saga-choreography.md](saga-choreography.md)). Um único handler em `sessaocompra`, igual aos outros, recebe as duas direções na mesma fila e decide o que fazer olhando o campo `tipo` da mensagem (`EXECUTE` → confirma; `DESFACA` → reverte) — mesmo padrão que `ReservasSagas`/`PagamentoSagas` já vão seguir.
 - **Caso "falha direto no webhook" precisa de publish fora do fluxo normal.** Publicar `DESFACA` direto em `sessaocompra` sem passar pelo anel exige que o profile `web` de `pagamento-interno` também consiga publicar mensagem (hoje só o profile `sagas`, via `SagasWiring`, tem essa capacidade) — é a mesma lacuna já registrada em [todo.md](todo.md) pro caso de sucesso (webhook precisa publicar `EXECUTE` em `pagamento`); os dois casos (sucesso e falha do webhook) resolvem juntos quando essa capacidade de publish existir no profile `web`.
 
+## Status de `Reserva` e não-idempotência de `reservas-externo`
+
+Dois axiomas assumidos pra esse simulador (decisão de design deliberada — não é ponto a reavaliar):
+
+1. **Cancelamento/expiração automática do lado externo é confiável.** TTL de 15min em `criar`/`confirmar` (`ReservasService`/`ReservasRepository`, `reservas-externo`); os dois são `@Transactional`, então falha explícita = zero efeito colateral. Consequência: o caminho de compensação (cancelar/liberar) não precisa de entrega garantida — melhor esforço basta, mesmo padrão que `ReservasService.liberarMelhorEsforco` (`reservas-interno`) já usa.
+2. **`confirmar`/`remover` são e continuam não-idempotentes.** Guarda estrita `WHERE confirmado = false` em `ReservasRepository` (`reservas-externo`) — uma segunda chamada depois de sucesso real dá o mesmo erro (`EntityNotFoundException`) de uma falha real, sem key nem endpoint de consulta pra desambiguar. Toda a responsabilidade de nunca chamar `confirmar` duas vezes cai em `reservas-interno` — sem ajuda do lado de lá.
+3. **`reservas-externo` precisa de um endpoint de consulta (`consultar`).** Sem ele, um timeout em `confirmar` é ambiguidade irredutível — dado o axioma 2, sucesso e falha real são indistinguíveis sem perguntar de volta à fonte de verdade. É o que torna o resto deste desenho possível; ainda não implementado (ver [todo.md](todo.md)).
+
+### Arquitetura: caminho feliz síncrono, caminho lento em background
+
+- **caminho feliz** (chamada externa dá resposta definitiva — sucesso ou falha de negócio): continua síncrono, `sagas-common` como está hoje ou com extensão leve — sem delay, sem task.
+- melhora no framework SAGAS (`SagasMessaging`) — estende, não troca:
+  - suportar erros "tratados" (de negócio) com ack + publica para trás — pula a DLQ, que fica só pra falha sistêmica/inesperada
+  - suportar "ack" puro para retentativa em caso de falha em *obter resposta* do serviço externo — obrigatório: `basicQos(1)` faz segurar sem ack travar a instância consumidora inteira
+- status de intenção + task de retentativa (não redelivery do RabbitMQ)
+  - novo status de intenção + contador de tentativas em `Reserva` (nomes ainda em aberto; hoje só `id`+`idExterno`, migration já tem `-- TODO falta status`), transição idempotente (`WHERE` aceita estado anterior ou já-no-alvo)
+  - idempotente
+  - limite de vezes por reserva — sobre tentativas de *obter resposta* do `consultar` (axioma 3 acima), não de `confirmar`
+  - também realiza tarefas de fila
+    - chama `consultar` pra saber o estado real (seguro de repetir — leitura pura)
+    - sequência SAGAS para frente (sucesso) ou para trás (falha de negócio), via `SagasMessaging.publicar()` — só o primitivo de publish, o loop de ack/nack de `iniciarConsumo` não serve aqui
+    - publica *antes* de marcar status terminal — se a escrita cair no meio, o próximo tick refaz com segurança; pior caso é mensagem duplicada, downstream já tolera at-least-once (ordem inversa exigiria um segundo scan estilo outbox)
+    - quando estoura o limite de tentativas de *obter resposta*: publica mensagem corrente na DLQ manualmente (`basicPublish` direto, sem delivery tag pra `nack`) + publica para trás
+      - *esse* é o único momento em que faz sentido para a gente jogar o cara para a DLQ
+
+**Gap concreto, independente dos axiomas acima:** `remover` também exige `WHERE confirmado = false` — hoje não existe operação em `reservas-externo` pra desfazer uma reserva já confirmada. Isso bloqueia de verdade o caso "DESFACA chega numa `Reserva` já `RESERVADA`, reverte pra pré-" descrito em "Discard vs. reverter" acima. Precisa de um endpoint tipo `desconfirmar`/estorno em `reservas-externo` antes desse caminho de compensação funcionar ponta a ponta.
+
+**Nota relacionada (achado separado, mesmo handler):** `SagasMessaging.iniciarConsumo` hoje dá `basicAck` da mensagem recebida **antes** de publicar a próxima na cadeia (`SagasMessaging.java`) — uma queda nesse intervalo perde a publicação sem redelivery (mensagem já foi consumida). Não afeta o status de intenção acima (esse depende do ack da mensagem *de entrada*, que só acontece depois do handler terminar), mas é outro furo de mesma natureza a corrigir na mesma área.
+
 ## O que isso desbloqueia / próximos passos
 
 - ~~Endpoints incrementais por tipo de reserva~~ — feito.
@@ -57,3 +86,5 @@ flowchart LR
 - Capacidade de publish no profile `web` de `pagamento-interno` (hoje só `sagas` publica) — necessária pro webhook de sucesso e de falha.
 - Implementação real dos handlers de negócio em `ReservasSagas`/`PagamentoSagas` (ver [todo.md](todo.md)).
 - Ordem de start-up `sessaocompra-web` × `reservas-interno-*-web` no `docker-compose.yml` (checar ciclo em `depends_on`).
+- Robustez do fluxo confirmar/reverter `Reserva` (endpoint `consultar`, endpoint `desconfirmar`/estorno, dois desfechos novos em `SagasMessaging`, status de intenção + task de retentativa, handler de `ReservasSagas`) — quebra em tarefas em [todo.md](todo.md), seção "Dual-write pagamento/reservas".
+- Reordenar `ack`/publish em `SagasMessaging` (ver nota acima).
