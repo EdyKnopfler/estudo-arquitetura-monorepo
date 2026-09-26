@@ -28,6 +28,10 @@ Java 25 (virtual threads), Spring Boot 4.0.1, Maven multi-módulo (8 módulos + 
   - cada fato mora num lugar só — duplicar entre código e doc(s) tende a ficar desatualizado
 - Escrita em geral (docs, TODOs, mensagens): bullets aninhados e frases curtas em vez de parágrafo denso
 
+## Testes
+
+Estratégia e regras obrigatórias em [docs/testing-strategy.md](docs/testing-strategy.md): teste de microsserviço usa sempre Testcontainers (`./mvnw test`); teste integrado entre serviços é `@Tag("integrado")` (`./mvnw package -DskipTests && ./mvnw test -Pintegrado`). Nenhum teste depende do compose de dev — só precisa do Docker no ar. Rodar módulo a módulo (`-pl`): máquina de 8 GB.
+
 ## Pendências
 
-A mecânica de infraestrutura (filas, auth, config) está mais madura que a regra de negócio que deveria carregar. Destaques: handlers da SAGA ainda são stub (só logam), webhook de pagamento é método vazio (nem confirma pagamento nem publica a primeira mensagem da SAGA), cobertura de teste é ~zero. Lista completa e categorizada: [docs/todo.md](docs/todo.md). Checklist de features por domínio (hotel/voo/pagamento): [README.md](README.md).
+A mecânica de infraestrutura (filas, auth, config) está mais madura que a regra de negócio que deveria carregar. Destaques: handlers da SAGA ainda são stub (só logam), webhook de pagamento é método vazio (nem confirma pagamento nem publica a primeira mensagem da SAGA) — e por isso ainda sem teste, assim como SAGA e timeout. Lista completa e categorizada: [docs/todo.md](docs/todo.md). Checklist de features por domínio (hotel/voo/pagamento): [README.md](README.md).

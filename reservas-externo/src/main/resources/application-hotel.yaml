@@ -10,4 +10,4 @@ spring:
 internal-backend:
   clients:
     - client-id: ${RESERVAS_EXTERNO_HOTEL_ID:reservasExternoHotelId}
-      client-secret: ${RESERVAS_EXTERNO_HOTEL_SECRET:reservasExternoHotelId}
+      client-secret: ${RESERVAS_EXTERNO_HOTEL_SECRET:reservasExternoHotelSecret}

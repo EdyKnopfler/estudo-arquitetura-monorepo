@@ -9,7 +9,7 @@ Detalhamento por tópico. O [CLAUDE.md](../CLAUDE.md) na raiz traz o resumo exec
 - [deploy-roles-by-profile.md](deploy-roles-by-profile.md) — como o papel (web vs. sagas) de cada módulo é escolhido por profile Spring, mecanismo e pegadinhas
 - [security-and-auth.md](security-and-auth.md) — JWT, client-id/secret entre serviços, limitações conhecidas
 - [web-base-hardening.md](web-base-hardening.md) — decisões de segurança do `web-base`: wiring da `SecurityFilterChain`, validação de JWT (`iss`/`kid`), client-secret, tratamento de erro — o que existe e por quê
-- [testing-strategy.md](testing-strategy.md) — Testcontainers vs. serviços já no ar (`docker-compose up`), quando usar cada um
+- [testing-strategy.md](testing-strategy.md) — teste de microsserviço (Testcontainers) vs. teste integrado (`-Pintegrado`), regras, e por que não rodamos contra o compose
 - [todo.md](todo.md) — lacunas técnicas encontradas em revisão de arquitetura (complementa o checklist de features do [README.md](../README.md))
 
 Conforme o conteúdo de um tópico crescer, prefira quebrar em subarquivos (ex.: `saga-choreography/compensacao.md`) e indexar aqui, em vez de inflar um único arquivo.

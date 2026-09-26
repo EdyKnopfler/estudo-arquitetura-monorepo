@@ -34,11 +34,22 @@ Este arquivo complementa o checklist de features do [README.md](../README.md) (q
 
 ## Testes
 
-- [ ] Cobertura de teste é essencialmente zero: todos os arquivos `*ApplicationTests.java` são o `contextLoads()` gerado pelo Spring Boot, nada além disso (confirmado por contagem de linhas). Os testes integrados já planejados no README (Requisição → Externo → Webhook; encaminha sucesso; notifica falha) ainda não existem em nenhum domínio.
-- [x] ~~Testes automatizados para `web-base`~~ — 31 testes cobrindo `JwtAuthenticationFilter`, `ClientSecretAuthFilter`, `JwtIssuerService`/`JwtValidatorService`, `InternalClientsConfig`, `TrataErros`. Achados e o que ainda falta (design de `iss`/`aud`/`kid`, refactor do wiring): [web-base-hardening.md](web-base-hardening.md).
+Estratégia e comandos: [testing-strategy.md](testing-strategy.md). Checklist de integrados por domínio: [README](../README.md).
+
+- [x] ~~Cobertura ~zero (só `contextLoads`)~~ — testes de microsserviço em todos os módulos web + integrados de contrato interno↔externo (`ReservasExternoServiceIntegrationTest`, `PagamentoExternoServiceIntegrationTest`).
+- [x] ~~Testes automatizados para `web-base`~~ — achados e o que ainda falta (design de `iss`/`aud`/`kid`, refactor do wiring): [web-base-hardening.md](web-base-hardening.md).
 - [ ] Testes automatizados para `sagas-common` — ainda zero, só validado indiretamente via módulos consumidores.
-- [x] ~~`pagamento-externo`/`PagamentoController` sem teste~~ — `PagamentoControllerTest` (3 casos: sucesso/negócio/infra). De quebra, `/efetuar` ganhou `ResultadoSimulado` (header `X-Simular-Resultado`, valores `SUCESSO`/`FALHA_NEGOCIO`/`FALHA_INFRA`) pra permitir teste de integração determinístico — mesmo padrão de "negative testing" do sandbox da PayPal (header) e cartões de teste da Stripe: resultado viaja no request, não em config do processo. Header ausente = `CHANCE_FALHA` aleatório de sempre (só pra app "rodando de verdade"). `pagamento-interno.PagamentoExternoServiceIntegrationTest` bate no `pagamento-externo` real (sem mock) forçando os 3 casos — precisa de `docker-compose up` no ar (não verificado rodando nesta sessão, só compilado — sandbox sem rede pro serviço). **Candidato a repetir em `reservas-externo` depois, se fizer sentido.**
-- [x] ~~Teste black-box interno↔externo, sem serviço nenhum já no ar~~ — `pagamento-interno.PagamentoCriacaoIntegradoTest`: sobe Postgres + RabbitMQ + pagamento-interno + pagamento-externo como containers reais via Testcontainers (imagem buildada do próprio `Dockerfile` de cada módulo), network isolada, `POST /pagamentos` de ponta a ponta sem mock nenhum. Opt-in (`SAGAS_TESTCONTAINERS=true`, mesma flag de docs/testing-strategy.md) — lento de propósito (builda 2 imagens Maven multi-módulo do zero), não roda no `mvn test` default. **Não verificado rodando nesta sessão** (sandbox sem Docker) — só compilado; precisa confirmação local. Achado no caminho: `WebhookService.enviarResposta` (pagamento-externo) ecoa de volta o MESMO client-id/secret de quem chamou `/efetuar`, não uma identidade fixa própria — `internal-backend.webhooks[0].client-id` de `pagamento-externo` e o `internal-backend.clients` de `pagamento-interno` estavam usando `PAGAMENTO_INTERNO_ID` (errado) em vez de `PAGAMENTO_EXTERNO_ID` (o identificador real de quem chama). Corrigido nos dois `application.yaml`; `PAGAMENTO_INTERNO_ID`/`SECRET` ficaram órfãos e foram removidos do `.env`/`.env.example`.
+- [ ] **Depois de desacoplar o webhook** (TODO em `PagamentoController` de `pagamento-externo`):
+  - reativar caso `SUCESSO` de `PagamentoExternoServiceIntegrationTest` e a classe `PagamentoCriacaoIntegradoTest` (hoje `@Disabled`); conferir o banco via JDBC
+  - "recusado" aleatório do `WebhookService` respeitar a simulação (`SimuladorDeTeste`)
+  - corpo do webhook com `idTransacao`
+  - webhook publica `EXECUTE` na fila `pagamento`: fila temporária ligada à exchange `sagas` + `basicGet`
+- [ ] **Com os handlers da SAGA e o timeout implementados:**
+  - handlers de `ReservasSagas`/`PagamentoSagas` (hoje só logam)
+  - jobs de `TimeoutTask` em `sessaocompra`
+  - integrados "encaminha sucesso" / "notificação de falha" do README (pagamento, hotel, voo)
+  - RabbitMQ de teste é um container só (reuse) pra `reservas-interno` e `pagamento-interno` — com consumidor real, filas de contextos diferentes podem se misturar; avaliar isolar (vhost por módulo)
+- [ ] **`PUT /sessoes/{id}/pagamento-efetuado` sem teste de propósito** — qualquer cliente com JWT válido marca qualquer sessão em `EFETUANDO_PAGAMENTO` como `PAGAMENTO_EFETUADO` (sem ownership, sem autenticação de serviço). Teste agora congelaria esse buraco; testar quando virar consumidor de fila (ver comentário no controller e [purchase-flow-design.md](purchase-flow-design.md)).
 
 ## Hygiene / housekeeping
 

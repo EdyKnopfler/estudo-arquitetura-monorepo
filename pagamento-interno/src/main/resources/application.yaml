@@ -56,8 +56,6 @@ security:
 # depois dessa correção (nada mais referencia) — removidos do .env.
 internal-backend:
   clients:
-    - client-id: ${FRONT_END_ID:frontEndId}
-      client-secret: ${FRONT_END_SECRET:frontEndSecret}
     - client-id: ${PAGAMENTO_EXTERNO_ID:pagamentoExternoId}
       client-secret: ${PAGAMENTO_EXTERNO_SECRET:pagamentoExternoSecret}
     - client-id: ${SESSAO_COMPRA_ID:sessaoCompraId}

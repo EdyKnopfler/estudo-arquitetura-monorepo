@@ -33,6 +33,10 @@
 
   <properties>
     <java.version>25</java.version>
+    <!-- testes @Tag("integrado") só rodam com -Pintegrado — docs/testing-strategy.md -->
+    <testes.excluidos>integrado</testes.excluidos>
+    <!-- reuse do Testcontainers (docs/testing-strategy.md) — CI desliga com -Dtestes.reuse=false -->
+    <testes.reuse>true</testes.reuse>
   </properties>
   
   <build>
@@ -51,7 +55,29 @@
         </plugin>
       </plugins>
     </pluginManagement>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <excludedGroups>${testes.excluidos}</excludedGroups>
+          <environmentVariables>
+            <TESTCONTAINERS_REUSE_ENABLE>${testes.reuse}</TESTCONTAINERS_REUSE_ENABLE>
+          </environmentVariables>
+        </configuration>
+      </plugin>
+    </plugins>
   </build>
+
+  <profiles>
+    <profile>
+      <id>integrado</id>
+      <properties>
+        <testes.excluidos></testes.excluidos>
+        <groups>integrado</groups>
+      </properties>
+    </profile>
+  </profiles>
 
 </project>
 

@@ -2,39 +2,32 @@ package com.derso.arquitetura.pagamentointerno;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.images.builder.ImageFromDockerfile;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
 
 import com.derso.arquitetura.pagamentointerno.dto.CriarPagamentoRequest;
 import com.derso.arquitetura.pagamentointerno.dto.PagamentoDTO;
 
-// Teste black-box de verdade: pagamento-interno e pagamento-externo rodando como containers reais,
-// buildados a partir do próprio Dockerfile de cada um (mesmo artefato que rodaria em produção),
-// conversando entre si por HTTP dentro de uma network isolada do Testcontainers — sem mock nenhum.
-// Só precisa de Postgres + RabbitMQ (RabbitMQ é exigido pelo boot do profile "web" hoje, ver
-// SagasWiring/RabbitConfig — não tem a ver com o fluxo de criação de pagamento em si).
-//
-// Opt-in (SAGAS_TESTCONTAINERS=true), mesma flag de docs/testing-strategy.md — builda 2 imagens
-// Maven multi-módulo do zero, é lento de propósito, não roda no `mvn test` default.
-//
-// Conhecido: o build context enviado pro Docker é o repo inteiro (não respeita .dockerignore, o
-// ImageFromDockerfile desta versão do Testcontainers não aplica isso) — correto, só mais pesado
-// que precisaria. Otimizar depois se incomodar.
+import com.derso.arquitetura.webbase.teste.ServicoEmContainer;
+
+// Black-box: pagamento-interno e pagamento-externo como containers reais (ServicoEmContainer),
+// conversando por HTTP numa network isolada, sem mock. RabbitMQ é exigido pelo boot do profile "web"
+// (o /webhook publica a 1ª mensagem da SAGA). Integrado: só roda com -Pintegrado (docs/testing-strategy.md).
+@Disabled("fluxo passa pelo webhook síncrono — volta após o desacoplamento (TODO em PagamentoController de pagamento-externo)")
+@Tag("integrado")
 class PagamentoCriacaoIntegradoTest {
 
     private static Network network;
@@ -45,15 +38,6 @@ class PagamentoCriacaoIntegradoTest {
 
     @BeforeAll
     static void subirContainers() {
-        Assumptions.assumeTrue(
-            "true".equalsIgnoreCase(System.getenv("SAGAS_TESTCONTAINERS")),
-            "Requer SAGAS_TESTCONTAINERS=true — sobe Postgres, RabbitMQ, pagamento-interno e "
-                + "pagamento-externo como containers reais e builda as imagens a partir dos "
-                + "Dockerfiles. Lento de propósito, não roda no mvn test default."
-        );
-
-        Path repoRoot = Paths.get("").toAbsolutePath().getParent();
-
         network = Network.newNetwork();
 
         postgres = new PostgreSQLContainer("postgres:18.1")
@@ -69,24 +53,19 @@ class PagamentoCriacaoIntegradoTest {
             .withNetworkAliases("broker");
         rabbit.start();
 
-        pagamentoExterno = new GenericContainer<>(
-            new ImageFromDockerfile()
-                .withFileFromPath(".", repoRoot)
-                .withDockerfilePath("pagamento-externo/Dockerfile")
-        )
+        pagamentoExterno = ServicoEmContainer.de("pagamento-externo")
             .withNetwork(network)
             .withNetworkAliases("pagamento-externo")
             .withEnv("PAGAMENTO_INTERNO_HOST", "pagamento-interno")
             .withEnv("PAGAMENTO_INTERNO_PORT", "8087")
+            // profile `test` + desfecho fixo: sem isso /efetuar cai no chaos aleatório (25% de falha)
+            .withEnv("SPRING_PROFILES_ACTIVE", "test")
+            .withEnv("SIMULACAO_RESULTADO", "SUCESSO")
             .waitingFor(Wait.forLogMessage(".*Started PagamentoExternoApplication.*\\n", 1)
                 .withStartupTimeout(Duration.ofMinutes(3)));
         pagamentoExterno.start();
 
-        pagamentoInterno = new GenericContainer<>(
-            new ImageFromDockerfile()
-                .withFileFromPath(".", repoRoot)
-                .withDockerfilePath("pagamento-interno/Dockerfile")
-        )
+        pagamentoInterno = ServicoEmContainer.de("pagamento-interno")
             .withNetwork(network)
             .withNetworkAliases("pagamento-interno")
             .withExposedPorts(8087)

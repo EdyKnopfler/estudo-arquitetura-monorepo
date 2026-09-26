@@ -23,7 +23,7 @@ import com.derso.arquitetura.webbase.config.BusinessException;
 class PagamentoControllerTest {
 
     private final WebhookService webhook = mock(WebhookService.class);
-    private final PagamentoController controller = new PagamentoController(webhook);
+    private final PagamentoController controller = new PagamentoController(webhook, header -> ResultadoSimulado.valueOf(header));
     private final Authentication authentication = mock(Authentication.class);
     private final PagamentoRequestDTO dados = new PagamentoRequestDTO("cartao", new BigDecimal("100.00"));
 
@@ -32,7 +32,7 @@ class PagamentoControllerTest {
         when(authentication.getPrincipal()).thenReturn("clienteTeste");
 
         ResponseEntity<PagamentoResponseDTO> resposta =
-            controller.efetuarPagamento(dados, ResultadoSimulado.SUCESSO, authentication);
+            controller.efetuarPagamento(dados, "SUCESSO", authentication);
 
         assertEquals(202, resposta.getStatusCode().value());
         assertNotNull(resposta.getBody().idTransacao());
@@ -43,7 +43,7 @@ class PagamentoControllerTest {
     @Test
     void resultadoFalhaNegocioLancaBusinessExceptionSemChamarWebhook() {
         assertThrows(BusinessException.class, () ->
-            controller.efetuarPagamento(dados, ResultadoSimulado.FALHA_NEGOCIO, authentication)
+            controller.efetuarPagamento(dados, "FALHA_NEGOCIO", authentication)
         );
 
         verify(webhook, never()).enviarResposta(anyString(), any());
@@ -52,7 +52,7 @@ class PagamentoControllerTest {
     @Test
     void resultadoFalhaInfraLancaRuntimeExceptionSemChamarWebhook() {
         assertThrows(RuntimeException.class, () ->
-            controller.efetuarPagamento(dados, ResultadoSimulado.FALHA_INFRA, authentication)
+            controller.efetuarPagamento(dados, "FALHA_INFRA", authentication)
         );
 
         verify(webhook, never()).enviarResposta(anyString(), any());

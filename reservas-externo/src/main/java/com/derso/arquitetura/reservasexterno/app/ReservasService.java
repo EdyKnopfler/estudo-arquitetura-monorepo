@@ -17,15 +17,15 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ReservasService {
 
-    private static final double CHANCE_FALHA = 0.25;
     private static final Duration TEMPO_MAXIMO = Duration.ofMinutes(15);
 
     private final ReservasRepository repositorio;
+    private final Simulador simulador;
     private final Random random = new Random();
 
     // INTRODUZIMOS ALGUMA "ENTROPIA" PARA OS SERVIÇOS INTERNOS TRATAREM
-    private void seraQueVaiFalhar() {
-        if (random.nextDouble() < CHANCE_FALHA) {
+    private void seraQueVaiFalhar(String headerSimularResultado) {
+        if (simulador.decidir(headerSimularResultado) == ResultadoSimulado.FALHA_INFRA) {
             try {
                 // Simula latência antes de um erro (comum em serviços reais)
                 Thread.sleep(random.nextLong(100, 500));
@@ -37,16 +37,16 @@ public class ReservasService {
     }
     
     @Transactional
-    public UUID criar(UUID idCliente) {
-        seraQueVaiFalhar();
+    public UUID criar(UUID idCliente, String headerSimularResultado) {
+        seraQueVaiFalhar(headerSimularResultado);
         Reserva reserva = new Reserva(idCliente);
         repositorio.save(reserva);
         return reserva.getId();
     }
 
     @Transactional
-    public void confirmar(UUID id) {
-        seraQueVaiFalhar();
+    public void confirmar(UUID id, String headerSimularResultado) {
+        seraQueVaiFalhar(headerSimularResultado);
         Instant horaRef = Instant.now().minus(TEMPO_MAXIMO);
 
         if (repositorio.confirmar(id, horaRef) == 0) {
@@ -55,8 +55,8 @@ public class ReservasService {
     }
 
     @Transactional
-    public void remover(UUID id) {
-        seraQueVaiFalhar();
+    public void remover(UUID id, String headerSimularResultado) {
+        seraQueVaiFalhar(headerSimularResultado);
 
         if (repositorio.remover(id) == 0) {
             throw new EntityNotFoundException("Reserva não encontrada ou já confirmada");

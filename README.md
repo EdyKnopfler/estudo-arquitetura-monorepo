@@ -79,6 +79,29 @@ pagamento-interno-sagas-1       | [pagamento] ESTORNANDO pagamento — rastreio=
 
 ---
 
+## Testes
+
+Só precisa do Docker no ar — Postgres e RabbitMQ sobem sozinhos via Testcontainers (nada do `docker compose`). Estratégia e regras em [docs/testing-strategy.md](docs/testing-strategy.md).
+
+```bash
+# testes de microsserviço (suíte padrão)
+./mvnw test
+
+# um módulo só (-am compila as libs de que ele depende)
+./mvnw test -pl sessaocompra -am
+
+# uma classe só
+./mvnw test -pl sessaocompra -am -Dtest=SessaoCompraFluxoTest -Dsurefire.failIfNoSpecifiedTests=false
+
+# testes integrados (serviços reais em container) — o package antes é obrigatório: o teste usa o jar compilado
+./mvnw package -DskipTests && ./mvnw test -Pintegrado
+
+# Postgres/RabbitMQ dos testes ficam de pé entre execuções (reuse) — pra liberar RAM:
+docker rm -f $(docker ps -aq --filter label=org.testcontainers.hash)
+```
+
+---
+
 ## **TODO** 
 
 * Encaixar e conectar todos os serviços (isso **demora**!)
@@ -132,7 +155,7 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
     * [X] **cancelamento:** cancela pré-reservas
     * [X] _deve falhar às vezes de propósito_
   * [ ] Testes integrados
-    * [ ] Requisição > Externo
+    * [X] Requisição > Externo (`ReservasExternoServiceIntegrationTest`)
     * [ ] Encaminha sucesso para outro serviço
     * [ ] Notificação de falha por outro serviço
 
@@ -149,7 +172,7 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
     * [X] **cancelamento:** cancela pré-reservas
     * [X] _deve falhar às vezes de propósito_
   * [ ] Testes integrados
-    * [ ] Requisição > Externo
+    * [X] Requisição > Externo (mesmo código de _Hotel_, só muda o profile — coberto por `ReservasExternoServiceIntegrationTest`)
     * [ ] Encaminha sucesso para outro serviço
     * [ ] Notificação de falha por outro serviço
 

@@ -1,12 +1,73 @@
 # Estratégia de testes
 
-Testes de integração que dependem de Postgres ou RabbitMQ rodam, por padrão, contra os serviços do `docker-compose up` já no ar — sem overhead de subir container a cada execução pela IDE. O `application.yaml` de cada módulo já aponta pro Postgres/RabbitMQ do compose, sem config extra.
+Dois tipos de teste, cada um com o modo que ele exige — nenhum teste roda em dois modos.
 
-Config de RabbitMQ via Testcontainers vive em `sagas-common` (`RabbitMQTestcontainersConfig`, empacotada como test-jar) — é infra de teste da SAGA, todo módulo que participa da coreografia importa de lá em vez de duplicar. RabbitMQ usa o client cru (`RabbitConfig`, sem Spring AMQP), então não tem `@ServiceConnection` pronto — a porta/host do container entra via `DynamicPropertyRegistrar`. Cada módulo consumidor ainda precisa declarar `spring-boot-testcontainers`/`testcontainers-rabbitmq` no próprio pom (escopo `test` não é transitivo via test-jar).
+## Teste de microsserviço (`./mvnw test`)
 
-Pra rodar self-contained (CI/CD, ou dev sem o compose no ar), liga o Testcontainers explicitamente: `SAGAS_TESTCONTAINERS=true mvn test`. O bean de conexão é condicional (`@ConditionalOnProperty`, opt-in).
+Um serviço isolado, rodando no próprio processo do teste.
 
-- dev: ciclo rápido, sem subir/derrubar banco a cada rodada
-- CI/CD: ativa a flag, suíte controla o container sozinha
+- `@SpringBootTest` + MockMvc — o serviço inteiro (segurança, validação, JPA, Flyway) de verdade
+- Postgres e RabbitMQ: Testcontainers, sempre
+  - Postgres: `PostgresTestcontainersConfig` do test-jar do `web-base` — um container pra todos os módulos, um database por módulo (nome = `spring.application.name`), espelhando o compose
+    - sem `@ServiceConnection`: ele apontaria pro database default do container; a URL entra via `DynamicPropertyRegistrar`
+  - RabbitMQ: `RabbitMQTestcontainersConfig` do test-jar do `sagas-common`
+    - `RabbitConfig` usa o client cru (sem Spring AMQP), sem `@ServiceConnection` — host/porta entram via `DynamicPropertyRegistrar`
+    - módulo consumidor declara `spring-boot-testcontainers`/`testcontainers-rabbitmq` no próprio pom (escopo `test` não é transitivo via test-jar)
+- outro serviço chamado por HTTP: mockado na fronteira (`@MockitoBean` no client/service que faz a chamada)
+- confere efeito, não só resposta: lê o banco com `JdbcTemplate` (SQL cru — pega coluna trocada que o próprio `@Entity` esconderia)
 
-Trade-off aceito no modo padrão: o teste não é isolado — reaproveita o banco de dev como está, então pode ver dado de execuções anteriores.
+### Reuse de containers
+
+Postgres/RabbitMQ ficam de pé entre execuções (`withReuse(true)`) — rodar uma classe ou método pela IDE conecta em ~1s.
+
+- ligado pelo projeto, não por máquina: env `TESTCONTAINERS_REUSE_ENABLE` no surefire (parent pom) e em `java.test.config` do `.vscode/settings.json`
+  - Testcontainers só lê essa chave de env ou `~/.testcontainers.properties` — arquivo no classpath é ignorado de propósito
+  - CI: `-Dtestes.reuse=false` volta ao descartável
+- `@Bean(destroyMethod = "")` nas configs: com o destroy method inferido (`close`), o Spring para o container no fim do contexto e anula o reuse
+- config idêntica = mesmo container reaproveitado — por isso um Postgres só serve todos os módulos, isolados por database (tabelas `reservas` de interno/externo e os Flyway colidiriam num database só)
+- estado persiste entre execuções — por isso a regra de limpeza abaixo é obrigatória
+- derrubar (liberar RAM, ou depois de editar migration já aplicada): `docker rm -f $(docker ps -aq --filter label=org.testcontainers.hash)`
+
+## Teste integrado (`./mvnw package -DskipTests && ./mvnw test -Pintegrado`)
+
+Serviços reais conversando entre si.
+
+- marcado com `@Tag("integrado")` — fora do `mvn test` padrão (parent pom exclui a tag; profile `integrado` inverte e roda só eles)
+- cada serviço sobe como container via `ServicoEmContainer` (test-jar do `web-base`): jar já compilado no host + imagem só com o JRE, numa network do Testcontainers
+  - por que não o `Dockerfile` do módulo: ele builda com Maven dentro do Docker usando `RUN --mount` (cache), que exige BuildKit — o cliente Docker do Testcontainers não suporta. E build Maven dentro do Docker é justamente o passo que pesa na RAM
+  - consequência: o jar precisa existir antes (`package`); sem ele o teste falha dizendo isso. Jar velho = teste contra código velho
+- sem reuse: cada classe monta e derruba seus containers
+
+## Regras (valem pros dois tipos)
+
+- Docker precisa estar no ar; o teste sobe tudo o mais sozinho — ninguém (nem agente) sobe ambiente à mão pra teste
+- sem `contextLoads` — qualquer `@SpringBootTest` do módulo já prova que o contexto sobe
+- dado único por teste (UUID, e-mail, CPF aleatórios) e o teste apaga o que criou em `@AfterEach`
+  - container é compartilhado entre testes e, com reuse, entre execuções — um teste não pode depender do estado deixado por outro
+  - nunca `DELETE`/`TRUNCATE` geral
+- sem `@Transactional` na classe de teste: o service entraria na transação do teste, sem commit real, e a leitura via JDBC não veria a linha
+- memória: rodar módulo a módulo (`-pl`) numa máquina de 8 GB
+
+## Simulação de falha dos `-externo`
+
+Os simuladores sorteiam falha de propósito (`CHANCE_FALHA`). Teste precisa de desfecho determinístico:
+
+- só com profile `test` ativo no simulador (`SimuladorDeTeste`); fora dele, sempre sorteio
+- header `X-Simular-Resultado`: quando o teste controla a requisição ao simulador
+- propriedade `simulacao.resultado` (env `SIMULACAO_RESULTADO`): fixa o desfecho do container inteiro — quando a requisição parte de outro serviço (ex.: `pagamento-interno` → `pagamento-externo` no teste integrado)
+- header vence propriedade
+
+## Descartado: rodar testes contra instâncias do compose já no ar
+
+Tentado em 2026-09-26: modo padrão contra o `docker compose` de dev (sem subir container por execução) + Testcontainers opt-in pra CI. Descartado porque:
+
+- todo teste tinha que funcionar nos dois ambientes — configuração dupla pra tudo:
+  - databases `*_test` criados à mão (o `databases.sql` só roda na criação do volume)
+  - URL de teste em documento `on-profile: test` de 7 YAMLs, com armadilha de precedência entre arquivos de profile
+  - vhost próprio no RabbitMQ, pra não cair nas filas dos consumidores `-sagas` de dev
+  - instâncias `-test` dos simuladores no compose (as de dev gravam no banco de dev)
+- estado persiste entre execuções — limpeza vira requisito crítico em vez de boa prática
+- ambiente pesado: JVMs extras + build de imagens esgotaram RAM e swap da máquina de dev
+- ganho pequeno: Postgres/RabbitMQ em container sobem em segundos, e o reuse cobre o ciclo rápido de dev sem modo duplo
+
+`docker compose up` segue sendo o jeito de **rodar a aplicação** localmente — só não é ambiente de teste.

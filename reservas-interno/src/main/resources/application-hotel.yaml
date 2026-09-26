@@ -10,8 +10,8 @@ spring:
 # para ACEITAR requisições
 internal-backend:
   clients:
-    - client-id: ${RESERVAS_INTERNO_WEB_HOTEL_ID:reservasExternoHotelId}
-      client-secret: ${RESERVAS_INTERNO_WEB_HOTEL_SECRET:reservasExternoHotelId}
+    - client-id: ${RESERVAS_INTERNO_WEB_HOTEL_ID:reservasInternoHotelId}
+      client-secret: ${RESERVAS_INTERNO_WEB_HOTEL_SECRET:reservasInternoHotelSecret}
 
 # para SOLICITAR ao serviço externo
 external-backend:

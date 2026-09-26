@@ -41,7 +41,7 @@ public class ReservasService {
         return transactionTemplate.execute(status -> {
             Reserva novaReserva = new Reserva(null, idExterno);
             repositorio.save(novaReserva);
-            return new ReservaDTO(novaReserva.getId(), novaReserva.getIdExterno());
+            return new ReservaDTO(novaReserva.getId());
         });
     }
 
@@ -60,7 +60,7 @@ public class ReservasService {
 
         liberarMelhorEsforco(reservaAntiga);
 
-        return new ReservaDTO(novaReserva.getId(), novaReserva.getIdExterno());
+        return new ReservaDTO(novaReserva.getId());
     }
 
     private void liberarMelhorEsforco(Reserva reservaAntiga) {

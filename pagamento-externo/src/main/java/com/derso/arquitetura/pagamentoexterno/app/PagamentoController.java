@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.derso.arquitetura.pagamentoexterno.PagamentoExternoApplication;
 import com.derso.arquitetura.pagamentoexterno.webhook.WebhookService;
 import com.derso.arquitetura.webbase.config.BusinessException;
 
@@ -23,14 +22,15 @@ public class PagamentoController {
     public static final String HEADER_SIMULAR_RESULTADO = "X-Simular-Resultado";
 
     private final WebhookService webhook;
+    private final Simulador simulador;
 
     @PostMapping("/efetuar")
     public ResponseEntity<PagamentoResponseDTO> efetuarPagamento(
         @Valid @RequestBody PagamentoRequestDTO dados,
-        @RequestHeader(value = HEADER_SIMULAR_RESULTADO, required = false) ResultadoSimulado resultadoSimulado,
+        @RequestHeader(value = HEADER_SIMULAR_RESULTADO, required = false) String headerSimularResultado,
         Authentication authentication
     ) {
-        ResultadoSimulado resultado = resultadoSimulado != null ? resultadoSimulado : sortear();
+        ResultadoSimulado resultado = simulador.decidir(headerSimularResultado);
 
         if (resultado == ResultadoSimulado.FALHA_INFRA) {
             throw new RuntimeException("Falhou por motivo de: " + UUID.randomUUID().toString());
@@ -42,18 +42,12 @@ public class PagamentoController {
         String idCliente = authentication.getPrincipal().toString();
         UUID idTransacao = UUID.randomUUID();
 
-        // Já enviamos a resposta do pagamento para o webhook da aplicação
+        // TODO desacoplar: webhook chamado síncrono, ANTES do 202 — pagamento-interno recebe o callback
+        // antes de gravar a linha em `pagamentos`, e falha no webhook vira 500 no /efetuar. Gateway real
+        // responde primeiro e notifica depois (assíncrono).
         webhook.enviarResposta(idCliente, idTransacao);
 
         return ResponseEntity.accepted().body(new PagamentoResponseDTO(idTransacao, "processando"));
-    }
-
-    // Mesma proporção/comportamento de sempre — sucesso ou o que hoje era a única falha existente
-    // (RuntimeException não tratada, agora nomeada FALHA_INFRA). Ver ResultadoSimulado.
-    private static ResultadoSimulado sortear() {
-        return Math.random() < PagamentoExternoApplication.CHANCE_FALHA
-            ? ResultadoSimulado.FALHA_INFRA
-            : ResultadoSimulado.SUCESSO;
     }
 
 }

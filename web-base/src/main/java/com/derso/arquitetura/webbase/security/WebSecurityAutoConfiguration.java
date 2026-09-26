@@ -10,10 +10,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication.Type;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.DefaultSecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import com.derso.arquitetura.webbase.internalclient.ClientSecretAuthFilter;
@@ -74,6 +76,9 @@ public class WebSecurityAutoConfiguration {
                 }
                 auth.anyRequest().authenticated();
             })
+            // sem isso, requisição não autenticada no modo jwt vira 403 (entry point default) —
+            // o filtro jwt não rejeita sozinho, só deixa de autenticar; client-secret já seta 401 no filtro
+            .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
             .addFilterBefore(authFilter, UsernamePasswordAuthenticationFilter.class)
             .build();
     }
