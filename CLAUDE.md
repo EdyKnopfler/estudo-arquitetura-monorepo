@@ -24,7 +24,6 @@ Java 25 (virtual threads), Spring Boot 4.0.1, Maven multi-módulo (8 módulos + 
   - se o porquê já está em `docs/`, aponta pra lá em vez de reexplicar
 - Documentação em `docs/`:
   - doc = decisão tomada/estado desejado; distância pro código tem que ter item no todo (sem item: perguntar)
-  - decisão que precisa ser tomada: item "decidir …" no todo; na doc, "em aberto — ver todo"
   - bug achado numa sessão só vira doc se o dono decidir
   - desenho ainda não implementado: detalhe completo (é a única fonte de verdade nesse momento)
   - depois de implementado: código vira fonte de verdade do *como*; a doc encolhe pro *porquê* (decisão de negócio/projeto, armadilhas encontradas)
