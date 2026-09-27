@@ -8,12 +8,12 @@ Java 25 (virtual threads), Spring Boot 4.0.1, Maven multi-módulo (8 módulos + 
 
 ## Módulos
 
-`clientes` · `sessaocompra` (roda 2x por papel via profile `web`/`timeout`) · `reservas-{interno,externo}` (cada um roda 2x via profile `hotel`/`voo`; `reservas-interno` roda ainda 2x por papel via profile `web`/`sagas`) · `pagamento-{interno,externo}` (`pagamento-interno` roda 2x por papel via profile `web`/`sagas`, sem eixo de domínio) · `web-base` e `sagas-common` (bibliotecas transversais). Mapa completo, portas e diagrama de fluxo: [docs/architecture-overview.md](docs/architecture-overview.md).
+`clientes` · `sessaocompra` (roda por papel via profile `web`/`sagas`/`timeout`) · `reservas-{interno,externo}` (cada um roda 2x via profile `hotel`/`voo`; `reservas-interno` roda ainda 2x por papel via profile `web`/`sagas`) · `pagamento-{interno,externo}` (`pagamento-interno` roda 2x por papel via profile `web`/`sagas`, sem eixo de domínio) · `web-base` e `sagas-common` (bibliotecas transversais). Mapa completo, portas e diagrama de fluxo: [docs/architecture-overview.md](docs/architecture-overview.md).
 
 ## Decisões arquiteturais
 
-- **`reservas-interno`, `pagamento-interno` e `sessaocompra` são cada um um artefato único**, com controller REST e listener de fila no mesmo processo — o papel ativo em cada instância é escolhido por profile Spring em runtime (`@Profile("web")`/`@Profile("sagas")`/`@Profile("timeout")`). Isso dá escala independente entre entrypoint REST e entrypoint de fila (N instâncias web, M instâncias fila) sem o custo de coordenar módulos Maven separados por domínio. `sessaocompra` não participa da SAGA — seu segundo papel é `timeout` (job `@Scheduled`), não `sagas`. Mecanismo em [docs/deploy-roles-by-profile.md](docs/deploy-roles-by-profile.md), organização interna da regra de negócio em [docs/module-boundaries.md](docs/module-boundaries.md). **Isso é verdade hoje, mas há um desenho (não implementado) que estende a coreografia até `sessaocompra`** — ver [docs/purchase-flow-design.md](docs/purchase-flow-design.md).
-- **SAGA por coreografia, não orquestração central.** Cada serviço só conhece a fila anterior/próxima; erro no handler dispara republish automático de compensação (`tipo=DESFACA`) retroativo na cadeia — mecânica implementada em `sagas-common`, cadeia atual é `pagamento → hotel → voo`. Detalhe: [docs/saga-choreography.md](docs/saga-choreography.md).
+- **`reservas-interno`, `pagamento-interno` e `sessaocompra` são cada um um artefato único**, com controller REST e listener de fila no mesmo processo — o papel ativo em cada instância é escolhido por profile Spring em runtime (`@Profile("web")`/`@Profile("sagas")`/`@Profile("timeout")`). Isso dá escala independente entre entrypoint REST e entrypoint de fila (N instâncias web, M instâncias fila) sem o custo de coordenar módulos Maven separados por domínio. `sessaocompra` tem ainda o papel `timeout` (job `@Scheduled`). Mecanismo em [docs/deploy-roles-by-profile.md](docs/deploy-roles-by-profile.md), organização interna da regra de negócio em [docs/module-boundaries.md](docs/module-boundaries.md).
+- **SAGA por coreografia, não orquestração central.** Cada serviço só conhece a fila anterior/próxima; erro no handler dispara republish automático de compensação (`tipo=DESFACA`) retroativo na cadeia — mecânica em `sagas-common`. Cadeia `pagamento → hotel → voo`, com `sessaocompra` nas duas pontas (confirma a viagem no fim do sucesso, reverte a sessão no fim da compensação) — desenho em [docs/purchase-flow-design.md](docs/purchase-flow-design.md). Detalhe: [docs/saga-choreography.md](docs/saga-choreography.md).
 - **Database por bounded context**, mesmo quando `-web` e `-sagas` do mesmo domínio compartilham banco (são a mesma unidade lógica de negócio, só split por entrypoint/escala).
 - **Duas identidades de autenticação**: JWT para cliente final, client-id/secret por par de serviços internos. Detalhe e limitações conhecidas: [docs/security-and-auth.md](docs/security-and-auth.md).
 - **Chaos engineering nos simuladores `-externo`**: falha e latência aleatórias propositais (`CHANCE_FALHA`), para exercitar os caminhos de compensação da SAGA.
@@ -23,7 +23,8 @@ Java 25 (virtual threads), Spring Boot 4.0.1, Maven multi-módulo (8 módulos + 
 - Comentário no código: só o que não é óbvio lendo o código (armadilha, invariante, motivo de workaround) — curto, de preferência uma linha
   - se o porquê já está em `docs/`, aponta pra lá em vez de reexplicar
 - Documentação em `docs/`:
-  - doc = decisão tomada/estado desejado; distância pro código tem que ter item no todo (sem item: perguntar); o que não foi decidido fica fora
+  - doc = decisão tomada/estado desejado; distância pro código tem que ter item no todo (sem item: perguntar)
+  - decisão que precisa ser tomada: item "decidir …" no todo; na doc, "em aberto — ver todo"
   - bug achado numa sessão só vira doc se o dono decidir
   - desenho ainda não implementado: detalhe completo (é a única fonte de verdade nesse momento)
   - depois de implementado: código vira fonte de verdade do *como*; a doc encolhe pro *porquê* (decisão de negócio/projeto, armadilhas encontradas)

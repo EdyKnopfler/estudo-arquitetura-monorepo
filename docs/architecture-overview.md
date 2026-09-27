@@ -6,7 +6,7 @@ Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (8
 
 ## Infra compartilhada
 
-- **Postgres**: um único container, mas **um database por bounded context** (não é compartilhamento de schema): `clientes`, `sessaocompra`, `externo_hotel`, `externo_voo`, `interno_hotel`, `interno_voo`, `interno_pagamento` — ver [databases.sql](../databases.sql). Cada serviço `-web`/`-sagas` conecta só no seu database via `spring.datasource.url` no `application-<profile>.yaml`.
+- **Postgres**: um único container, mas **um database por bounded context** (não é compartilhamento de schema): `clientes`, `sessaocompra`, `externo_hotel`, `externo_voo`, `interno_hotel`, `interno_voo`, `interno_pagamento` — ver [databases.sql](../databases.sql).
 - **RabbitMQ**: broker único para a coreografia SAGA. Detalhe da mecânica em [saga-choreography.md](saga-choreography.md).
 
 ## Módulos e portas (via `.env` / `docker-compose.yml`)
@@ -16,6 +16,7 @@ Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (8
 | `clientes` | cadastro/login, emite JWT | 8081 | db |
 | `sessaocompra` (profile `web`) | árbitro de estado da compra | 8080 | db |
 | `sessaocompra` (profile `timeout`) | job agendado, cancela sessões expiradas | — (sem porta web) | db |
+| `sessaocompra` (profile `sagas`) | pontas da SAGA: confirma a viagem / reverte a sessão | — | db, broker |
 | `reservas-externo` (profile `hotel`) | simulador instável do fornecedor de hotel | 8082 | db |
 | `reservas-externo` (profile `voo`) | simulador instável do fornecedor de voo | 8083 | db |
 | `reservas-interno` (profile `hotel,web`) | REST de pré-reserva de hotel | 8084 | db |
@@ -35,7 +36,7 @@ Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (8
 
 ## Padrão de módulos por domínio
 
-Reservas, pagamento e sessão de compra são cada um um artefato único por domínio (`reservas-interno`, `pagamento-interno`, `sessaocompra`), com controller REST e listener de fila no mesmo processo — o papel ativo em cada instância é escolhido por profile Spring em runtime, ver [deploy-roles-by-profile.md](deploy-roles-by-profile.md) pro mecanismo. `sessaocompra` é uma variação: não participa da coreografia SAGA, então o segundo papel não é `sagas`, é `timeout` (job `@Scheduled` que cancela sessões expiradas) — mesmo princípio (`@Profile`/`web-application-type: none`), sem depender de `sagas-common`.
+Reservas, pagamento e sessão de compra são cada um um artefato único por domínio (`reservas-interno`, `pagamento-interno`, `sessaocompra`), com controller REST e listener de fila no mesmo processo — o papel ativo em cada instância é escolhido por profile Spring em runtime, ver [deploy-roles-by-profile.md](deploy-roles-by-profile.md) pro mecanismo. `sessaocompra` tem um papel a mais: `timeout` (job `@Scheduled` que cancela sessões expiradas) — mesmo princípio (`@Profile`/`web-application-type: none`).
 
 Bibliotecas transversais, usadas por praticamente todo `-web`/`-externo`:
 
@@ -60,17 +61,22 @@ flowchart LR
   subgraph SAGA["Coreografia SAGA — RabbitMQ (ver saga-choreography.md)"]
     Qpag[fila: pagamento] --> Qhotel[fila: hotel]
     Qhotel --> Qvoo[fila: voo]
+    Qvoo --> Qsc[fila: sessaocompra]
+    Qsc -.compensação.-> Qvoo
     Qvoo -.compensação.-> Qhotel
     Qhotel -.compensação.-> Qpag
+    Qpag -.compensação.-> Qsc
   end
 
-  pagamento-interno-web -->|webhook publica| Qpag
+  pagamento-interno-web -->|webhook publica: sucesso| Qpag
+  pagamento-interno-web -.webhook publica: pagamento recusado.-> Qsc
+  Qsc -.consome.-> sessaocompra-sagas
   Qpag -.consome.-> pagamento-interno-sagas
   Qhotel -.consome.-> reservas-interno-hotel-sagas
   Qvoo -.consome.-> reservas-interno-voo-sagas
 ```
 
-`sessaocompra-web` é o único ponto de contato do front ("porteiro"): chama `reservas-interno` e `pagamento-interno` por trás. A volta do resultado da SAGA até `sessaocompra` ainda não existe — desenho em [purchase-flow-design.md](purchase-flow-design.md), lacunas em [todo.md](todo.md).
+`sessaocompra-web` é o único ponto de contato do front ("porteiro"): chama `reservas-interno` e `pagamento-interno` por trás. A volta do resultado da SAGA até `sessaocompra` está em [purchase-flow-design.md](purchase-flow-design.md).
 
 ## Convenção de configuração
 

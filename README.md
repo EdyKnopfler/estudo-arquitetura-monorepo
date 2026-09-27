@@ -150,4 +150,4 @@ Pra quem está chegando: cada módulo com as etapas do fluxo em que ele aparece 
   * [ ] chamar o webhook
   * [ ] estornar
 * **web-base** (biblioteca: autenticação e tratamento de erro) — [X] pronto
-* **sagas-common** (biblioteca: coreografia SAGA sobre RabbitMQ) — [ ] mecânica pronta; faltam reconexão ao broker e ordem ack/publish
+* **sagas-common** (biblioteca: coreografia SAGA sobre RabbitMQ) — [ ] mecânica pronta; falta ordem ack/publish

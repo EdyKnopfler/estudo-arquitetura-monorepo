@@ -15,10 +15,13 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
   * [ ] sessão presa em `CRIANDO_PAGAMENTO` (processo caiu no meio): nenhum timeout pega — destino em aberto
 
 * [ ] **Sessão de compra — ponta da SAGA** (decidido, ver [purchase-flow-design.md](purchase-flow-design.md#saga-estendida--sessaocompra-como-bookend-do-anel)):
-  * [ ] papel de fila novo em `sessaocompra` (passa a depender de `sagas-common`), fila `sessaocompra`; `voo.proximafila` e `pagamento.filaanterior` apontando pra ela
+  * [ ] papel `sagas` em `sessaocompra` (passa a depender de `sagas-common`), fila `sessaocompra`; `voo.proximafila` e `pagamento.filaanterior` apontando pra ela
   * [ ] `EXECUTE` (fim da cadeia de sucesso): marca `VIAGEM_RESERVADA`
   * [ ] `DESFACA` (fim da reversão, ou pagamento recusado no webhook): volta a sessão pra `INICIADA` e reinicia o timer de expiração
-    * [ ] diferenciar falha de negócio × erro de execução (inclui serviço externo) — status próprio (`REVERTENDO`?) ou informação no payload; em aberto
+    * [ ] **decidir** a modelagem de status da reversão:
+      * diferenciar falha de negócio × erro de execução (inclui serviço externo) — status próprio (`REVERTENDO`?) ou informação no payload
+      * terminar em `ERRO` depende dessa distinção (erro de execução, não falha de negócio)
+      * [ ] diagramas (README, purchase-flow-design) só depois de fechar essa modelagem
     * a considerar: remover as reservas que falharam, resetar o tempo e notificar o usuário, que decide se volta pra tentar outras opções
 
 * [ ] **Pagamentos** — fluxo (foco atual):
@@ -27,12 +30,15 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
   * [ ] chamada ao webhook pelo externo — pendente de ajuste no código (TODO em `PagamentoController` de `pagamento-externo`)
   * [ ] implementação do webhook no interno
     * [ ] validar assinatura/origem e proteger contra reprocessamento
+    * [ ] outbox + status do pagamento em `pagamentos` — ver [Dual-write](#dual-write-pagamentoreservas-outbox-das-reservas-descartado--ver-desenho)
+    * [ ] sucesso: sessão vai pra `PAGAMENTO_EFETUADO` — mecanismo em aberto (hoje `PUT /sessoes/{id}/pagamento-efetuado`, sem auth de serviço — ver [Testes](#testes))
     * [ ] sucesso: publica `EXECUTE` na fila `pagamento` com os ids internos ([desenho do payload](purchase-flow-design.md#payload-da-mensagem-da-saga))
     * [ ] falha: publica `DESFACA` direto na fila `sessaocompra` (nada a desfazer em hotel/voo/pagamento ainda)
   * [ ] **sagas:** eventos de confirmação e cancelamento
     * [X] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
-    * [ ] início da cadeia (sem fila anterior própria) — só existe pra escutar compensação voltando de hotel/voo e repassar o estorno até `sessaocompra`
+    * [ ] compensação: estorna e repassa `DESFACA` até `sessaocompra` (`filaanterior: sessaocompra`, ver [saga-choreography.md](saga-choreography.md#cadeia))
   * [ ] **externo:** endpoint de estorno, _deve falhar às vezes de propósito_
+  * [ ] **externo:** latência aleatória (chaos) — hoje só sorteia falha
   * [ ] Testes integrados
     * [ ] Requisição > Externo > Webhook
     * [ ] Encaminha sucesso para outro serviço
@@ -41,7 +47,8 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
 * [ ] **Hotel:**
   * [X] **web:** interação com usuário (pré-reservas) — chamado por `sessaocompra`, não o inverso
     * [X] chama endpoints do serviço externo
-  * [ ] **sagas:** eventos de confirmação e cancelamento
+    * [ ] cancelamento por timeout da sessão (chamado pelo `TimeoutTask` de `sessaocompra`, via REST)
+  * [ ] **sagas:** eventos de confirmação e cancelamento por reversão
     * [X] fiação das filas de "entrada" e saída
     * [ ] chama endpoints do serviço externo
   * [X] **externo:** simula serviço externo, **introduz erros aleatórios**
@@ -57,7 +64,8 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
 * [ ] **Voo:** para voos ida e volta, mesma estrutura de _Hotel_
   * [X] **web:** interação com usuário (pré-reservas) — chamado por `sessaocompra`, não o inverso
     * [X] chama endpoints do serviço externo
-  * [ ] **sagas:** eventos de confirmação e cancelamento por timeout
+    * [ ] cancelamento por timeout da sessão (chamado pelo `TimeoutTask` de `sessaocompra`, via REST)
+  * [ ] **sagas:** eventos de confirmação e cancelamento por reversão
     * [X] fiação das filas de "entrada" e saída
     * [ ] chama endpoints do serviço externo
     * [ ] agir nas duas reservas (ida + volta) a partir de uma mensagem — forma não desenhada
@@ -79,9 +87,9 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
 
 Transversais ou de "amarração", não de regra de negócio de um domínio — levantadas numa revisão de arquitetura em 2026-08-01.
 
-### Dual-write pagamento/reservas (outbox por serviço descartado — ver desenho)
+### Dual-write pagamento/reservas (outbox das reservas descartado — ver desenho)
 
-- [ ] **Avaliar Outbox no webhook de pagamento.** Confirmar pagamento no banco + publicar a 1ª mensagem da SAGA é um dual-write clássico. Decidir Outbox vs. `@Transactional` + retry quando o webhook for implementado. **Ordem:** depois do item de reservas abaixo — esse expõe a versão geral do problema (dual-write contra sistema externo não-idempotente), o outbox do webhook é um caso mais estreito do mesmo tema. **Nota:** não confundir com `sessaocompra.iniciarPagamento` → `pagamento-interno` (já implementado) — ali não há dual-write, porque a linha em `pagamentos` só é salva depois do `/efetuar` responder; falha nessa chamada só reverte o status local de `SessaoCompra` (`reverterPagamento`) e devolve erro pro front-end tentar de novo.
+- [ ] **Outbox no webhook de pagamento** (decidido — ponto crucial do fluxo). Confirmar pagamento no banco + publicar a 1ª mensagem da SAGA é um dual-write clássico. Status do pagamento em `pagamentos` faz parte disso. **Ordem:** depois do item de reservas abaixo — esse expõe a versão geral do problema (dual-write contra sistema externo não-idempotente), o outbox do webhook é um caso mais estreito do mesmo tema. **Nota:** não confundir com `sessaocompra.iniciarPagamento` → `pagamento-interno` (já implementado) — ali não há dual-write, porque a linha em `pagamentos` só é salva depois do `/efetuar` responder; falha nessa chamada só reverte o status local de `SessaoCompra` (`reverterPagamento`) e devolve erro pro front-end tentar de novo.
 - [ ] **Robustez do passo de confirmar/reverter `Reserva` em `reservas-interno`.** Desenho fechado (axiomas do `reservas-externo`, esboço de arquitetura) em [purchase-flow-design.md](purchase-flow-design.md). Quebra em:
   - [ ] Endpoint de consulta de estado (`consultar`) em `reservas-externo` — desambigua timeout/falha de infra sem exigir idempotência do lado de lá.
   - [ ] Endpoint `desconfirmar`/estorno em `reservas-externo` — falta pra reverter uma `Reserva` já confirmada.
@@ -91,12 +99,18 @@ Transversais ou de "amarração", não de regra de negócio de um domínio — l
   - [ ] Task de retentativa: acha reservas em intenção, resolve via `consultar`, publica a sequência SAGA pra frente/trás — marca status terminal *depois* de publicar, não antes (retry seguro se cair no meio, downstream já tolera duplicata). Ao estourar o limite de tentativas: publica manualmente na fila de erros (mensagem original já foi ackeada, não tem nack pra dar).
   - [ ] Handler de negócio em `ReservasSagas` usando esse fluxo.
 
+### Contrato da mensagem da SAGA
+
+- [ ] **Decidir** o contrato da mensagem ([module-boundaries.md](module-boundaries.md#contrato-tipado-para-a-mensagem-da-saga)): `Map<String, Object>` genérico (`Messaging`) ou DTO próprio da fila (ids de correlação da sessão + ids de reserva/pagamento)
+  - a favor do DTO: não reaproveitar entidade JPA nem DTO de REST — contratos com motivos de mudança diferentes
+  - ganha peso com os ids de negócio na mensagem ([payload](purchase-flow-design.md#payload-da-mensagem-da-saga))
+
 ### Testes
 
 Estratégia e comandos: [testing-strategy.md](testing-strategy.md). Integrados por domínio: seção [Features por domínio](#features-por-domínio).
 
 - [x] ~~Cobertura ~zero (só `contextLoads`)~~ — testes de microsserviço em todos os módulos web + integrados de contrato interno↔externo (`ReservasExternoServiceIntegrationTest`, `PagamentoExternoServiceIntegrationTest`).
-- [x] ~~Testes automatizados para `web-base`~~ — achados e o que ainda falta (design de `iss`/`aud`/`kid`, refactor do wiring): [web-base-hardening.md](web-base-hardening.md).
+- [x] ~~Testes automatizados para `web-base`~~ — decisões em [web-base-hardening.md](web-base-hardening.md).
 - [x] ~~Testes automatizados para `sagas-common`~~ — `MessagingTest` (desfechos do `ResultadoHandler` e compensação por exceção).
 - [ ] **Depois de desacoplar o webhook** (TODO em `PagamentoController` de `pagamento-externo`):
   - reativar caso `SUCESSO` de `PagamentoExternoServiceIntegrationTest` e a classe `PagamentoCriacaoIntegradoTest` (hoje `@Disabled`); conferir o banco via JDBC
@@ -115,7 +129,6 @@ Estratégia e comandos: [testing-strategy.md](testing-strategy.md). Integrados p
 - [x] ~~`.env` está commitado no git com credenciais de dev.~~ — `.env`/`.env.clientes` viraram `.env.example`/`.env.clientes.example` versionados; reais fora do índice via `.gitignore` (`.env*` / `!.env*.example`, cobre automaticamente qualquer `.env.<serviço>` futuro sem editar o padrão). Histórico não foi reescrito — decisão consciente, são credenciais de dev descartáveis.
 - [x] ~~Arquivo órfão `reservas-interno-web/Dockerfile copy`~~ — resolvido de graça pela unificação de `reservas-interno` (o diretório antigo, e o arquivo órfão junto, deixaram de existir).
 - [x] ~~`pagamento-interno-web/application.yaml` tinha placeholder malformado~~ — `${FRONT_END_ID}:frontEndId}` (faltava o `:` dentro das chaves) e `FRONT_END_ID`/`FRONT_END_SECRET` não estavam no `.env`, então a aplicação não subia (placeholder não resolvido). Corrigido pra `${FRONT_END_ID:frontEndId}` na migração pra `pagamento-interno`.
-- [ ] Sem reconexão automática de `Connection`/`Channel` do RabbitMQ em `sagas-common` — uma queda de broker provavelmente exige restart manual da instância consumidora (não há listener de shutdown/retry).
 - [ ] `Messaging.iniciarConsumo` dá ack/nack da mensagem recebida **antes** de publicar a próxima na cadeia — queda nesse intervalo perde a publicação sem redelivery (a mensagem de entrada já foi consumida). Corrigir junto com o trabalho de robustez dos handlers (mesma área).
 - [x] ~~Flyway rodando em todos os papéis, não só `web`~~ — regressão introduzida pela unificação dos módulos: antes, `-sagas`/`-timeout` nem tinham Flyway como dependência (só `-web` migrava); ao virar um artefato só, o pom passou a trazer Flyway incondicionalmente pra qualquer profile. Isso só virou bug visível em `sessaocompra-timeout` (pool `maximum-pool-size: 1` herdado do módulo antigo — Flyway precisa de 2 conexões simultâneas pra coordenação de lock durante a migration, e travava contra si mesmo até estourar timeout de 30s); em `reservas-interno`/`pagamento-interno` o pool nunca foi reduzido pro papel `sagas` (ficou em 10), então a mesma corrida nunca chegou a falhar — mas o problema de fundo (múltiplas instâncias tentando migrar ao mesmo tempo) existia igual, só mascarado. Corrigido com `spring.flyway.enabled: false` explícito nos profiles `sagas`/`timeout` dos três domínios, restaurando "só uma instância migra" como já era antes do refactor.
 
@@ -123,7 +136,7 @@ Estratégia e comandos: [testing-strategy.md](testing-strategy.md). Integrados p
 
 - [x] ~~Unificar `-common`/`-web`/`-sagas` de reservas num único artefato~~ — feito, ver `reservas-interno` e [deploy-roles-by-profile.md](deploy-roles-by-profile.md).
 - [x] ~~Fazer o mesmo para pagamento~~ — feito, ver `pagamento-interno`. O papel `sagas` foi criado do zero (nunca existira como módulo). Mecanismo documentado em [deploy-roles-by-profile.md](deploy-roles-by-profile.md).
-- [x] ~~Fazer o mesmo para sessão de compra~~ — feito, ver `sessaocompra`. Variação: não tem papel `sagas` (não participa da coreografia), o segundo papel é `timeout` (`TimeoutTask` com `@Profile("timeout")`), sem depender de `sagas-common`. De quebra, corrigiu o pacote `com.derso.arquitetura.timeout`/`com.derso.treinohotel.timeout` (nome legado) pra `com.derso.arquitetura.sessaocompra.timeout`, consistente com o resto do domínio.
+- [x] ~~Fazer o mesmo para sessão de compra~~ — feito, ver `sessaocompra`. Variação: papel a mais `timeout` (`TimeoutTask` com `@Profile("timeout")`); o papel `sagas` veio depois, com a SAGA estendida (item acima). De quebra, corrigiu o pacote `com.derso.arquitetura.timeout`/`com.derso.treinohotel.timeout` (nome legado) pra `com.derso.arquitetura.sessaocompra.timeout`, consistente com o resto do domínio.
 
 ### Verificação manual da coreografia — feita em 2026-08-02 e 2026-08-08
 

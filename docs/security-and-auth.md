@@ -4,9 +4,9 @@ Duas identidades distintas, deliberadamente separadas — não misturar ao mexer
 
 ## JWT — cliente final
 
-`web-base/jwt/JwtIssuerService.java`+`JwtValidatorService.java`: RSA assimétrico (RS256), expiração de 10 minutos, claims `id`/`email`/`userType`/`iss`, `kid` no header. Emitido por `clientes` (`AuthController`) após login. `clientes` e `sessaocompra` (profile `web`) validam esse JWT (`JwtAuthenticationFilter`, ligado pela autoconfiguração do `web-base` com `security.auth-type: jwt`, ver [web-base-hardening.md](web-base-hardening.md)) — `reservas-interno` e `pagamento-interno` ainda não importam esse filtro, porque não são chamados pelo front (só client-id/secret, ver seção seguinte). `sessaocompra` é o único ponto de contato do front ("porteiro": ela mesma chama `reservas-interno` internamente, front nunca fala direto com esses serviços — ver [purchase-flow-design.md](purchase-flow-design.md)).
+`web-base/jwt/JwtIssuerService.java`+`JwtValidatorService.java`: RSA assimétrico (RS256), expiração de 10 minutos, claims `id`/`email`/`userType`/`iss`, `kid` no header. Emitido por `clientes` (`AuthController`) após login. `clientes` e `sessaocompra` (profile `web`) validam esse JWT (`JwtAuthenticationFilter`, ligado pela autoconfiguração do `web-base` com `security.auth-type: jwt`, ver [web-base-hardening.md](web-base-hardening.md)) — `reservas-interno` e `pagamento-interno` não usam JWT, porque não são chamados pelo front (só client-id/secret, ver seção seguinte). `sessaocompra` é o único ponto de contato do front ("porteiro": ela mesma chama `reservas-interno` internamente, front nunca fala direto com esses serviços — ver [purchase-flow-design.md](purchase-flow-design.md)).
 
-**Validação não assume "é tudo meu, confio"**: `JwtValidatorService` resolve a chave pelo `kid` do header (parte do que é assinado — um `kid` forjado só faz a verificação falhar contra a chave errada) via `TrustedJwtIssuersConfig` (`jwt.trusted-issuers`, uma lista de `{kid, issuer, public-key}` por serviço), e só aceita o token se o `iss` do payload bater com o emissor esperado *para aquele kid específico* — pega até o caso de token assinado pela chave certa mas alegando ser de outro emissor. Hoje só existe um emissor (`clientes`), mas o design já suporta múltiplas chaves/emissores confiados sem mudar código, só config. `aud` foi deliberadamente deixado de fora: `clientes` e `sessaocompra` validam o mesmo token por design (não é confusão a fechar) — ver [web-base-hardening.md](web-base-hardening.md#2-jwt-issaud-kid).
+**Validação não assume "é tudo meu, confio"**: `JwtValidatorService` resolve a chave pelo `kid` do header (parte do que é assinado — um `kid` forjado só faz a verificação falhar contra a chave errada) via `TrustedJwtIssuersConfig` (`jwt.trusted-issuers`, uma lista de `{kid, issuer, public-key}` por serviço), e só aceita o token se o `iss` do payload bater com o emissor esperado *para aquele kid específico* — pega até o caso de token assinado pela chave certa mas alegando ser de outro emissor. O emissor é `clientes`; o design suporta múltiplas chaves/emissores confiados sem mudar código, só config. `aud` foi deliberadamente deixado de fora: `clientes` e `sessaocompra` validam o mesmo token por design (não é confusão a fechar) — ver [web-base-hardening.md](web-base-hardening.md#2-jwt-issaud-kid).
 
 ### Gerar o par de chaves local
 
@@ -27,13 +27,14 @@ Além de autenticar o cliente, `sessaocompra` precisa garantir que a sessão de 
 
 Um teste estrutural (`SessaoCompraControllerOwnershipGuardTest`, via reflection) garante que todo método do controller com um `UUID id` de sessão no path tenha `@PreAuthorize` — quebra sozinho se alguém esquecer ao adicionar um endpoint novo.
 
-**Nota de compilação:** `#id` no SpEL do `@PreAuthorize` depende do nome do parâmetro estar disponível em runtime — exige `<parameters>true</parameters>` no `maven-compiler-plugin` (adicionado no `pom.xml` de `sessaocompra`; os demais módulos ainda não precisam disso).
+**Nota de compilação:** `#id` no SpEL do `@PreAuthorize` depende do nome do parâmetro estar disponível em runtime — exige `<parameters>true</parameters>` no `maven-compiler-plugin` do módulo.
 
 ## Client-ID/Secret — serviço a serviço
 
-`web-base/internalclient/ClientSecretAuthFilter.java`: cada `-web` mantém um mapa `client-id → client-secret` (`InternalClientsConfig`, carregado de `internal-backend.clients` no `application-<profile>.yaml`). Quem chama envia `X-Client-Id`/`X-Client-Secret` nos headers; sem match exato, 401. Usado tanto para chamadas legítimas entre serviços internos (`reservas-interno` → `reservas-externo`, `pagamento-interno` → `pagamento-externo`, `sessaocompra` → `reservas-interno-{hotel,voo}`, `sessaocompra` → `pagamento-interno` com `SESSAO_COMPRA_ID/SECRET`) quanto para o webhook do `pagamento-externo` responder ao `pagamento-interno` profile `web`. O par `sessaocompra` → `reservas-interno-{hotel,voo}` reaproveita as credenciais que já existiam do lado de `reservas-interno` (`RESERVAS_INTERNO_WEB_HOTEL_ID/SECRET`, `RESERVAS_INTERNO_WEB_VOO_ID/SECRET`) — nenhum segredo novo foi criado.
+[ClientSecretAuthFilter](../web-base/src/main/java/com/derso/arquitetura/webbase/internalclient/ClientSecretAuthFilter.java): quem chama envia `X-Client-Id`/`X-Client-Secret`; sem match exato, 401.
 
-Cada par de serviços (chamador/chamado) tem client-id/secret próprios configurados nos dois lados — ver `external-backend.*` (para quem chama) e `internal-backend.clients` (para quem aceita) em cada `application-<profile>.yaml`.
+- cada par de serviços (chamador/chamado) tem client-id/secret próprios, configurados nos dois lados
+- vale também pro webhook do `pagamento-externo` chamando de volta o `pagamento-interno`
 
 ## Tratamento de erro
 
@@ -42,4 +43,4 @@ Cada par de serviços (chamador/chamado) tem client-id/secret próprios configur
 ## Limitações conhecidas (aceitáveis para estudo local, não levar adiante sem revisar)
 
 - Client-secret sem rate limit — `ClientSecretAuthFilter` responde 401 sem nenhum limite de tentativas por IP/client-id. Fora de escopo do `web-base` (é infra de borda, não lógica de autenticação em si).
-- `aud` não é validado no JWT — `clientes` e `sessaocompra` aceitam o mesmo token por design (ver seção JWT acima), então não é uma lacuna ativa hoje, mas também não há proteção caso surja um segundo tipo de token com público-alvo diferente.
+- `aud` não é validado no JWT — `clientes` e `sessaocompra` aceitam o mesmo token por design (ver seção JWT acima), então não é uma lacuna ativa, mas também não há proteção caso surja um segundo tipo de token com público-alvo diferente.

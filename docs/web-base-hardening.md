@@ -20,7 +20,7 @@ public List<RotaPublica> rotasPublicas() {
 }
 ```
 
-Sem esse bean, `WebSecurityAutoConfiguration` cai num default vazio (`@ConditionalOnMissingBean(name = "rotasPublicas")`) — hoje só `clientes` declara (`/login`, `POST /clientes`); os outros 5 não precisam de nada.
+Sem esse bean, `WebSecurityAutoConfiguration` cai num default vazio (`@ConditionalOnMissingBean(name = "rotasPublicas")`).
 
 `pagamento-externo`, `pagamento-interno`, `reservas-interno`, `reservas-externo` não têm `SecurityConfiguration.java` próprio — não sobrou nada específico deles nesse assunto. `clientes` mantém um arquivo mínimo só pro `PasswordEncoder` (BCrypt) e as rotas públicas. `sessaocompra` mantém um mínimo só pro `@EnableMethodSecurity` (ownership de sessão, ortogonal ao tipo de auth).
 
@@ -34,11 +34,11 @@ Sem esse bean, `WebSecurityAutoConfiguration` cai num default vazio (`@Condition
 
 ## Autenticação JWT — cliente final
 
-Emissor (`JwtIssuerService`) e validador (`JwtValidatorService`) usam RSA (RS256), não HMAC — chave privada só existe onde `jwt.private-key` está configurado (hoje só `clientes`).
+Emissor (`JwtIssuerService`) e validador (`JwtValidatorService`) usam RSA (RS256), não HMAC — chave privada só existe onde `jwt.private-key` está configurado (só no emissor, `clientes`).
 
 **Validação não assume "é tudo meu, confio"**: `TrustedJwtIssuersConfig` (mesmo padrão de `InternalClientsConfig`) liga uma lista `jwt.trusted-issuers` (`kid`/`issuer`/`public-key`) a dois mapas. `JwtValidatorService` resolve a chave pelo `kid` do header — assinado junto com o payload, então um `kid` forjado só derruba a verificação contra a chave errada, não existe "confusão" possível aqui — e só depois confere se o `iss` do payload é o emissor esperado *para aquele kid específico*. Isso pega até o caso de token assinado pela chave certa mas alegando ser de outro emissor. Hoje só existe um emissor confiado (`clientes`), mas o design suporta múltiplos sem mudar código, só config.
 
-**`aud` foi deixado de fora, de propósito**: `clientes` e `sessaocompra` validam o mesmo token (login do cliente final) por design — não é confusão a corrigir, é o comportamento pretendido. Um `aud` fixo que os dois checam não fecharia lacuna real hoje, só burocracia. Reavaliar se surgir um segundo tipo de token com público-alvo diferente.
+**`aud` foi deixado de fora, de propósito**: `clientes` e `sessaocompra` validam o mesmo token (login do cliente final) por design — não é confusão a corrigir, é o comportamento pretendido. Um `aud` fixo que os dois checam não fecharia lacuna real, só burocracia. Reavaliar se surgir um segundo tipo de token com público-alvo diferente.
 
 **Alg confusion e `alg: none`**: JJWT resolve a chave de verificação pelo `kid` (retorna uma `PublicKey` RSA), e essa chave é incompatível de tipo com HMAC — um token forjado declarando `HS256` e "assinado" com a chave pública como segredo é rejeitado por incompatibilidade de tipo, não por comparação de conteúdo. Token sem assinatura (`alg: none`) também é rejeitado. Ambos os casos têm teste dedicado em `JwtValidatorServiceTest`, não é só confiança na lib.
 
@@ -69,4 +69,4 @@ Log fica só local (SLF4J) — captura centralizada fora de escopo, ver [todo.md
 
 - Checklist técnico completo item-a-item (o que foi testado e onde): `web-base/src/test/`.
 - `docs/security-and-auth.md` — visão geral de autenticação no projeto (as duas identidades, JWT vs client-id/secret).
-- `docs/todo.md` — pendências que não são deste módulo (ex.: cobertura de teste de `sagas-common`).
+- `docs/todo.md` — pendências.

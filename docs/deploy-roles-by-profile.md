@@ -57,24 +57,11 @@ spring:
     web-application-type: none
 ```
 
-## Opcional: nomear a combinação (profile groups)
-
-```yaml
-# application.yaml
-spring:
-  profiles:
-    group:
-      reservas-hotel-web: hotel,web
-      reservas-hotel-sagas: hotel,sagas
-```
-
-Deixa o `docker-compose.yml` mais legível (`SPRING_PROFILES_ACTIVE: reservas-hotel-web`), sem mudar a mecânica.
-
 ## Aplicado em cada domínio
 
 `reservas-interno` e `pagamento-interno`: o `@RestController` leva `@Profile("web")`; o listener/`SmartLifecycle` do papel fila leva `@Profile("sagas")`, junto com a cadeia de `@Configuration` da qual depende — via a classe-ponte `SagasWiring` (ver seção acima; em `pagamento-interno` ela também vale pro `web`, que publica). `application-sagas.yaml` seta `spring.main.web-application-type: none`; não foi necessário um `application-web.yaml` em nenhum dos dois domínios (nada específico do papel web além do que já está em `application.yaml`/`application-<domínio>.yaml`).
 
-`sessaocompra` segue o mesmo mecanismo com uma variação: como esse domínio não participa da coreografia SAGA, o segundo papel se chama `timeout` (não `sagas`) e não tem `SagasWiring`/dependência de `sagas-common` — é só `@Profile("timeout")` no `TimeoutTask` (`@Scheduled`) + `application-timeout.yaml` com `web-application-type: none`. (Desenho ainda não implementado adiciona um papel de fila a `sessaocompra` — ver [purchase-flow-design.md](purchase-flow-design.md).)
+`sessaocompra` segue o mesmo mecanismo, com um papel a mais: `timeout` — `@Profile("timeout")` no `TimeoutTask` (`@Scheduled`) + `application-timeout.yaml` com `web-application-type: none`. O papel `sagas` dela (pontas da SAGA) segue o padrão acima — ver [purchase-flow-design.md](purchase-flow-design.md).
 
 **Flyway roda só no profile `web`**: `spring.flyway.enabled: false` explícito em `application-sagas.yaml`/`application-timeout.yaml` dos três domínios. Non-óbvio: Flyway precisa de 2 conexões simultâneas pra coordenação de lock durante a migration — com múltiplas instâncias de um profile não-web tentando migrar ao mesmo tempo (e pool pequeno, como em `sessaocompra-timeout`), elas travam entre si até estourar timeout.
 

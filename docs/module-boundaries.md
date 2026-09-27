@@ -8,10 +8,10 @@ Como cada módulo já é um artefato único com dois entrypoints (REST e fila) e
 
 ## Camada hexagonal (domain/infrastructure) — avaliada e descartada por ora
 
-Separar `domain` (POJOs/interfaces puros, sem Spring/JPA) de `infrastructure` (implementação JPA/HTTP) foi considerado. Decisão, depois de checar o tamanho real do código: **não vale a pena agora**. Na época, `pagamento-interno` tinha uma entidade de um campo e um service de 5 linhas; hoje os dois domínios cresceram pouco (entidades só com ids, services de poucas dezenas de linhas). Nesse tamanho, POJO + `@Entity` + mapper é boilerplate puro, não ganho de clareza.
+Separar `domain` (POJOs/interfaces puros, sem Spring/JPA) de `infrastructure` (implementação JPA/HTTP) foi considerado. Decisão, depois de checar o tamanho real do código: **não vale a pena agora**. Com entidades só de ids e services de poucas dezenas de linhas, POJO + `@Entity` + mapper é boilerplate puro, não ganho de clareza.
 
 Os candidatos reais a "ficar grande" seriam os fornecedores externos de verdade (hotel/voo/pagamento reais) — aqui eles são só simulados (`-externo`), então não há um segundo adapter de infraestrutura para justificar a interface ainda. Revisitar quando: (a) a regra de negócio deixar de ser trivial, ou (b) surgir necessidade real de testar a regra de negócio sem subir Spring/JPA.
 
-## Contrato tipado para a mensagem da SAGA — ainda por fazer
+## Contrato tipado para a mensagem da SAGA
 
-A mensagem hoje é um `Map<String, Object>` genérico (`Messaging`) — nenhuma entidade trafega nela, só os campos `tipo` e `rastreio` são usados. Quando os handlers de negócio forem implementados (ver [saga-choreography.md](saga-choreography.md)), vale desenhar essa mensagem como um DTO próprio da fila (ex.: id de correlação da sessão de compra + ids de reserva), não reaproveitar a entidade JPA nem o DTO de REST — são contratos com motivos de mudança diferentes.
+Em aberto — ver [todo.md](todo.md#contrato-da-mensagem-da-saga).

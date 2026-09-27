@@ -29,23 +29,22 @@ Implementação própria sobre o cliente Java cru do RabbitMQ (`com.rabbitmq.cli
 
 O handler de negócio expressa os casos esperados (sucesso, falha de negócio, falha em obter resposta do externo) via `ResultadoHandler`; só precisa lançar exceção pro caso realmente inesperado — não precisa saber que está numa saga pra disparar rollback distribuído.
 
-## Cadeia atual
+## Cadeia
 
 ```
 pagamento → hotel → voo
 ```
 
-Config real (`reservas-interno/src/main/resources/application-hotel.yaml` e `-voo.yaml`):
-- `hotel`: `filaanterior: pagamento`, `proximafila: voo`
-- `voo`: `filaanterior: hotel`, sem `proximafila` (fim da cadeia)
+Fiação em `sagas.*` de [application-sagas.yaml](../pagamento-interno/src/main/resources/application-sagas.yaml) (`pagamento-interno`) e [application-hotel.yaml](../reservas-interno/src/main/resources/application-hotel.yaml)/[application-voo.yaml](../reservas-interno/src/main/resources/application-voo.yaml) (`reservas-interno`).
 
-`pagamento-interno/src/main/resources/application-sagas.yaml`: `estafila: pagamento`, `proximafila: hotel`, sem `filaanterior` (início da cadeia — só existe pra escutar compensação vinda de volta de hotel/voo, não pra receber execução de alguém anterior).
+**Quem publica não precisa ser nó da cadeia.** Publicar é só ser cliente da fila; o papel `sagas` é quem fica pendurado nela escutando.
 
-## O que foi validado
+- o início da SAGA é o webhook de pagamento (papel `web` de `pagamento-interno`): publica o `EXECUTE` inicial na fila `pagamento`
+- `pagamento` é o primeiro nó da cadeia
+  - não tem `filaanterior`: nada o antecede no caminho de execução
+  - o que vem "antes" dele só existe no caminho de reversão (estorno → `sessaocompra`, ver extensão abaixo)
+- `voo` é o último: sem `proximafila`
 
-- O framework (`sagas-common`), de forma agnóstica ao projeto: handlers só logando a mensagem em cada ponto da cadeia e, na ponta final, um erro forçado — a mensagem voltou pela cadeia como compensação até o início (teste manual de 2026-08-08, ver [todo.md](todo.md)). Os desfechos também são cobertos por `MessagingTest`.
-- Regra de negócio dos handlers: não validada — em que pé está: [todo.md](todo.md#features-por-domínio).
+## Extensão — sessaocompra como bookend do anel
 
-## Extensão planejada — sessaocompra como bookend do anel
-
-Desenho ainda não implementado: dois nós novos (`confirma` depois de `voo`, `reverte` antes de `pagamento`) fariam `sessaocompra` participar do mesmo anel de coreografia, reaproveitando este mecanismo (handler lança exceção → compensação automática pra trás) em vez de um consumo de fila à parte. Detalhe e diagrama em [purchase-flow-design.md](purchase-flow-design.md).
+Dois nós (`confirma` depois de `voo`, `reverte` antes de `pagamento`) fazem `sessaocompra` participar do mesmo anel de coreografia, reaproveitando este mecanismo em vez de um consumo de fila à parte. Detalhe e diagrama em [purchase-flow-design.md](purchase-flow-design.md).
