@@ -6,10 +6,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.context.annotation.Profile;
-import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.derso.arquitetura.pagamentointerno.PagamentoService;
@@ -34,12 +34,12 @@ public class PagamentoInternoController {
         sagas.configurarServico(FILA_PAGAMENTO, Optional.empty(), Optional.empty());
     }
 
-    // Chamada por sessaocompra.iniciarPagamento — ver docs/purchase-flow-design.md#payload-da-mensagem-da-saga.
-    @PostMapping("/pagamentos")
-    @ResponseStatus(HttpStatus.CREATED)
-    public PagamentoDTO criar(@RequestBody @Valid CriarPagamentoRequest dados) {
+    // Chamada por sessaocompra.iniciarPagamento; PUT porque repetir devolve o mesmo pagamento —
+    // ver docs/purchase-flow-design.md#criação-do-pagamento.
+    @PutMapping("/pagamentos/{idSessaoCompra}")
+    public PagamentoDTO criar(@PathVariable("idSessaoCompra") UUID idSessaoCompra, @RequestBody @Valid CriarPagamentoRequest dados) {
         return servico.criarPagamento(
-            dados.idSessaoCompra(), dados.idReservaHotel(), dados.idReservaVooIda(), dados.idReservaVooVolta()
+            idSessaoCompra, dados.idReservaHotel(), dados.idReservaVooIda(), dados.idReservaVooVolta()
         );
     }
 

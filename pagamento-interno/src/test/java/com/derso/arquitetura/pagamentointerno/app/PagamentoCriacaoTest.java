@@ -2,12 +2,14 @@ package com.derso.arquitetura.pagamentointerno.app;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -19,6 +21,7 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -30,6 +33,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
@@ -37,6 +41,7 @@ import org.springframework.web.client.HttpServerErrorException;
 import com.derso.arquitetura.webbase.teste.PostgresTestcontainersConfig;
 import com.derso.arquitetura.pagamentointerno.PagamentoExternoService;
 import com.derso.arquitetura.pagamentointerno.dto.CriarPagamentoRequest;
+import com.derso.arquitetura.pagamentointerno.dto.EfetuarPagamentoResponse;
 import com.derso.arquitetura.pagamentointerno.dto.PagamentoDTO;
 import com.derso.arquitetura.sagas.RabbitMQTestcontainersConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -70,85 +75,138 @@ class PagamentoCriacaoTest {
     }
 
     @Test
-    void criarGravaLinhaComTodosOsIdsEDevolveSoOIdInterno() throws Exception {
-        UUID idExterno = UUID.randomUUID();
-        when(externo.efetuar(anyString(), any(BigDecimal.class))).thenReturn(idExterno);
+    void sucessoGravaLinhaAguardandoEDevolveIdInternoEUrl() throws Exception {
+        UUID idSessao = novaSessao();
         CriarPagamentoRequest pedido = novoPedido();
+        EfetuarPagamentoResponse resposta = respostaDoGateway();
+        when(externo.efetuar(anyString(), any(BigDecimal.class), any(UUID.class))).thenReturn(resposta);
 
-        String corpo = mockMvc.perform(comCredencial(post("/pagamentos"), CLIENT_SECRET).content(json(pedido)))
-            .andExpect(status().isCreated())
+        PagamentoDTO dto = criar(idSessao, pedido)
+            .andExpect(status().isOk())
             .andExpect(jsonPath("$.idExterno").doesNotExist())
-            .andReturn().getResponse().getContentAsString();
-        UUID id = objectMapper.readValue(corpo, PagamentoDTO.class).id();
+            .andReturn().getResponse().getContentAsString().transform(this::lerDTO);
 
-        Map<String, Object> linha = jdbc.queryForMap("select * from pagamentos where id = ?", id);
-        assertEquals(idExterno, linha.get("id_externo"));
-        assertEquals(pedido.idSessaoCompra(), linha.get("id_sessao_compra"));
+        Map<String, Object> linha = linhaDaSessao(idSessao);
+        assertEquals(dto.id(), linha.get("id"));
+        assertEquals("AGUARDANDO_PAGAMENTO", linha.get("status"));
+        assertEquals(resposta.idTransacao(), linha.get("id_externo"));
+        assertEquals(resposta.urlPagamento(), linha.get("url_pagamento"));
+        assertEquals(resposta.urlPagamento(), dto.urlPagamento());
         assertEquals(pedido.idReservaHotel(), linha.get("id_reserva_hotel"));
         assertEquals(pedido.idReservaVooIda(), linha.get("id_reserva_voo_ida"));
         assertEquals(pedido.idReservaVooVolta(), linha.get("id_reserva_voo_volta"));
-        assertNotEquals(idExterno, id);
+        assertNotEquals(resposta.idTransacao(), dto.id());
     }
 
     @Test
-    void falhaDeInfraNoExternoNaoGravaNada() throws Exception {
-        when(externo.efetuar(anyString(), any(BigDecimal.class))).thenThrow(
-            HttpServerErrorException.create(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", HttpHeaders.EMPTY, new byte[0], null));
-        CriarPagamentoRequest pedido = novoPedido();
+    void comUrlJaObtidaDevolveAMesmaSemChamarOGateway() throws Exception {
+        UUID idSessao = novaSessao();
+        when(externo.efetuar(anyString(), any(BigDecimal.class), any(UUID.class))).thenReturn(respostaDoGateway());
 
-        mockMvc.perform(comCredencial(post("/pagamentos"), CLIENT_SECRET).content(json(pedido)))
-            .andExpect(status().is5xxServerError());
+        String primeira = criar(idSessao, novoPedido()).andReturn().getResponse().getContentAsString();
+        String segunda = criar(idSessao, novoPedido())
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
 
-        assertEquals(0, linhasDaSessao(pedido.idSessaoCompra()));
+        assertEquals(lerDTO(primeira), lerDTO(segunda));
+        verify(externo, times(1)).efetuar(anyString(), any(BigDecimal.class), any(UUID.class));
     }
 
     @Test
-    void recusaDeNegocioNoExternoNaoGravaNada() throws Exception {
-        when(externo.efetuar(anyString(), any(BigDecimal.class))).thenThrow(
-            HttpClientErrorException.create(HttpStatus.CONFLICT, "Conflict", HttpHeaders.EMPTY, new byte[0], null));
-        CriarPagamentoRequest pedido = novoPedido();
+    void falhaAmbiguaMantemCriandoEARetentativaRepeteAMesmaChave() throws Exception {
+        UUID idSessao = novaSessao();
+        when(externo.efetuar(anyString(), any(BigDecimal.class), any(UUID.class)))
+            .thenThrow(HttpServerErrorException.create(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", HttpHeaders.EMPTY, new byte[0], null))
+            .thenReturn(respostaDoGateway());
 
-        mockMvc.perform(comCredencial(post("/pagamentos"), CLIENT_SECRET).content(json(pedido)))
-            .andExpect(status().is5xxServerError());
+        criar(idSessao, novoPedido()).andExpect(status().is5xxServerError());
+        Map<String, Object> depoisDaFalha = linhaDaSessao(idSessao);
+        assertEquals("CRIANDO", depoisDaFalha.get("status"));
+        assertNull(depoisDaFalha.get("url_pagamento"));
 
-        assertEquals(0, linhasDaSessao(pedido.idSessaoCompra()));
+        criar(idSessao, novoPedido()).andExpect(status().isOk());
+
+        List<UUID> chaves = chavesEnviadas(2);
+        assertEquals(chaves.get(0), chaves.get(1));
+        assertEquals(depoisDaFalha.get("chave_idempotencia"), chaves.get(0));
+    }
+
+    @Test
+    void recusaDevolve409MantemCriandoEARetentativaUsaChaveNova() throws Exception {
+        UUID idSessao = novaSessao();
+        when(externo.efetuar(anyString(), any(BigDecimal.class), any(UUID.class)))
+            .thenThrow(HttpClientErrorException.create(HttpStatus.CONFLICT, "Conflict", HttpHeaders.EMPTY, new byte[0], null))
+            .thenReturn(respostaDoGateway());
+
+        criar(idSessao, novoPedido()).andExpect(status().isConflict());
+        assertEquals("CRIANDO", linhaDaSessao(idSessao).get("status"));
+
+        criar(idSessao, novoPedido()).andExpect(status().isOk());
+
+        List<UUID> chaves = chavesEnviadas(2);
+        assertNotEquals(chaves.get(0), chaves.get(1));
     }
 
     @Test
     void corpoComCampoNuloRetorna400SemChamarExterno() throws Exception {
-        String semReservaHotel = "{\"idSessaoCompra\":\"" + UUID.randomUUID()
-            + "\",\"idReservaVooIda\":\"" + UUID.randomUUID()
+        String semReservaHotel = "{\"idReservaVooIda\":\"" + UUID.randomUUID()
             + "\",\"idReservaVooVolta\":\"" + UUID.randomUUID() + "\"}";
 
-        mockMvc.perform(comCredencial(post("/pagamentos"), CLIENT_SECRET).content(semReservaHotel))
+        mockMvc.perform(comCredencial(put("/pagamentos/{id}", novaSessao()), CLIENT_SECRET).content(semReservaHotel))
             .andExpect(status().isBadRequest());
 
-        verify(externo, never()).efetuar(anyString(), any(BigDecimal.class));
+        verify(externo, never()).efetuar(anyString(), any(BigDecimal.class), any(UUID.class));
     }
 
     @Test
     void secretErradoRetorna401SemChamarExterno() throws Exception {
-        mockMvc.perform(comCredencial(post("/pagamentos"), "secret-errado").content(json(novoPedido())))
+        mockMvc.perform(comCredencial(put("/pagamentos/{id}", novaSessao()), "secret-errado").content(json(novoPedido())))
             .andExpect(status().isUnauthorized());
 
-        verify(externo, never()).efetuar(anyString(), any(BigDecimal.class));
+        verify(externo, never()).efetuar(anyString(), any(BigDecimal.class), any(UUID.class));
     }
 
     @Test
     void semCredencialRetorna401() throws Exception {
-        mockMvc.perform(post("/pagamentos").contentType(MediaType.APPLICATION_JSON).content(json(novoPedido())))
+        mockMvc.perform(put("/pagamentos/{id}", novaSessao()).contentType(MediaType.APPLICATION_JSON).content(json(novoPedido())))
             .andExpect(status().isUnauthorized());
     }
 
-    private CriarPagamentoRequest novoPedido() {
-        CriarPagamentoRequest pedido = new CriarPagamentoRequest(
-            UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
-        sessoesUsadas.add(pedido.idSessaoCompra());
-        return pedido;
+    private ResultActions criar(UUID idSessao, CriarPagamentoRequest pedido) throws Exception {
+        return mockMvc.perform(comCredencial(put("/pagamentos/{id}", idSessao), CLIENT_SECRET).content(json(pedido)));
     }
 
-    private int linhasDaSessao(UUID idSessaoCompra) {
-        return jdbc.queryForObject("select count(*) from pagamentos where id_sessao_compra = ?", Integer.class, idSessaoCompra);
+    private List<UUID> chavesEnviadas(int chamadas) {
+        ArgumentCaptor<UUID> chave = ArgumentCaptor.forClass(UUID.class);
+        verify(externo, times(chamadas)).efetuar(anyString(), any(BigDecimal.class), chave.capture());
+        return chave.getAllValues();
+    }
+
+    private UUID novaSessao() {
+        UUID id = UUID.randomUUID();
+        sessoesUsadas.add(id);
+        return id;
+    }
+
+    private static CriarPagamentoRequest novoPedido() {
+        return new CriarPagamentoRequest(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+    }
+
+    private static EfetuarPagamentoResponse respostaDoGateway() {
+        UUID idTransacao = UUID.randomUUID();
+        return new EfetuarPagamentoResponse(idTransacao, "processando", "http://gateway/pagar/" + idTransacao);
+    }
+
+    private Map<String, Object> linhaDaSessao(UUID idSessao) {
+        return jdbc.queryForMap("select * from pagamentos where id_sessao_compra = ?", idSessao);
+    }
+
+    private PagamentoDTO lerDTO(String corpo) {
+        try {
+            return objectMapper.readValue(corpo, PagamentoDTO.class);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private String json(Object objeto) throws Exception {

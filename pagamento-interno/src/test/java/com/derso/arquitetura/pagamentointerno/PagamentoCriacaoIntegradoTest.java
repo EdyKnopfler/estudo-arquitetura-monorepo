@@ -105,7 +105,7 @@ class PagamentoCriacaoIntegradoTest {
     }
 
     @Test
-    void postPagamentosCriaPagamentoDeVerdadeViaPagamentoExternoReal() {
+    void putPagamentosCriaPagamentoDeVerdadeViaPagamentoExternoReal() {
         RestClient restClient = RestClient.builder()
             .baseUrl("http://" + pagamentoInterno.getHost() + ":" + pagamentoInterno.getMappedPort(8087))
             // credenciais default de .env.example (internal-backend.clients de pagamento-interno)
@@ -114,11 +114,11 @@ class PagamentoCriacaoIntegradoTest {
             .build();
 
         CriarPagamentoRequest pedido = new CriarPagamentoRequest(
-            UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()
+            UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()
         );
 
-        PagamentoDTO resposta = restClient.post()
-            .uri("/pagamentos")
+        PagamentoDTO resposta = restClient.put()
+            .uri("/pagamentos/{id}", UUID.randomUUID())
             .contentType(MediaType.APPLICATION_JSON)
             .body(pedido)
             .retrieve()

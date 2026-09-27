@@ -27,10 +27,10 @@ public class PagamentoInternoClient {
     }
 
     public void criar(UUID idSessaoCompra, UUID idReservaHotel, UUID idReservaVooIda, UUID idReservaVooVolta) {
-        restClient.post()
-            .uri("/pagamentos")
+        restClient.put()
+            .uri("/pagamentos/{idSessaoCompra}", idSessaoCompra)
             .contentType(MediaType.APPLICATION_JSON)
-            .body(new CriarPagamentoInternoRequest(idSessaoCompra, idReservaHotel, idReservaVooIda, idReservaVooVolta))
+            .body(new CriarPagamentoInternoRequest(idReservaHotel, idReservaVooIda, idReservaVooVolta))
             .retrieve()
             .toBodilessEntity();
     }

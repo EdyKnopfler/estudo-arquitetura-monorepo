@@ -4,12 +4,15 @@ import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+// Criada e alterada só via PagamentoRepository (insert/updates condicionais).
 @Entity
 @Table(name = "pagamentos")
 @Getter
@@ -19,9 +22,6 @@ public class Pagamento {
     @Id
     @Column(nullable = false, updatable = false)
     private UUID id;
-
-    @Column(name = "id_externo", nullable = false, updatable = false)
-    private UUID idExterno;
 
     @Column(name = "id_sessao_compra", nullable = false, updatable = false)
     private UUID idSessaoCompra;
@@ -35,13 +35,17 @@ public class Pagamento {
     @Column(name = "id_reserva_voo_volta", nullable = false, updatable = false)
     private UUID idReservaVooVolta;
 
-    public Pagamento(UUID idExterno, UUID idSessaoCompra, UUID idReservaHotel, UUID idReservaVooIda, UUID idReservaVooVolta) {
-        this.id = UUID.randomUUID();
-        this.idExterno = idExterno;
-        this.idSessaoCompra = idSessaoCompra;
-        this.idReservaHotel = idReservaHotel;
-        this.idReservaVooIda = idReservaVooIda;
-        this.idReservaVooVolta = idReservaVooVolta;
-    }
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private StatusPagamento status;
+
+    @Column(name = "chave_idempotencia", nullable = false)
+    private UUID chaveIdempotencia;
+
+    @Column(name = "id_externo")
+    private UUID idExterno;
+
+    @Column(name = "url_pagamento")
+    private String urlPagamento;
 
 }

@@ -4,7 +4,7 @@ Duas identidades distintas, deliberadamente separadas — não misturar ao mexer
 
 ## JWT — cliente final
 
-`web-base/jwt/JwtIssuerService.java`+`JwtValidatorService.java`: RSA assimétrico (RS256), expiração de 10 minutos, claims `id`/`email`/`userType`/`iss`, `kid` no header. Emitido por `clientes` (`AuthController`) após login. `clientes` e `sessaocompra` (profile `web`) validam esse JWT (`JwtAuthenticationFilter`, ligado pela autoconfiguração do `web-base` com `security.auth-type: jwt`, ver [web-base-hardening.md](web-base-hardening.md)) — `reservas-interno` e `pagamento-interno` não usam JWT, porque não são chamados pelo front (só client-id/secret, ver seção seguinte). `sessaocompra` é o único ponto de contato do front ("porteiro": ela mesma chama `reservas-interno` internamente, front nunca fala direto com esses serviços — ver [purchase-flow-design.md](purchase-flow-design.md)).
+`web-base/jwt/JwtIssuerService.java`+`JwtValidatorService.java`: RSA assimétrico (RS256), expiração de 10 minutos, claims `id`/`email`/`userType`/`iss`, `kid` no header. Emitido por `clientes` (`AuthController`) após login. `clientes` e `sessaocompra` (profile `web`) validam esse JWT (`JwtAuthenticationFilter`, ligado pela autoconfiguração do `web-base` com `security.auth-type: jwt`, ver [web-base-hardening.md](web-base-hardening.md)) — `reservas-interno` e `pagamento-interno` não usam JWT, porque não são chamados pelo front (só client-id/secret, ver seção seguinte). `sessaocompra` é o único ponto de contato do front com o backend ("porteiro": ela mesma chama `reservas-interno` internamente, front nunca fala direto com esses serviços — ver [purchase-flow-design.md](purchase-flow-design.md)).
 
 **Validação não assume "é tudo meu, confio"**: `JwtValidatorService` resolve a chave pelo `kid` do header (parte do que é assinado — um `kid` forjado só faz a verificação falhar contra a chave errada) via `TrustedJwtIssuersConfig` (`jwt.trusted-issuers`, uma lista de `{kid, issuer, public-key}` por serviço), e só aceita o token se o `iss` do payload bater com o emissor esperado *para aquele kid específico* — pega até o caso de token assinado pela chave certa mas alegando ser de outro emissor. O emissor é `clientes`; o design suporta múltiplas chaves/emissores confiados sem mudar código, só config. `aud` foi deliberadamente deixado de fora: `clientes` e `sessaocompra` validam o mesmo token por design (não é confusão a fechar) — ver [web-base-hardening.md](web-base-hardening.md#2-jwt-issaud-kid).
 
@@ -35,6 +35,7 @@ Um teste estrutural (`SessaoCompraControllerOwnershipGuardTest`, via reflection)
 
 - cada par de serviços (chamador/chamado) tem client-id/secret próprios, configurados nos dois lados
 - vale também pro webhook do `pagamento-externo` chamando de volta o `pagamento-interno`
+- exceção: pagar no `pagamento-externo` não autentica — a URL de pagamento é a credencial ([purchase-flow-design.md](purchase-flow-design.md#premissas-do-gateway-simulado-pagamento-externo))
 
 ## Tratamento de erro
 

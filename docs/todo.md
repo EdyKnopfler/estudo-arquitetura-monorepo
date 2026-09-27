@@ -6,11 +6,9 @@ Lista detalhada do que falta. O [README.md](../README.md) só resume em que pé 
 
 Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, SAGA) está desenhado em [purchase-flow-design.md](purchase-flow-design.md).
 
-**Foco atual:** fluxo do pagamento — efetuar → `pagamento-externo` → webhook.
-
 * [ ] **Timeout:**
   * [ ] sessão em `INICIADA` expirada (`TimeoutTask`, já agendado): **cancela e desfaz as pré-reservas efetuadas**, via REST em `reservas-interno` — não é SAGA
-  * [ ] pagamento não efetuado a tempo (`TimeoutPagamentoTask`): cancela o pagamento e volta a sessão pra `INICIADA` — ver [purchase-flow-design.md](purchase-flow-design.md#dois-timeouts)
+  * [ ] pagamento não efetuado a tempo (`TimeoutPagamentoTask`): mesma operação do cancelamento — ver [purchase-flow-design.md](purchase-flow-design.md#dois-timeouts)
   * [ ] modelar os registros de tempo: o tempo da sessão não conta enquanto corre o do pagamento
   * [ ] sessão presa em `CRIANDO_PAGAMENTO` (processo caiu no meio): nenhum timeout pega — destino em aberto
 
@@ -24,13 +22,26 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
       * [ ] diagramas (README, purchase-flow-design) só depois de fechar essa modelagem
     * a considerar: remover as reservas que falharam, resetar o tempo e notificar o usuário, que decide se volta pra tentar outras opções
 
-* [ ] **Pagamentos** — fluxo (foco atual):
-  * [X] criação no interno (`POST /pagamentos`, chamado por `sessaocompra`)
-  * [X] chamada ao externo (`/efetuar`, _deve falhar às vezes de propósito_)
-  * [ ] chamada ao webhook pelo externo — pendente de ajuste no código (TODO em `PagamentoController` de `pagamento-externo`)
+* [ ] **Pagamentos** — fluxo, criação desenhada em [purchase-flow-design.md](purchase-flow-design.md#criação-do-pagamento):
+  * [X] criação no interno (`PUT /pagamentos/{idSessao}`, chamado por `sessaocompra`; unique em `id_sessao_compra`): pagamento por sessão, intenção gravada antes do externo, troca de tentativa até obter URL, depois devolve sempre a mesma
+    * [X] chave de idempotência por tentativa: repetida em falha ambígua, trocada em falha certa
+    * [ ] **decidir** retentativa ativa enquanto `CRIANDO` (na própria requisição, com backoff, ou job) — sem ela, só a próxima chamada retenta
+  * [ ] `sessaocompra` repassa a URL de pagamento na resposta de `iniciando-pagamento`
+  * [ ] `sessaocompra` não reverte a sessão quando a criação falha — fica em `CRIANDO_PAGAMENTO` e o front retenta
+  * [ ] cancelar pagamento, com ou sem URL ([desenho](purchase-flow-design.md#cancelamento-e-prazo--gateway-como-juiz)): endpoint em `sessaocompra` e em `pagamento-interno`; o `PUT` seguinte abre tentativa nova com os ids de reserva atuais
+  * [ ] **externo:** criar
+    * [X] _deve falhar às vezes de propósito_
+    * [ ] devolve URL de pagamento fictícia
+    * [ ] aceita chave de idempotência
+    * [ ] define prazo da transação; pagar recusa depois dele
+  * [ ] **externo:** expirar — responde se expirou ou se já foi paga
+  * [ ] **externo:** pagar — sorteia o desfecho e dispara o webhook (substitui o webhook chamado dentro da criação)
+    * [ ] **decidir** webhook síncrono ou em background com retentativa
+    * [ ] **decidir** falha técnica simulada: webhook de falha ou só erro pra quem paga
   * [ ] implementação do webhook no interno
     * [ ] validar assinatura/origem e proteger contra reprocessamento
-    * [ ] outbox + status do pagamento em `pagamentos` — ver [Dual-write](#dual-write-pagamentoreservas-outbox-das-reservas-descartado--ver-desenho)
+    * [ ] aceita só pagamento da tentativa vigente em estado válido; outro é estornado
+    * [ ] outbox + transição de status do pagamento pelo webhook — ver [Dual-write](#dual-write-pagamentoreservas-outbox-das-reservas-descartado--ver-desenho)
     * [ ] sucesso: sessão vai pra `PAGAMENTO_EFETUADO` — mecanismo em aberto (hoje `PUT /sessoes/{id}/pagamento-efetuado`, sem auth de serviço — ver [Testes](#testes))
     * [ ] sucesso: publica `EXECUTE` na fila `pagamento` com os ids internos ([desenho do payload](purchase-flow-design.md#payload-da-mensagem-da-saga))
     * [ ] falha: publica `DESFACA` direto na fila `sessaocompra` (nada a desfazer em hotel/voo/pagamento ainda)
@@ -40,7 +51,7 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
   * [ ] **externo:** endpoint de estorno, _deve falhar às vezes de propósito_
   * [ ] **externo:** latência aleatória (chaos) — hoje só sorteia falha
   * [ ] Testes integrados
-    * [ ] Requisição > Externo > Webhook
+    * [ ] Requisição > Externo > Pagar > Webhook
     * [ ] Encaminha sucesso para outro serviço
     * [ ] Notificação de falha por outro serviço
 
@@ -89,7 +100,7 @@ Transversais ou de "amarração", não de regra de negócio de um domínio — l
 
 ### Dual-write pagamento/reservas (outbox das reservas descartado — ver desenho)
 
-- [ ] **Outbox no webhook de pagamento** (decidido — ponto crucial do fluxo). Confirmar pagamento no banco + publicar a 1ª mensagem da SAGA é um dual-write clássico. Status do pagamento em `pagamentos` faz parte disso. **Ordem:** depois do item de reservas abaixo — esse expõe a versão geral do problema (dual-write contra sistema externo não-idempotente), o outbox do webhook é um caso mais estreito do mesmo tema. **Nota:** não confundir com `sessaocompra.iniciarPagamento` → `pagamento-interno` (já implementado) — ali não há dual-write, porque a linha em `pagamentos` só é salva depois do `/efetuar` responder; falha nessa chamada só reverte o status local de `SessaoCompra` (`reverterPagamento`) e devolve erro pro front-end tentar de novo.
+- [ ] **Outbox no webhook de pagamento** (decidido — ponto crucial do fluxo). Confirmar pagamento no banco + publicar a 1ª mensagem da SAGA é um dual-write clássico. Status do pagamento em `pagamentos` faz parte disso. **Ordem:** depois do item de reservas abaixo — esse expõe a versão geral do problema (dual-write contra sistema externo não-idempotente), o outbox do webhook é um caso mais estreito do mesmo tema. **Nota:** a criação do pagamento é outro dual-write, resolvido com intenção gravada antes da chamada — ver [purchase-flow-design.md](purchase-flow-design.md#dual-write-na-criação).
 - [ ] **Robustez do passo de confirmar/reverter `Reserva` em `reservas-interno`.** Desenho fechado (axiomas do `reservas-externo`, esboço de arquitetura) em [purchase-flow-design.md](purchase-flow-design.md). Quebra em:
   - [ ] Endpoint de consulta de estado (`consultar`) em `reservas-externo` — desambigua timeout/falha de infra sem exigir idempotência do lado de lá.
   - [ ] Endpoint `desconfirmar`/estorno em `reservas-externo` — falta pra reverter uma `Reserva` já confirmada.
@@ -112,9 +123,9 @@ Estratégia e comandos: [testing-strategy.md](testing-strategy.md). Integrados p
 - [x] ~~Cobertura ~zero (só `contextLoads`)~~ — testes de microsserviço em todos os módulos web + integrados de contrato interno↔externo (`ReservasExternoServiceIntegrationTest`, `PagamentoExternoServiceIntegrationTest`).
 - [x] ~~Testes automatizados para `web-base`~~ — decisões em [web-base-hardening.md](web-base-hardening.md).
 - [x] ~~Testes automatizados para `sagas-common`~~ — `MessagingTest` (desfechos do `ResultadoHandler` e compensação por exceção).
-- [ ] **Depois de desacoplar o webhook** (TODO em `PagamentoController` de `pagamento-externo`):
+- [ ] **Depois de separar criar/pagar no externo** ([desenho](purchase-flow-design.md#criação-do-pagamento)):
   - reativar caso `SUCESSO` de `PagamentoExternoServiceIntegrationTest` e a classe `PagamentoCriacaoIntegradoTest` (hoje `@Disabled`); conferir o banco via JDBC
-  - "recusado" aleatório do `WebhookService` respeitar a simulação (`SimuladorDeTeste`)
+  - desfecho do pagar respeitar a simulação (`SimuladorDeTeste`) — hoje o "recusado" do `WebhookService` sorteia por fora
   - corpo do webhook com `idTransacao`
   - webhook publica `EXECUTE` na fila `pagamento`: fila temporária ligada à exchange `sagas` + `basicGet`
 - [ ] **Com os handlers da SAGA e o timeout implementados:**

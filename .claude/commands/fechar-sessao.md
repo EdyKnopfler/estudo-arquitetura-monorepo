@@ -1,7 +1,7 @@
 ---
-description: Fim de sessão — atualiza docs, decisões e TODOs com o que mudou
+description: Fim de sessão — propõe e aplica a atualização de docs, decisões e TODOs com o que mudou
 ---
 
-Atualize o que mudamos nesta sessão nas docs, acrescente as decisões novas e coloque as pendências nos TODOs.
+Atualize as docs com o que mudou nesta sessão seguindo o procedimento de "Atualização de docs" do `CLAUDE.md` (Convenções de escrita).
 
-Na dúvida se algo entra na doc, pergunte.
+Não edite nada antes de o plano ser aprovado.

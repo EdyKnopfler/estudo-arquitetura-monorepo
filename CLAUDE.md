@@ -36,7 +36,13 @@ Java 25 (virtual threads), Spring Boot 4.0.1, Maven multi-módulo (8 módulos + 
     - "próximos passos" também vão pro todo, não pra dentro do doc de desenho
   - nada que o código responde sozinho: contagem de testes, tamanho de arquivo, listas que espelham um mapa do código
     - nome de classe/método/config: preferir link pro arquivo a repetir o nome solto
-- Ao fim de uma tarefa que mexeu em código: conferir quais docs, itens do todo e o resumo por módulo do README o diff afeta, e atualizar junto (marcar checkbox faz parte de terminar a tarefa)
+- Atualização de docs (fim de tarefa com código, ou decisão de desenho tomada em conversa) — sempre nesta ordem:
+  1. reler: buscar tudo que o assunto toca em `docs/`, `README.md`, `CLAUDE.md` e comentários no código que citam docs
+  2. propor o plano antes de editar: por arquivo, o que muda/sai/entra
+     - separar decidido × em aberto: só vira decisão o que o dono confirmou explicitamente
+     - em aberto vira item "decidir" no todo, nunca texto de desenho
+  3. aplicar; o que falta fazer vai pro todo (marcar checkbox faz parte de terminar a tarefa)
+  4. conferir de novo: docs entre si e contra o código (links, nomes, estado, afirmações que o diff tornou falsas)
 - Escrita em geral (docs, TODOs, mensagens): bullets aninhados e frases curtas em vez de parágrafo denso
 
 ## Testes

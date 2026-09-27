@@ -8,17 +8,69 @@ Mecanismo em [SessaoCompraController](../sessaocompra/src/main/java/com/derso/ar
 
 1. `idCliente` vem do JWT só na criação da sessão, nunca de update posterior. Cliente pode ter **múltiplas sessões simultâneas** (decisão deliberada, não uma-por-cliente); ownership por sessão via `@PreAuthorize` (ver [security-and-auth.md](security-and-auth.md)).
 2. Re-seleção de item já escolhido faz troca de verdade (não cria e ignora a antiga): adquire a nova antes de liberar a antiga, nunca ao contrário — evita deixar o cliente sem nada se a nova falhar. Liberação da antiga é melhor esforço; o timeout do próprio `reservas-externo` é a rede de segurança.
-3. `sessaocompra` é o único ponto de contato do front ("porteiro") — front nunca fala direto com `reservas-interno`/`pagamento-interno`, nem sabe os ids de reserva.
+3. `sessaocompra` é o único ponto de contato do front com o nosso backend ("porteiro") — front nunca fala direto com `reservas-interno`/`pagamento-interno`, nem sabe os ids de reserva.
+   - fora do backend, o front só acessa a URL de pagamento do gateway (ver [Criação do pagamento](#criação-do-pagamento))
 
 ## Dois timeouts
 
 - **timeout da sessão** (`TimeoutTask`): só pega sessão em `INICIADA` (pendente de criar pagamento) → cancela e **desfaz as pré-reservas efetuadas**.
   - serviços dão erro e nem o cancelamento consegue seguir → `FALHA_CANCELAMENTO`, terminal — registra o caso em vez de perdê-lo
 - **timeout do pagamento** (`TimeoutPagamentoTask`): tempo pro cliente pagar, sessão em `EFETUANDO_PAGAMENTO` — janela própria, alinhada à validade do meio de pagamento (PIX/redirect de gateway)
-  - estourou → cancela aquele pagamento e volta a sessão pra `INICIADA`, pro cliente iniciar outro pagamento
+  - estourou → cancela aquele pagamento e volta a sessão pra `INICIADA`, pro cliente iniciar outro pagamento — mesma operação do [cancelamento](#cancelamento-e-prazo--gateway-como-juiz)
 - relógio: enquanto corre o timeout do pagamento, o tempo da sessão não conta
 
 Os dois competem com a mudança de estado pelo mesmo tipo de update condicional guardado por `status` (`WHERE status = '...'`) de `iniciarPagamento`/`marcarLoteComoCancelando` — quem mudar o status primeiro no banco "vence"; o outro não encontra mais linha pra afetar.
+
+## Criação do pagamento
+
+Desenho de 2026-09-27. O que falta decidir e implementar: [todo.md](todo.md#features-por-domínio).
+
+### Premissas do gateway simulado (`pagamento-externo`)
+
+Imita gateways reais no que importa pro backend — o front é abstraído, não há tela:
+
+- criar e pagar são endpoints separados
+  - criar: chamado por `pagamento-interno` (client-id/secret), devolve `idTransacao` + URL de pagamento fictícia
+  - pagar: simula o usuário na tela do gateway — chamado por quem tem a URL, sorteia o desfecho (sucesso, recusa, falha técnica) e dispara o webhook
+  - pagar não autentica: a URL é a credencial — valor e destino já foram fixados na criação
+- criar aceita chave de idempotência: mesma chave devolve a mesma transação, em vez de criar outra
+- criar define o prazo da transação; depois dele, pagar recusa
+  - transação cuja URL nunca foi entregue nunca é paga — só expira
+- expirar: encerra uma transação não paga; se já foi paga, responde isso em vez de expirar
+
+### Dual-write na criação
+
+Criar envolve o gateway e o nosso banco, sem transação comum. Chamar o gateway antes de gravar deixa, num timeout ou numa queda antes do save, uma transação lá sem registro aqui.
+
+- a linha em `pagamentos` é gravada antes da chamada, com status de intenção (`CRIANDO`)
+- a resposta do gateway completa a linha (`id_externo`, URL, `AGUARDANDO_PAGAMENTO`); sem URL, a linha continua em `CRIANDO`
+- pior caso vira "registro de algo que talvez não exista lá" (recuperável), em vez de "algo lá sem registro aqui"
+- risco baixo aqui: transação perdida só custa criar outra — a antiga expira no gateway (premissas acima). Bem menos crítico que o dual-write do webhook ([todo.md](todo.md#dual-write-pagamentoreservas-outbox-das-reservas-descartado--ver-desenho))
+
+### Pagamento da sessão, tentativa trocável
+
+- uma linha em `pagamentos` por sessão de compra: é o controle do pagamento da sessão, não uma tentativa
+  - `PUT /pagamentos/{idSessao}`: repetir leva ao mesmo estado (mesmo pagamento, mesma URL)
+- a tentativa é a chave de idempotência da linha (e o `id_externo` que ela rende), trocada no lugar:
+  - cada tentativa nasce com uma chave nova, gravada antes da chamada
+  - falha ambígua (timeout, 5xx, gateway ainda processando a mesma chave): próxima chamada repete com a mesma chave — se a transação foi criada, o gateway devolve a mesma, sem criar outra
+  - falha certa (recusa): troca a chave e devolve o erro, sem repetir na hora — a próxima chamada usa a chave nova; a linha continua em `CRIANDO`
+  - troca de chave é update condicional (`WHERE chave = :antiga`), contra chamadas concorrentes
+  - obtida a URL: toda chamada seguinte devolve a mesma, sem chamar o gateway
+- enquanto não há URL, a sessão fica em `CRIANDO_PAGAMENTO` e o front retenta — falha na criação não reverte a sessão
+- a regra é "já obtivemos URL", não "já entregamos": se ela chegou ao usuário não sabemos, e não importa — devolvemos a mesma
+- consequência: só a tentativa vigente pode ser paga, então o webhook sempre correlaciona por `id_externo` (passo 5 da cadeia abaixo)
+
+### Cancelamento e prazo — gateway como juiz
+
+Cancelar × pagar e prazo × pagar são corridas; quem decide é o gateway, fonte da verdade de "foi pago a tempo".
+
+- o front pode cancelar o pagamento a qualquer momento antes de pago, com ou sem URL — sessão volta pra `INICIADA`
+  - sem URL: nada a pedir ao gateway
+  - com URL: pede ao gateway pra expirar — "expirei" cancela; "já foi paga" faz o pagamento vencer e seguir o fluxo
+  - cancelado, a URL corrente deixa de valer: o próximo `PUT` abre tentativa nova — chave nova, ids de reserva atuais
+- timeout do pagamento é a mesma operação, com outro gatilho; nosso prazo é maior que o do gateway
+- rede de segurança: webhook só aceita pagamento da tentativa vigente em estado válido — qualquer outro é estornado
 
 ## SAGA estendida — sessaocompra como bookend do anel
 
@@ -66,8 +118,8 @@ Cada handler precisa agir num recurso específico (a reserva, o pagamento, a ses
 **Cadeia de propagação:**
 
 1. `sessaocompra` guarda `idReservaHotel`/`idReservaVooIda`/`idReservaVooVolta`.
-2. `sessaocompra` → `pagamento-interno` (`POST /pagamentos`) passa `idSessaoCompra` + os 3 `idReserva*` numa tacada só.
-3. `pagamento-interno` chama `pagamento-externo` (`/efetuar`) e salva **uma linha só** em `pagamentos` com tudo que tem nesse instante: PK própria, `id_externo = idTransacao`, `idSessaoCompra`, os 3 `idReserva*`.
+2. `sessaocompra` → `pagamento-interno` (`PUT /pagamentos/{idSessao}`) passa `idSessaoCompra` + os 3 `idReserva*` numa tacada só.
+3. `pagamento-interno` grava a linha da sessão em `pagamentos` (PK própria, `idSessaoCompra`, os 3 `idReserva*`) antes de chamar o gateway, e completa com `id_externo = idTransacao` na resposta — ver [Criação do pagamento](#criação-do-pagamento).
 4. O callback do `pagamento-externo` (webhook) carrega `idTransacao` + `status` — sem `idTransacao` não dá pra correlacionar a resposta com a linha certa.
 5. O webhook em `pagamento-interno` busca `pagamentos WHERE id_externo = idTransacao` (id de correlação natural desse par requisição/resposta) e monta a mensagem da SAGA com `idPagamento` — **a PK da linha (`pagamentos.id`), não `idTransacao`** — mesma distinção de `idReserva`/`idExterno` em reservas: `idTransacao` só serve pra achar a linha aqui, nunca viaja na mensagem. Publica.
 6. `ReservasSagas`/`PagamentoSagas`: cada um lê da mensagem só o id que lhe interessa e faz `findById` local pra pegar `idExterno` (e o resto que precisar) do próprio banco.

@@ -110,10 +110,8 @@ public class SessaoCompraService {
     }
 
     // Nunca chamar pagamento-interno dentro de transação (mesma convenção de reservas-interno acima).
-    // Sem outbox aqui: a linha em `pagamentos` só é salva depois do `/efetuar` responder (ver
-    // PagamentoService.criarPagamento), então uma falha nesta chamada não deixa nenhum efeito
-    // colateral em pagamento-interno pra compensar — só reverte o próprio status local e devolve
-    // a falha pro front-end tentar de novo.
+    // Falha aqui só reverte o status local: o PUT em pagamento-interno é idempotente por sessão, então
+    // tentar de novo retoma o mesmo pagamento — ver docs/purchase-flow-design.md#criação-do-pagamento.
     public void iniciarPagamento(UUID id) {
         int linhas = transactionTemplate.execute(status -> repositorio.iniciarPagamento(id));
         if (linhas == 0) {

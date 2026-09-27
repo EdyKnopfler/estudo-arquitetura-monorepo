@@ -62,9 +62,8 @@ public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID
     """)
     int iniciarPagamento(@Param("idSessao") UUID id);
 
-    // Reversão da transição acima — chamada `pagamento-interno` falhou antes de qualquer efeito
-    // colateral existir (linha em `pagamentos` só é salva depois do `/efetuar` responder, ver
-    // PagamentoService.criarPagamento) — não é dual-write, é só desfazer o próprio status local.
+    // Reversão da transição acima — chamada a `pagamento-interno` falhou; o que ficou por lá é
+    // retomado na próxima tentativa (PUT idempotente por sessão).
     @Modifying
     @Query("""
         UPDATE SessaoCompra s

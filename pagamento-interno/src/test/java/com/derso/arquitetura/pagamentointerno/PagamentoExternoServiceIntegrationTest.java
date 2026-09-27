@@ -54,7 +54,7 @@ class PagamentoExternoServiceIntegrationTest {
     @Test
     @Disabled("SUCESSO chama o webhook síncrono antes de responder — volta após o desacoplamento (TODO em PagamentoController de pagamento-externo)")
     void resultadoSucessoDevolveIdTransacao() {
-        UUID idTransacao = servico.efetuar("cartao", new BigDecimal("100.00"), ResultadoSimulado.SUCESSO);
+        UUID idTransacao = servico.efetuar("cartao", new BigDecimal("100.00"), UUID.randomUUID(), ResultadoSimulado.SUCESSO).idTransacao();
 
         assertNotNull(idTransacao);
     }
@@ -62,14 +62,14 @@ class PagamentoExternoServiceIntegrationTest {
     @Test
     void resultadoFalhaDeNegocioDevolve409() {
         assertThrows(HttpClientErrorException.Conflict.class, () ->
-            servico.efetuar("cartao", new BigDecimal("100.00"), ResultadoSimulado.FALHA_NEGOCIO)
+            servico.efetuar("cartao", new BigDecimal("100.00"), UUID.randomUUID(), ResultadoSimulado.FALHA_NEGOCIO)
         );
     }
 
     @Test
     void resultadoFalhaDeInfraDevolve500() {
         assertThrows(HttpServerErrorException.class, () ->
-            servico.efetuar("cartao", new BigDecimal("100.00"), ResultadoSimulado.FALHA_INFRA)
+            servico.efetuar("cartao", new BigDecimal("100.00"), UUID.randomUUID(), ResultadoSimulado.FALHA_INFRA)
         );
     }
 

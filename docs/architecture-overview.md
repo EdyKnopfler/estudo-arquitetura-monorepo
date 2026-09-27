@@ -56,6 +56,7 @@ flowchart LR
   reservas-interno-voo-web -->|client-id/secret REST| reservas-externo-voo
   sessaocompra-web -->|iniciar pagamento, client-id/secret REST| pagamento-interno-web
   pagamento-interno-web -->|client-id/secret REST| pagamento-externo
+  C -->|paga, pela URL de pagamento| pagamento-externo
   pagamento-externo -.webhook.-> pagamento-interno-web
 
   subgraph SAGA["Coreografia SAGA — RabbitMQ (ver saga-choreography.md)"]
@@ -76,7 +77,7 @@ flowchart LR
   Qvoo -.consome.-> reservas-interno-voo-sagas
 ```
 
-`sessaocompra-web` é o único ponto de contato do front ("porteiro"): chama `reservas-interno` e `pagamento-interno` por trás. A volta do resultado da SAGA até `sessaocompra` está em [purchase-flow-design.md](purchase-flow-design.md).
+`sessaocompra-web` é o único ponto de contato do front com o backend ("porteiro"): chama `reservas-interno` e `pagamento-interno` por trás. Fora do backend, o front só paga no gateway pela URL de pagamento ([purchase-flow-design.md](purchase-flow-design.md#criação-do-pagamento)). A volta do resultado da SAGA até `sessaocompra` está em [purchase-flow-design.md](purchase-flow-design.md).
 
 ## Convenção de configuração
 

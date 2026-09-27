@@ -19,11 +19,12 @@ stateDiagram-v2
 
     INICIADA --> CRIANDO_PAGAMENTO: reservas completas, pagamento solicitado
     CRIANDO_PAGAMENTO --> EFETUANDO_PAGAMENTO: pagamento criado no externo
-    CRIANDO_PAGAMENTO --> INICIADA: falha ao criar pagamento
+    CRIANDO_PAGAMENTO --> INICIADA: cancelado pelo usuário
     INICIADA --> CANCELANDO: timeout
 
     EFETUANDO_PAGAMENTO --> PAGAMENTO_EFETUADO: webhook, pagamento registrado (SAGA dispara)
     EFETUANDO_PAGAMENTO --> INICIADA: pagamento recusado
+    EFETUANDO_PAGAMENTO --> INICIADA: cancelado pelo usuário
     EFETUANDO_PAGAMENTO --> INICIADA: timeout do pagamento, pagamento cancelado
 
     PAGAMENTO_EFETUADO --> VIAGEM_RESERVADA: SAGA completa (pagamento + hotel + voo)
@@ -124,10 +125,11 @@ Pra quem está chegando: cada módulo com as etapas do fluxo em que ele aparece 
 * **clientes**
   * [X] cadastro
   * [X] login, emite JWT
-* **sessaocompra** — único ponto de contato do front ("porteiro")
+* **sessaocompra** — único ponto de contato do front com o backend ("porteiro")
   * [X] criar sessão (web)
   * [X] escolher/trocar hotel e voos (web)
   * [X] iniciar pagamento (web)
+  * [ ] cancelar pagamento (web)
   * [ ] confirmar viagem, fim da SAGA (fila — só desenho)
   * [ ] reverter, falha na SAGA ou pagamento recusado (fila — só desenho)
   * [ ] expirar sessão (timeout)
@@ -142,12 +144,14 @@ Pra quem está chegando: cada módulo com as etapas do fluxo em que ele aparece 
   * [X] cancelar pré-reserva
 * **pagamento-interno**
   * [X] criar pagamento (web)
+  * [ ] cancelar pagamento (web)
   * [ ] webhook (web — dispara a SAGA, mas sem dados de negócio)
   * [ ] confirmar pagamento (sagas — stub)
   * [ ] estornar (sagas — stub)
 * **pagamento-externo** — simula gateway de pagamento _instável_
-  * [X] efetuar
-  * [ ] chamar o webhook
+  * [ ] criar pagamento (sendo refeito)
+  * [ ] pagar (simula o usuário na tela do gateway; chama o webhook)
+  * [ ] expirar
   * [ ] estornar
 * **web-base** (biblioteca: autenticação e tratamento de erro) — [X] pronto
 * **sagas-common** (biblioteca: coreografia SAGA sobre RabbitMQ) — [ ] mecânica pronta; falta ordem ack/publish
