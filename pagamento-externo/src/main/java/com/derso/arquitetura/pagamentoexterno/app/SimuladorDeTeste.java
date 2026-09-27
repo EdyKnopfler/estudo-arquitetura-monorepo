@@ -4,7 +4,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
-// header (modo padrão) > simulacao.resultado (modo Testcontainers) > sorteio
+// simulacao.resultado fixa o desfecho do processo inteiro; ausente, sorteia
 @Component
 @Profile("test")
 public class SimuladorDeTeste implements Simulador {
@@ -16,10 +16,7 @@ public class SimuladorDeTeste implements Simulador {
     }
 
     @Override
-    public ResultadoSimulado decidir(String headerSimularResultado) {
-        if (headerSimularResultado != null) {
-            return ResultadoSimulado.valueOf(headerSimularResultado);
-        }
+    public ResultadoSimulado decidir() {
         return configurado != null ? configurado : Simulador.sortear();
     }
 

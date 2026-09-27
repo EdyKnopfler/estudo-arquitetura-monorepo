@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,34 +24,29 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ReservasController {
 
-    public static final String HEADER_SIMULAR_RESULTADO = "X-Simular-Resultado";
-
     private final ReservasService servico;
     
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public CriacaoReservaResponse criarReserva(
-        @Valid @RequestBody CriacaoReservaRequest dados,
-        @RequestHeader(value = HEADER_SIMULAR_RESULTADO, required = false) String headerSimularResultado
+        @Valid @RequestBody CriacaoReservaRequest dados
     ) {
-        return new CriacaoReservaResponse(servico.criar(dados.idCliente(), headerSimularResultado));
+        return new CriacaoReservaResponse(servico.criar(dados.idCliente()));
     }
 
     @PutMapping("/confirmar/{id}")
     public ResponseEntity<Void> confirmarReserva(
-        @PathVariable("id") UUID id,
-        @RequestHeader(value = HEADER_SIMULAR_RESULTADO, required = false) String headerSimularResultado
+        @PathVariable("id") UUID id
     ) {
-        servico.confirmar(id, headerSimularResultado);
+        servico.confirmar(id);
         return ResponseEntity.ok().build();
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> cancelarReserva(
-        @PathVariable("id") UUID id,
-        @RequestHeader(value = HEADER_SIMULAR_RESULTADO, required = false) String headerSimularResultado
+        @PathVariable("id") UUID id
     ) {
-        servico.remover(id, headerSimularResultado);
+        servico.remover(id);
         return ResponseEntity.ok().build();
     }
 

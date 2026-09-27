@@ -6,7 +6,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.derso.arquitetura.pagamentoexterno.webhook.WebhookService;
@@ -19,18 +18,15 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class PagamentoController {
 
-    public static final String HEADER_SIMULAR_RESULTADO = "X-Simular-Resultado";
-
     private final WebhookService webhook;
     private final Simulador simulador;
 
     @PostMapping("/efetuar")
     public ResponseEntity<PagamentoResponseDTO> efetuarPagamento(
         @Valid @RequestBody PagamentoRequestDTO dados,
-        @RequestHeader(value = HEADER_SIMULAR_RESULTADO, required = false) String headerSimularResultado,
         Authentication authentication
     ) {
-        ResultadoSimulado resultado = simulador.decidir(headerSimularResultado);
+        ResultadoSimulado resultado = simulador.decidir();
 
         if (resultado == ResultadoSimulado.FALHA_INFRA) {
             throw new RuntimeException("Falhou por motivo de: " + UUID.randomUUID().toString());

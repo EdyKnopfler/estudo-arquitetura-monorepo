@@ -5,7 +5,7 @@ public interface Simulador {
 
     double CHANCE_FALHA = 0.25;
 
-    ResultadoSimulado decidir(String headerSimularResultado);
+    ResultadoSimulado decidir();
 
     static ResultadoSimulado sortear() {
         return Math.random() < CHANCE_FALHA ? ResultadoSimulado.FALHA_INFRA : ResultadoSimulado.SUCESSO;

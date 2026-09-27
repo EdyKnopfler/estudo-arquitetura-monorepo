@@ -19,13 +19,10 @@ class SimuladorTest {
     }
 
     @Test
-    void noProfileTestHeaderVenceConfiguracao() {
-        contexto.withPropertyValues("spring.profiles.active=test", "simulacao.resultado=FALHA_INFRA").run(ctx -> {
-            Simulador simulador = ctx.getBean(Simulador.class);
-
-            assertEquals(ResultadoSimulado.SUCESSO, simulador.decidir("SUCESSO"));
-            assertEquals(ResultadoSimulado.FALHA_INFRA, simulador.decidir(null));
-        });
+    void noProfileTestObedeceConfiguracao() {
+        contexto.withPropertyValues("spring.profiles.active=test", "simulacao.resultado=FALHA_INFRA").run(ctx ->
+            assertEquals(ResultadoSimulado.FALHA_INFRA, ctx.getBean(Simulador.class).decidir())
+        );
     }
 
 }

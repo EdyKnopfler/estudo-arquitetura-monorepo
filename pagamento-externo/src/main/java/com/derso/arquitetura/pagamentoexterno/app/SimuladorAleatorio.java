@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 public class SimuladorAleatorio implements Simulador {
 
     @Override
-    public ResultadoSimulado decidir(String headerSimularResultado) {
+    public ResultadoSimulado decidir() {
         return Simulador.sortear();
     }
 

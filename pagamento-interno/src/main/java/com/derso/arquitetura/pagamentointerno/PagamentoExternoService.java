@@ -23,10 +23,6 @@ public class PagamentoExternoService {
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(5);
 
-    // Mesmo nome de header que PagamentoController.HEADER_SIMULAR_RESULTADO em pagamento-externo
-    // (módulo separado, sem constante compartilhada). Ver ResultadoSimulado.
-    private static final String HEADER_SIMULAR_RESULTADO = "X-Simular-Resultado";
-
     private static final String HEADER_IDEMPOTENCIA = "Idempotency-Key";
 
     private final RestClient restClient;
@@ -49,22 +45,10 @@ public class PagamentoExternoService {
     }
 
     public EfetuarPagamentoResponse efetuar(String metodo, BigDecimal valor, UUID chaveIdempotencia) {
-        return efetuar(metodo, valor, chaveIdempotencia, null);
-    }
-
-    // package-private — só teste de integração passa resultadoSimulado, pra forçar um dos 3
-    // desfechos deterministicamente contra o pagamento-externo real. Produção sempre usa o overload
-    // acima (resultadoSimulado null = header ausente = aleatório de verdade do lado de lá).
-    EfetuarPagamentoResponse efetuar(String metodo, BigDecimal valor, UUID chaveIdempotencia, ResultadoSimulado resultadoSimulado) {
         return restClient.post()
             .uri("/efetuar")
             .contentType(MediaType.APPLICATION_JSON)
             .header(HEADER_IDEMPOTENCIA, chaveIdempotencia.toString())
-            .headers(headers -> {
-                if (resultadoSimulado != null) {
-                    headers.add(HEADER_SIMULAR_RESULTADO, resultadoSimulado.name());
-                }
-            })
             .body(new EfetuarPagamentoRequest(metodo, valor))
             .retrieve()
             .body(EfetuarPagamentoResponse.class);

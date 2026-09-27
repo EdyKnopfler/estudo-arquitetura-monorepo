@@ -51,9 +51,10 @@ Serviços reais conversando entre si.
 Os simuladores sorteiam falha de propósito (`CHANCE_FALHA`). Teste precisa de desfecho determinístico:
 
 - só com profile `test` ativo no simulador (`SimuladorDeTeste`); fora dele, sempre sorteio
-- header `X-Simular-Resultado`: quando o teste controla a requisição ao simulador
-- propriedade `simulacao.resultado` (env `SIMULACAO_RESULTADO`): fixa o desfecho do container inteiro — quando a requisição parte de outro serviço (ex.: `pagamento-interno` → `pagamento-externo` no teste integrado)
-- header vence propriedade
+- desfecho só por config do processo: propriedade `simulacao.resultado` (env `SIMULACAO_RESULTADO`)
+  - teste de microsserviço: `@TestPropertySource` por classe; outro desfecho vai num `@Nested` com o seu (outro contexto Spring)
+  - teste integrado: um container por desfecho, um de cada vez
+- sem header por requisição: ele só existia pro modo contra o compose já no ar (descartado, ver abaixo)
 
 ## Descartado: rodar testes contra instâncias do compose já no ar
 

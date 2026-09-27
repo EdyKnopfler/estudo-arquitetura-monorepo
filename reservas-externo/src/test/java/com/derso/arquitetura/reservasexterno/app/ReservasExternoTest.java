@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -26,6 +27,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
@@ -36,6 +38,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles({ "hotel", "test" })
+@TestPropertySource(properties = "simulacao.resultado=SUCESSO")
 @Import(PostgresTestcontainersConfig.class)
 class ReservasExternoTest {
 
@@ -70,20 +73,8 @@ class ReservasExternoTest {
     }
 
     @Test
-    void criarComFalhaDeInfraRetorna500SemGravar() throws Exception {
-        UUID idCliente = UUID.randomUUID();
-
-        mockMvc.perform(comoCliente(post("/reservas"), "FALHA_INFRA")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idCliente\":\"" + idCliente + "\"}"))
-            .andExpect(status().isInternalServerError());
-
-        assertEquals(0, jdbc.queryForObject("select count(*) from reservas where id_cliente = ?", Integer.class, idCliente));
-    }
-
-    @Test
     void criarSemIdClienteRetorna400() throws Exception {
-        mockMvc.perform(comoCliente(post("/reservas"), "SUCESSO")
+        mockMvc.perform(comoCliente(post("/reservas"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
             .andExpect(status().isBadRequest());
@@ -93,19 +84,9 @@ class ReservasExternoTest {
     void confirmarDentroDoPrazoMarcaConfirmado() throws Exception {
         UUID id = criar(UUID.randomUUID());
 
-        mockMvc.perform(comoCliente(put("/reservas/confirmar/" + id), "SUCESSO")).andExpect(status().isOk());
+        mockMvc.perform(comoCliente(put("/reservas/confirmar/" + id))).andExpect(status().isOk());
 
         assertEquals(true, linha(id).get("confirmado"));
-    }
-
-    @Test
-    void confirmarComFalhaDeInfraRetorna500SemConfirmar() throws Exception {
-        UUID id = criar(UUID.randomUUID());
-
-        mockMvc.perform(comoCliente(put("/reservas/confirmar/" + id), "FALHA_INFRA"))
-            .andExpect(status().isInternalServerError());
-
-        assertEquals(false, linha(id).get("confirmado"));
     }
 
     @Test
@@ -113,7 +94,7 @@ class ReservasExternoTest {
         // criacao é gravada em UTC (hibernate.jdbc.time_zone)
         UUID id = inserirDireto(LocalDateTime.now(ZoneOffset.UTC).minusMinutes(16), false);
 
-        mockMvc.perform(comoCliente(put("/reservas/confirmar/" + id), "SUCESSO")).andExpect(status().isNotFound());
+        mockMvc.perform(comoCliente(put("/reservas/confirmar/" + id))).andExpect(status().isNotFound());
 
         assertEquals(false, linha(id).get("confirmado"));
     }
@@ -122,13 +103,13 @@ class ReservasExternoTest {
     void confirmarDuasVezesRetorna404NaSegunda() throws Exception {
         UUID id = criar(UUID.randomUUID());
 
-        mockMvc.perform(comoCliente(put("/reservas/confirmar/" + id), "SUCESSO")).andExpect(status().isOk());
-        mockMvc.perform(comoCliente(put("/reservas/confirmar/" + id), "SUCESSO")).andExpect(status().isNotFound());
+        mockMvc.perform(comoCliente(put("/reservas/confirmar/" + id))).andExpect(status().isOk());
+        mockMvc.perform(comoCliente(put("/reservas/confirmar/" + id))).andExpect(status().isNotFound());
     }
 
     @Test
     void confirmarInexistenteRetorna404() throws Exception {
-        mockMvc.perform(comoCliente(put("/reservas/confirmar/" + UUID.randomUUID()), "SUCESSO"))
+        mockMvc.perform(comoCliente(put("/reservas/confirmar/" + UUID.randomUUID())))
             .andExpect(status().isNotFound());
     }
 
@@ -136,7 +117,7 @@ class ReservasExternoTest {
     void removerNaoConfirmadaApagaALinha() throws Exception {
         UUID id = criar(UUID.randomUUID());
 
-        mockMvc.perform(comoCliente(delete("/reservas/" + id), "SUCESSO")).andExpect(status().isOk());
+        mockMvc.perform(comoCliente(delete("/reservas/" + id))).andExpect(status().isOk());
 
         assertTrue(jdbc.queryForList("select id from reservas where id = ?", id).isEmpty());
     }
@@ -145,9 +126,38 @@ class ReservasExternoTest {
     void removerConfirmadaRetorna404EMantemALinha() throws Exception {
         UUID id = inserirDireto(LocalDateTime.now(ZoneOffset.UTC), true);
 
-        mockMvc.perform(comoCliente(delete("/reservas/" + id), "SUCESSO")).andExpect(status().isNotFound());
+        mockMvc.perform(comoCliente(delete("/reservas/" + id))).andExpect(status().isNotFound());
 
         assertFalse(jdbc.queryForList("select id from reservas where id = ?", id).isEmpty());
+    }
+
+    // Desfecho do simulador é config do processo — outro valor, outro contexto Spring
+    @Nested
+    @TestPropertySource(properties = "simulacao.resultado=FALHA_INFRA")
+    class ComFalhaDeInfra {
+
+        @Test
+        void criarRetorna500SemGravar() throws Exception {
+            UUID idCliente = UUID.randomUUID();
+
+            mockMvc.perform(comoCliente(post("/reservas"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"idCliente\":\"" + idCliente + "\"}"))
+                .andExpect(status().isInternalServerError());
+
+            assertEquals(0, jdbc.queryForObject("select count(*) from reservas where id_cliente = ?", Integer.class, idCliente));
+        }
+
+        @Test
+        void confirmarRetorna500SemConfirmar() throws Exception {
+            UUID id = inserirDireto(LocalDateTime.now(ZoneOffset.UTC), false);
+
+            mockMvc.perform(comoCliente(put("/reservas/confirmar/" + id)))
+                .andExpect(status().isInternalServerError());
+
+            assertEquals(false, linha(id).get("confirmado"));
+        }
+
     }
 
     @Test
@@ -159,7 +169,7 @@ class ReservasExternoTest {
     }
 
     private UUID criar(UUID idCliente) throws Exception {
-        String corpo = mockMvc.perform(comoCliente(post("/reservas"), "SUCESSO")
+        String corpo = mockMvc.perform(comoCliente(post("/reservas"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idCliente\":\"" + idCliente + "\"}"))
             .andExpect(status().isCreated())
@@ -182,11 +192,10 @@ class ReservasExternoTest {
         return jdbc.queryForMap("select * from reservas where id = ?", id);
     }
 
-    private static MockHttpServletRequestBuilder comoCliente(MockHttpServletRequestBuilder req, String resultadoSimulado) {
+    private static MockHttpServletRequestBuilder comoCliente(MockHttpServletRequestBuilder req) {
         return req
             .header("X-Client-Id", CLIENT_ID)
-            .header("X-Client-Secret", CLIENT_SECRET)
-            .header(ReservasController.HEADER_SIMULAR_RESULTADO, resultadoSimulado);
+            .header("X-Client-Secret", CLIENT_SECRET);
     }
 
 }

@@ -13,35 +13,32 @@ class SimuladorTest {
         .withUserConfiguration(SimuladorAleatorio.class, SimuladorDeTeste.class);
 
     @Test
-    void foraDoProfileTestIgnoraHeaderEConfiguracao() {
+    void foraDoProfileTestIgnoraConfiguracao() {
         contexto.withPropertyValues("simulacao.resultado=FALHA_NEGOCIO").run(ctx -> {
             Simulador simulador = ctx.getBean(Simulador.class);
             assertThat(simulador).isInstanceOf(SimuladorAleatorio.class);
 
-            // sorteio só produz SUCESSO/FALHA_INFRA — FALHA_NEGOCIO só sai se o pedido fosse obedecido
+            // sorteio só produz SUCESSO/FALHA_INFRA — FALHA_NEGOCIO só sai se a configuração fosse obedecida
             for (int i = 0; i < 50; i++) {
-                assertNotEquals(ResultadoSimulado.FALHA_NEGOCIO, simulador.decidir("FALHA_NEGOCIO"));
+                assertNotEquals(ResultadoSimulado.FALHA_NEGOCIO, simulador.decidir());
             }
         });
     }
 
     @Test
-    void noProfileTestHeaderVenceConfiguracao() {
-        contexto.withPropertyValues("spring.profiles.active=test", "simulacao.resultado=FALHA_INFRA").run(ctx -> {
-            Simulador simulador = ctx.getBean(Simulador.class);
-
-            assertEquals(ResultadoSimulado.FALHA_NEGOCIO, simulador.decidir("FALHA_NEGOCIO"));
-            assertEquals(ResultadoSimulado.FALHA_INFRA, simulador.decidir(null));
-        });
+    void noProfileTestObedeceConfiguracao() {
+        contexto.withPropertyValues("spring.profiles.active=test", "simulacao.resultado=FALHA_NEGOCIO").run(ctx ->
+            assertEquals(ResultadoSimulado.FALHA_NEGOCIO, ctx.getBean(Simulador.class).decidir())
+        );
     }
 
     @Test
-    void noProfileTestSemHeaderNemConfiguracaoSorteia() {
+    void noProfileTestSemConfiguracaoSorteia() {
         contexto.withPropertyValues("spring.profiles.active=test").run(ctx -> {
             Simulador simulador = ctx.getBean(Simulador.class);
 
             for (int i = 0; i < 50; i++) {
-                assertNotEquals(ResultadoSimulado.FALHA_NEGOCIO, simulador.decidir(null));
+                assertNotEquals(ResultadoSimulado.FALHA_NEGOCIO, simulador.decidir());
             }
         });
     }
