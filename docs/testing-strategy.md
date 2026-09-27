@@ -6,10 +6,9 @@ Dois tipos de teste, cada um com o modo que ele exige — nenhum teste roda em d
 
 Um serviço isolado, rodando no próprio processo do teste.
 
-- `@SpringBootTest` + MockMvc — o serviço inteiro (segurança, validação, JPA, Flyway) de verdade
+- padrão: `@SpringBootTest` + MockMvc — o serviço inteiro (segurança, validação, JPA, Flyway) de verdade
 - Postgres e RabbitMQ: Testcontainers, sempre
-  - Postgres: `PostgresTestcontainersConfig` do test-jar do `web-base` — um container pra todos os módulos, um database por módulo (nome = `spring.application.name`), espelhando o compose
-    - sem `@ServiceConnection`: ele apontaria pro database default do container; a URL entra via `DynamicPropertyRegistrar`
+  - Postgres: `PostgresTestcontainersConfig` do test-jar do `web-base`
   - RabbitMQ: `RabbitMQTestcontainersConfig` do test-jar do `sagas-common`
     - `RabbitConfig` usa o client cru (sem Spring AMQP), sem `@ServiceConnection` — host/porta entram via `DynamicPropertyRegistrar`
     - módulo consumidor declara `spring-boot-testcontainers`/`testcontainers-rabbitmq` no próprio pom (escopo `test` não é transitivo via test-jar)
@@ -24,7 +23,6 @@ Postgres/RabbitMQ ficam de pé entre execuções (`withReuse(true)`) — rodar u
   - Testcontainers só lê essa chave de env ou `~/.testcontainers.properties` — arquivo no classpath é ignorado de propósito
   - CI: `-Dtestes.reuse=false` volta ao descartável
 - `@Bean(destroyMethod = "")` nas configs: com o destroy method inferido (`close`), o Spring para o container no fim do contexto e anula o reuse
-- config idêntica = mesmo container reaproveitado — por isso um Postgres só serve todos os módulos, isolados por database (tabelas `reservas` de interno/externo e os Flyway colidiriam num database só)
 - estado persiste entre execuções — por isso a regra de limpeza abaixo é obrigatória
 - derrubar (liberar RAM, ou depois de editar migration já aplicada): `docker rm -f $(docker ps -aq --filter label=org.testcontainers.hash)`
 

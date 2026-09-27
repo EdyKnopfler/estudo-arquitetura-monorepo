@@ -1,6 +1,6 @@
 # Fluxo de compra — desenho (não implementado)
 
-Resultado de uma sessão de arquitetura (2026-08-02) sobre como `sessaocompra` amarra pré-reservas, pagamento e a SAGA. **A seção "Interação do usuário" abaixo (até o disparo do pagamento) está implementada** (sessão de 2026-08-09) — falta só a "SAGA estendida" mais abaixo, que continua desenho. Complementa [saga-choreography.md](saga-choreography.md) (mecânica já implementada) e [todo.md](todo.md) (lacunas atuais).
+Resultado de uma sessão de arquitetura (2026-08-02) sobre como `sessaocompra` amarra pré-reservas, pagamento e a SAGA. **Só a seção "Interação do usuário" (até o disparo do pagamento) está implementada** (sessão de 2026-08-09); o resto deste doc é desenho — o que falta: [todo.md](todo.md). Complementa [saga-choreography.md](saga-choreography.md) (mecânica já implementada) e [todo.md](todo.md) (lacunas atuais).
 
 ## Interação do usuário
 
@@ -12,8 +12,10 @@ Implementado em `SessaoCompraController`/`SessaoCompraService`/`SessaoCompraRepo
 
 ## Dois timeouts
 
-- **`TimeoutTask` (existente)**: sessões em `INICIADA` que passam de `TEMPO_MAXIMO` sem completar as reservas e iniciar pagamento → cancela.
-- **novo, planejado (`TimeoutPagamentoTask`)**: sessões em `EFETUANDO_PAGAMENTO` que passam de uma janela própria (mais longa, alinhada à validade do meio de pagamento — PIX/redirect de gateway) sem confirmação → expira. Precisa de uma coluna de timestamp própria pro início do pagamento (`start_time` hoje só marca o início da sessão inteira).
+- **timeout da sessão** (`TimeoutTask`): só pega sessão em `INICIADA` (pendente de criar pagamento) → cancela e **desfaz as pré-reservas efetuadas**.
+- **timeout do pagamento** (`TimeoutPagamentoTask`): tempo pro cliente pagar, sessão em `EFETUANDO_PAGAMENTO` — janela própria, alinhada à validade do meio de pagamento (PIX/redirect de gateway)
+  - estourou → cancela aquele pagamento e volta a sessão pra `INICIADA`, pro cliente iniciar outro pagamento
+- relógio: enquanto corre o timeout do pagamento, o tempo da sessão não conta
 
 Os dois competem com a mudança de estado feita pelo mesmo tipo de update condicional guardado por `status` (`WHERE status = '...'`) já usado em `iniciarPagamento`/`marcarLoteComoCancelando` — quem mudar o status primeiro no banco "vence"; o outro não encontra mais linha pra afetar.
 
@@ -40,7 +42,7 @@ flowchart LR
 - **Falha em qualquer etapa (inclusive em `sessaocompra: confirma`)**: propaga DESFACA pra trás até `sessaocompra: reverte`, que volta a sessão pro estado anterior e reseta o timer de expiração (dá mais tempo pro usuário escolher outra opção de voo/hotel/pagamento).
 - **Falha direto no webhook** (pagamento recusado, nada chegou a ser confirmado): pula o anel inteiro, vai direto pra `sessaocompra: reverte` — não há nada em `pagamento`/`hotel`/`voo` pra desfazer.
 - **Discard vs. reverter**: quem detecta a falha de confirmação (ex. `voo`, item não disponível mais no fornecedor) trata isso como erro local *antes* de publicar DESFACA — zera a própria pré-reserva. Quem só recebe DESFACA nunca é quem falhou (por construção da coreografia), então sempre faz a mesma ação: reverter pra pré-. Não precisa de flag na mensagem pra essa distinção — mas precisa saber qual linha local afetar (ver "Payload da mensagem da SAGA" abaixo).
-- Consequência: `sessaocompra` passa a ter um consumidor de fila mínimo pros dois nós novos. Hoje ela não depende de `sagas-common` nem participa da coreografia — isso muda com esse desenho (ver nota em [CLAUDE.md](../CLAUDE.md) e [deploy-roles-by-profile.md](deploy-roles-by-profile.md), que hoje afirmam o contrário como decisão tomada).
+- Consequência: `sessaocompra` vira a ponta final da reversão da SAGA (e do sucesso) — ganha um papel de fila mínimo pros dois nós novos e passa a depender de `sagas-common`.
 - **Mecanismo de fiação — reaproveita `proximafila`/`filaanterior`, não precisa de "dois nós" de verdade.** Os dois pontos de contato do diagrama colapsam numa única fila nova (`sessaocompra`), porque o protocolo já resolve isso: configurar `proximafila: sessaocompra` em `voo` (hoje sem `proximafila`, fim da cadeia) e `filaanterior: sessaocompra` em `pagamento` (hoje sem `filaanterior`, início da cadeia) é suficiente — `Messaging.iniciarConsumo` já publica em `filaProximoServico` no caminho `EXECUTE` e em `filaServicoAnterior` no caminho `DESFACA` (ver [saga-choreography.md](saga-choreography.md)). Um único handler em `sessaocompra`, igual aos outros, recebe as duas direções na mesma fila e decide o que fazer olhando o campo `tipo` da mensagem (`EXECUTE` → confirma; `DESFACA` → reverte) — mesmo padrão que `ReservasSagas`/`PagamentoSagas` já vão seguir.
 - **Caso "falha direto no webhook" precisa de publish fora do fluxo normal.** Publicar `DESFACA` direto em `sessaocompra` sem passar pelo anel é feito pelo profile `web` de `pagamento-interno`, que já consegue publicar (o `SagasWiring` de lá vale pra `web` também, e o webhook já publica `EXECUTE` em `pagamento`). Falta só o ramo de falha, que depende da fila `sessaocompra` existir.
 
@@ -62,8 +64,8 @@ Hoje a mensagem só carrega `tipo` + `rastreio` (opaco, sem ligação com sessã
 **Cadeia de propagação — uma única chamada nova resolve tudo, o resto já existe pela metade:**
 
 1. `sessaocompra` já tem `idReservaHotel`/`idReservaVooIda`/`idReservaVooVolta` — nenhuma mudança necessária aqui.
-2. ~~**Única chamada nova: `sessaocompra` → `pagamento-interno`**~~ — implementado: `PagamentoInternoClient`/`POST /pagamentos`, disparada de `iniciarPagamento` depois da transição de status (fora de transação, mesma convenção de `reservas-interno`) — passa `idSessaoCompra` + os 3 `idReserva*` numa tacada só.
-3. ~~`pagamento-interno` aciona `pagamento-externo` de verdade~~ — implementado: `PagamentoExternoService.efetuar` chama `POST /efetuar` (`PagamentoResponseDTO`/`idTransacao`). `pagamento-interno` salva **uma linha só** em `pagamentos` com tudo que tem nesse instante: `id` (própria PK), `id_externo = idTransacao`, `idSessaoCompra`, os 3 `idReserva*` (migration `V2`). **Achado:** `application.yaml` de `pagamento-interno` tinha os pares client-id/secret de `external-backend`/`internal-backend` trocados entre si (dois pares existiam, mas cada lado apontava pro par errado) — só ficou visível agora que a chamada real existe; corrigido.
+2. **Única chamada nova: `sessaocompra` → `pagamento-interno`** (`POST /pagamentos`) — passa `idSessaoCompra` + os 3 `idReserva*` numa tacada só.
+3. `pagamento-interno` chama `pagamento-externo` (`/efetuar`) e salva **uma linha só** em `pagamentos` com tudo que tem nesse instante: PK própria, `id_externo = idTransacao`, `idSessaoCompra`, os 3 `idReserva*`.
 4. Mais tarde, `pagamento-externo.WebhookService.enviarResposta` dispara o callback — mas `WebhookRequestDTO` hoje só carrega `status`, **sem `idTransacao`**. Sem isso não dá pra correlacionar a resposta com a linha certa. Precisa carregar `idTransacao` também.
 5. `PagamentoInternoController.webhookServicoExterno()` recebe o corpo (hoje não tem nenhum) com `idTransacao` + `status`, busca `pagamentos WHERE id_externo = idTransacao` (coluna já existe, já é o id de correlação natural desse par requisição/resposta) e monta a mensagem da SAGA com `idPagamento` — **a PK da linha (`pagamentos.id`), não `idTransacao`** — mesma distinção de `idReserva`/`idExterno` em reservas: `idTransacao` só serve pra achar a linha aqui, nunca viaja na mensagem. Publica.
 6. `ReservasSagas`/`PagamentoSagas`: cada um lê da mensagem só o id que lhe interessa e faz `findById` local pra pegar `idExterno` (e o resto que precisar) do próprio banco — já implementado em `ReservasSagas` (`repositorio.findById(idReserva)`), esperando só o campo chegar na mensagem.
@@ -98,21 +100,3 @@ Dois axiomas assumidos pra esse simulador (decisão de design deliberada — nã
       - *esse* é o único momento em que faz sentido para a gente jogar o cara para a DLQ
 
 **Gap concreto, independente dos axiomas acima:** `remover` também exige `WHERE confirmado = false` — hoje não existe operação em `reservas-externo` pra desfazer uma reserva já confirmada. Isso bloqueia de verdade o caso "DESFACA chega numa `Reserva` já `RESERVADA`, reverte pra pré-" descrito em "Discard vs. reverter" acima. Precisa de um endpoint tipo `desconfirmar`/estorno em `reservas-externo` antes desse caminho de compensação funcionar ponta a ponta.
-
-**Nota relacionada (achado separado, mesmo handler):** `Messaging.iniciarConsumo` hoje dá `basicAck` da mensagem recebida **antes** de publicar a próxima na cadeia (`Messaging.java`) — uma queda nesse intervalo perde a publicação sem redelivery (mensagem já foi consumida). Não afeta o status de intenção acima (esse depende do ack da mensagem *de entrada*, que só acontece depois do handler terminar), mas é outro furo de mesma natureza a corrigir na mesma área.
-
-## O que isso desbloqueia / próximos passos
-
-- ~~Endpoints incrementais por tipo de reserva~~ — feito.
-- ~~Gate de completude em `iniciarPagamento`~~ — feito.
-- ~~Client-id/secret `sessaocompra` → `reservas-interno`~~ — feito, reaproveitando credenciais existentes (ver [security-and-auth.md](security-and-auth.md)).
-- ~~`SecurityConfiguration`/`@PreAuthorize` em `sessaocompra`~~ — feito.
-- ~~Endpoint de troca em `reservas-interno`~~ — feito, ver item 2 acima.
-- `TimeoutPagamentoTask` + coluna de timestamp do início do pagamento.
-- Payload da mensagem SAGA com id de correlação.
-- Fila nova `sessaocompra` + handler único (branch por `tipo`), `voo.proximafila`/`pagamento.filaanterior` apontando pra ela.
-- ~~Capacidade de publish no profile `web` de `pagamento-interno`~~ — feito (`SagasWiring` com `@Profile({ "web", "sagas" })`).
-- Implementação real dos handlers de negócio em `ReservasSagas`/`PagamentoSagas` (ver [todo.md](todo.md)).
-- Ordem de start-up `sessaocompra-web` × `reservas-interno-*-web` no `docker-compose.yml` (checar ciclo em `depends_on`).
-- Robustez do fluxo confirmar/reverter `Reserva` (endpoint `consultar`, endpoint `desconfirmar`/estorno, status de intenção + task de retentativa, handler de `ReservasSagas`) — quebra em tarefas em [todo.md](todo.md), seção "Dual-write pagamento/reservas".
-- Reordenar `ack`/publish em `Messaging` (ver nota acima).

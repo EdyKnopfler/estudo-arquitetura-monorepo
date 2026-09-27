@@ -23,13 +23,15 @@ Java 25 (virtual threads), Spring Boot 4.0.1, Maven multi-módulo (8 módulos + 
 - Comentário no código: só o que não é óbvio lendo o código (armadilha, invariante, motivo de workaround) — curto, de preferência uma linha
   - se o porquê já está em `docs/`, aponta pra lá em vez de reexplicar
 - Documentação em `docs/`:
+  - doc = decisão tomada/estado desejado; distância pro código tem que ter item no todo (sem item: perguntar); o que não foi decidido fica fora
+  - bug achado numa sessão só vira doc se o dono decidir
   - desenho ainda não implementado: detalhe completo (é a única fonte de verdade nesse momento)
   - depois de implementado: código vira fonte de verdade do *como*; a doc encolhe pro *porquê* (decisão de negócio/projeto, armadilhas encontradas)
   - cada fato mora num lugar só — duplicar entre código e doc(s) tende a ficar desatualizado
     - outros docs linkam pro dono do fato, não resumem
   - estado ("ainda não existe", "hoje é stub", "feito") só em `docs/todo.md` (detalhado) e no `README.md` (resumo)
     - `README.md`: por módulo, uma entrada por etapa do fluxo em que ele aparece (as caixas dos diagramas) — pra quem está chegando; sem detalhe de implementação
-    - `docs/todo.md`: toda tarefa detalhada (features por domínio, lacunas de arquitetura)
+    - `docs/todo.md`: tarefas em nível de fluxo/feature — detalhe de implementação fica em `TODO` no código; item riscado não se repete no doc explicativo
     - docs de tópico descrevem desenho e porquê; pra saber o que falta, linkam o todo
     - "próximos passos" também vão pro todo, não pra dentro do doc de desenho
   - nada que o código responde sozinho: contagem de testes, tamanho de arquivo, listas que espelham um mapa do código

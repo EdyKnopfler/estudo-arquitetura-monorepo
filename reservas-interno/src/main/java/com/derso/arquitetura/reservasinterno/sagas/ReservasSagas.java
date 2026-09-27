@@ -125,8 +125,9 @@ public class ReservasSagas implements SmartLifecycle {
     private void atualizarStatusReserva(UUID idReserva, String novoStatus) {
     }
 
-    // TODO mensagem da SAGA ainda não carrega nenhum id (só `rastreio`, opaco) — ver
-    // docs/purchase-flow-design.md#payload-da-mensagem-da-saga e docs/todo.md.
+    // TODO lança de propósito: handler pausado até a mensagem da SAGA carregar o id da reserva (hoje só
+    // `rastreio`) — depende do fluxo de pagamento/webhook. Ver docs/purchase-flow-design.md#payload-da-mensagem-da-saga
+    // e docs/todo.md.
     UUID idReservaDaMensagem(Map<String, Object> mensagem) {
         throw new UnsupportedOperationException("id de reserva ainda não existe na mensagem da SAGA");
     }

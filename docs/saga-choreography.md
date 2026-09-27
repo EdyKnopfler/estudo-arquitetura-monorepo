@@ -41,14 +41,10 @@ Config real (`reservas-interno/src/main/resources/application-hotel.yaml` e `-vo
 
 `pagamento-interno/src/main/resources/application-sagas.yaml`: `estafila: pagamento`, `proximafila: hotel`, sem `filaanterior` (início da cadeia — só existe pra escutar compensação vinda de volta de hotel/voo, não pra receber execução de alguém anterior).
 
-## Status de implementação (importante — mecânica ≠ negócio)
+## O que foi validado
 
-- A mecânica de fila (declarar, consumir, ack/nack, compensação) **funciona** — testada manualmente publicando direto nas filas via management UI do RabbitMQ: uma mensagem `{"tipo":1}` publicada em `hotel` é consumida e repassada corretamente até `voo`.
-- O handler de negócio em `ReservasSagas`/`PagamentoSagas` é um **stub**: só imprime a mensagem recebida (`// TODO fazer o tratamento no nível do negócio`). Nenhuma reserva/pagamento é confirmado/cancelado a partir da fila ainda — e, como o stub nunca lança exceção, hoje **não tem como o handler em si disparar uma compensação**; só dá pra forçar isso de fora publicando um corpo inválido (que falha no `decode()`, antes do handler rodar) — só que aí a mensagem já não existe pra ser republicada pra trás (`Messaging` corretamente não compensa sem uma mensagem decodificada), então isso só demonstra o caminho de dead-letter, não a compensação retroativa de verdade. Validar o caminho de compensação com conteúdo de mensagem preservado só vai ser possível quando o handler tiver lógica real capaz de falhar (ou temporariamente forçando uma exceção só pra teste, sem commitar).
-- `PagamentoInternoController.webhookServicoExterno()` (papel `web`) publica a primeira mensagem na fila `pagamento`, consumida pelo papel `sagas`. A mensagem ainda só carrega `tipo` + `rastreio`, e o webhook não confirma o pagamento no banco.
-- A mensagem só carrega `rastreio` (id opaco de fluxo, gerado no webhook) — ainda sem os ids de negócio que cada handler precisa. Desenho em [purchase-flow-design.md](purchase-flow-design.md#payload-da-mensagem-da-saga).
-
-Ver [todo.md](todo.md) para a lista consolidada.
+- O framework (`sagas-common`), de forma agnóstica ao projeto: handlers só logando a mensagem em cada ponto da cadeia e, na ponta final, um erro forçado — a mensagem voltou pela cadeia como compensação até o início (teste manual de 2026-08-08, ver [todo.md](todo.md)). Os desfechos também são cobertos por `MessagingTest`.
+- Regra de negócio dos handlers: não validada — em que pé está: [todo.md](todo.md#features-por-domínio).
 
 ## Extensão planejada — sessaocompra como bookend do anel
 

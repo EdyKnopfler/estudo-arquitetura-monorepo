@@ -6,21 +6,33 @@ Lista detalhada do que falta. O [README.md](../README.md) só resume em que pé 
 
 Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, SAGA) está desenhado em [purchase-flow-design.md](purchase-flow-design.md).
 
-* [ ] **Timeout:**
-  * [ ] sessão sem reservas completas (`TimeoutTask`, já agendado): liberar as pré-reservas diretamente via REST em `reservas-interno` — não é uma sequência SAGAS, a SAGA só começa depois que o pagamento já foi confirmado
-  * [ ] pagamento iniciado sem confirmação (`TimeoutPagamentoTask` + coluna de timestamp do início do pagamento) — ver [purchase-flow-design.md](purchase-flow-design.md#dois-timeouts)
+**Foco atual:** fluxo do pagamento — efetuar → `pagamento-externo` → webhook.
 
-* [ ] **Pagamentos**:
-  * [ ] **web:** aciona o serviço externo, webhook de confirmação e erro
-    * [X] chama endpoints do serviço externo (`/efetuar`)
-    * [X] webhook sucesso: publica `EXECUTE` na fila `pagamento` (dispara a SAGA de confirmação) — mensagem ainda sem ids, ver "Payload da mensagem da SAGA" em [Bloqueadores](#bloqueadores-para-a-saga-funcionar-ponta-a-ponta)
-    * [ ] webhook falha: publica `DESFACA` direto na fila `sessaocompra` (nada a desfazer em hotel/voo/pagamento ainda)
+* [ ] **Timeout:**
+  * [ ] sessão em `INICIADA` expirada (`TimeoutTask`, já agendado): **cancela e desfaz as pré-reservas efetuadas**, via REST em `reservas-interno` — não é SAGA
+  * [ ] pagamento não efetuado a tempo (`TimeoutPagamentoTask`): cancela o pagamento e volta a sessão pra `INICIADA` — ver [purchase-flow-design.md](purchase-flow-design.md#dois-timeouts)
+  * [ ] modelar os registros de tempo: o tempo da sessão não conta enquanto corre o do pagamento
+  * [ ] sessão presa em `CRIANDO_PAGAMENTO` (processo caiu no meio): nenhum timeout pega — destino em aberto
+
+* [ ] **Sessão de compra — ponta da SAGA** (decidido, ver [purchase-flow-design.md](purchase-flow-design.md#saga-estendida--sessaocompra-como-bookend-do-anel)):
+  * [ ] papel de fila novo em `sessaocompra` (passa a depender de `sagas-common`), fila `sessaocompra`; `voo.proximafila` e `pagamento.filaanterior` apontando pra ela
+  * [ ] `EXECUTE` (fim da cadeia de sucesso): marca `VIAGEM_RESERVADA`
+  * [ ] `DESFACA` (fim da reversão, ou pagamento recusado no webhook): volta a sessão pra `INICIADA` e reinicia o timer de expiração
+    * [ ] diferenciar falha de negócio × erro de execução (inclui serviço externo) — status próprio (`REVERTENDO`?) ou informação no payload; em aberto
+    * a considerar: remover as reservas que falharam, resetar o tempo e notificar o usuário, que decide se volta pra tentar outras opções
+
+* [ ] **Pagamentos** — fluxo (foco atual):
+  * [X] criação no interno (`POST /pagamentos`, chamado por `sessaocompra`)
+  * [X] chamada ao externo (`/efetuar`, _deve falhar às vezes de propósito_)
+  * [ ] chamada ao webhook pelo externo — pendente de ajuste no código (TODO em `PagamentoController` de `pagamento-externo`)
+  * [ ] implementação do webhook no interno
+    * [ ] validar assinatura/origem e proteger contra reprocessamento
+    * [ ] sucesso: publica `EXECUTE` na fila `pagamento` com os ids internos ([desenho do payload](purchase-flow-design.md#payload-da-mensagem-da-saga))
+    * [ ] falha: publica `DESFACA` direto na fila `sessaocompra` (nada a desfazer em hotel/voo/pagamento ainda)
   * [ ] **sagas:** eventos de confirmação e cancelamento
     * [X] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
     * [ ] início da cadeia (sem fila anterior própria) — só existe pra escutar compensação voltando de hotel/voo e repassar o estorno até `sessaocompra`
-  * [ ] **externo:** simula serviço externo, **introduz erros aleatórios**
-    * [ ] endpoint de pagamento (`/efetuar`), _deve falhar às vezes de propósito_
-    * [ ] endpoint de estorno, _deve falhar às vezes de propósito_
+  * [ ] **externo:** endpoint de estorno, _deve falhar às vezes de propósito_
   * [ ] Testes integrados
     * [ ] Requisição > Externo > Webhook
     * [ ] Encaminha sucesso para outro serviço
@@ -30,7 +42,7 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
   * [X] **web:** interação com usuário (pré-reservas) — chamado por `sessaocompra`, não o inverso
     * [X] chama endpoints do serviço externo
   * [ ] **sagas:** eventos de confirmação e cancelamento
-    * [X] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
+    * [X] fiação das filas de "entrada" e saída
     * [ ] chama endpoints do serviço externo
   * [X] **externo:** simula serviço externo, **introduz erros aleatórios**
     * [X] **pré-reserva:** cria reserva sem confirmação
@@ -46,8 +58,9 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
   * [X] **web:** interação com usuário (pré-reservas) — chamado por `sessaocompra`, não o inverso
     * [X] chama endpoints do serviço externo
   * [ ] **sagas:** eventos de confirmação e cancelamento por timeout
-    * [X] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
+    * [X] fiação das filas de "entrada" e saída
     * [ ] chama endpoints do serviço externo
+    * [ ] agir nas duas reservas (ida + volta) a partir de uma mensagem — forma não desenhada
     * [ ] fim da cadeia de sucesso: publica `EXECUTE` na fila `sessaocompra` (confirma a viagem); recebe `DESFACA` de volta se `sessaocompra` falhar ao confirmar
   * [X] **externo:** simula serviço externo, **introduz erros aleatórios**
     * [X] **pré-reserva:** cria reserva sem confirmação
@@ -65,25 +78,6 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
 ## Lacunas de arquitetura
 
 Transversais ou de "amarração", não de regra de negócio de um domínio — levantadas numa revisão de arquitetura em 2026-08-01.
-
-### Bloqueadores para a SAGA funcionar ponta a ponta
-
-- [ ] **Handler de negócio da SAGA continua sem persistência real.** `ReservasSagas`/`PagamentoSagas` agora logam a mensagem (com `rastreio`), repassam adiante em sucesso e — só na ponta final da cadeia (sem `proximafila`) — lançam exceção simulando falha, disparando a compensação de verdade até `pagamento`. Isso amarra a coreografia ponta-a-ponta com regra **dummy**, mas nenhuma reserva/pagamento é confirmada/cancelada no banco ainda: falta chamar `ReservasService`/repositório de fato. Ver [saga-choreography.md](saga-choreography.md).
-- [x] ~~Módulo `pagamento-interno-sagas` não existe.~~ — existe agora como papel `sagas` de `pagamento-interno` (`PagamentoSagas`, `estafila: pagamento`, `proximafila: hotel`).
-- [x] ~~Webhook de pagamento é um método vazio.~~ — `PagamentoInternoController.webhookServicoExterno()` (`pagamento-interno`, profile `web`) agora gera um `rastreio` (UUID) e publica a primeira mensagem da SAGA na fila `pagamento`. **Ainda falta:** validação de assinatura/origem e proteção contra reprocessamento (é acionado por callback externo — maior risco de bug de segurança/idempotência do projeto) — isso não foi implementado, só o disparo.
-- [x] ~~`sessaocompra` ainda não ativa o serviço de pagamento.~~ — `SessaoCompraController.iniciarPagamento` → `SessaoCompraService.iniciarPagamento` agora chama `pagamento-interno` (`PagamentoInternoClient`) depois da transição de status, fora de transação. Ver itens 1-2 abaixo.
-- [x] ~~`reservas-interno` não tem endpoint de troca de pré-reserva.~~ — `PUT /reservas/{id}/trocar`, ver [purchase-flow-design.md](purchase-flow-design.md).
-- [ ] **Ordem de start-up entre `sessaocompra-web` e `reservas-interno-{hotel,voo}-web` não está garantida no `docker-compose.yml`.** `sessaocompra` agora chama `reservas-interno` via HTTP; falta `depends_on` (checar se introduz ciclo com os serviços já existentes) — por ora assume-se que sobem saudáveis antes da primeira chamada.
-- [ ] **Sessão presa em `CRIANDO_PAGAMENTO` não tem saída.** Se o processo cair entre `iniciarPagamento` e `pagamentoCriado`/`reverterPagamento` (`SessaoCompraService`), nenhum timeout pega esse estado — `TimeoutTask` só olha `INICIADA`. Falta decidir o destino (voltar pra `INICIADA`? cancelar?) e se `pagamento-interno` chegou a criar a linha em `pagamentos` nesse meio-tempo.
-- [x] ~~Sem id de correlação na mensagem da SAGA.~~ — campo `rastreio` (UUID gerado no webhook) agora viaja em toda a mensagem e é logado em cada elo. **Nuance:** é só um id opaco de rastreio de fluxo, ainda não é o id da `SessaoCompra`/reserva.
-- [ ] **Payload da mensagem da SAGA — correlação completa.** `ReservasSagas.idReservaDaMensagem` já lança `UnsupportedOperationException` de propósito esperando isso. Desenho fechado em [purchase-flow-design.md](purchase-flow-design.md#payload-da-mensagem-da-saga) — só ids internos (`idSessaoCompra`, `idPagamento`, `idReservaHotel`, `idReservaVooIda`/`idReservaVooVolta`) viajam na mensagem; `idExterno` nunca sai de `reservas-interno`/`pagamento-interno` — cada instância `sagas` já busca o seu localmente (`findById`, mesmo banco do papel `web` do domínio, não é chamada de rede). Quebra em:
-  Ordem = sequência real: efetuar pagamento vem antes do webhook (é o que faz ele existir pra ser chamado depois); webhook é o início da cadeia SAGA; o resto já está implementado esperando os campos chegarem.
-  1. [x] ~~Única chamada nova: `sessaocompra` → `pagamento-interno`~~ — `PagamentoInternoClient`/`POST /pagamentos`, chamada de `iniciarPagamento` com `idSessaoCompra` + os 3 `idReserva*`. Colunas de correlação novas em `pagamentos` (migration `V2`). De quebra, corrigido um bug pré-existente de config: `pagamento-interno/application.yaml` tinha os pares client-id/secret de `external-backend`/`internal-backend` trocados entre si (daria 401 nas duas pontas assim que uma chamada de verdade fosse feita).
-  2. [x] ~~`PagamentoExternoService` vazia~~ — chama `POST /efetuar` de `pagamento-externo` de verdade (`RestClient`, mesmo padrão de `ReservasExternoService`). `PagamentoService.criarPagamento` chama fora de transação, salva a linha de `pagamentos` já completa (`id` própria + `id_externo = idTransacao` + o que veio no item 1). **Nota:** `metodo`/`valor` do `/efetuar` ainda são placeholder fixo — regra de precificação não existe.
-  3. [ ] `pagamento-externo`: `WebhookRequestDTO` só carrega `status` hoje — falta `idTransacao` (`WebhookService.enviarResposta` já tem o valor, só não repassa) pra `pagamento-interno` conseguir achar a linha certa quando o callback chegar.
-  4. [ ] `pagamento-interno.webhookServicoExterno()`: recebe `idTransacao`+`status` (hoje não recebe nada), busca `pagamentos WHERE id_externo = idTransacao` (coluna já existe), monta a mensagem com **`idPagamento` = a PK da linha** (não `idTransacao` — esse só serve pra achar a linha, nunca viaja na mensagem) + `idSessaoCompra` + os 3 `idReserva*`, publica. É aqui que a cadeia SAGA de fato começa.
-  5. [ ] `ReservasSagas.idReservaDaMensagem`/`PagamentoSagas`: trocam o `throw`/stub por leitura direta do campo certo da mensagem (conforme profile) — o `findById` local já está implementado em `ReservasSagas`, só falta o campo chegar.
-  6. [ ] Handler de `voo` agindo em duas reservas (ida+volta) a partir de uma mensagem só — forma ainda não desenhada, ver nota em purchase-flow-design.md.
 
 ### Dual-write pagamento/reservas (outbox por serviço descartado — ver desenho)
 
@@ -122,6 +116,7 @@ Estratégia e comandos: [testing-strategy.md](testing-strategy.md). Integrados p
 - [x] ~~Arquivo órfão `reservas-interno-web/Dockerfile copy`~~ — resolvido de graça pela unificação de `reservas-interno` (o diretório antigo, e o arquivo órfão junto, deixaram de existir).
 - [x] ~~`pagamento-interno-web/application.yaml` tinha placeholder malformado~~ — `${FRONT_END_ID}:frontEndId}` (faltava o `:` dentro das chaves) e `FRONT_END_ID`/`FRONT_END_SECRET` não estavam no `.env`, então a aplicação não subia (placeholder não resolvido). Corrigido pra `${FRONT_END_ID:frontEndId}` na migração pra `pagamento-interno`.
 - [ ] Sem reconexão automática de `Connection`/`Channel` do RabbitMQ em `sagas-common` — uma queda de broker provavelmente exige restart manual da instância consumidora (não há listener de shutdown/retry).
+- [ ] `Messaging.iniciarConsumo` dá ack/nack da mensagem recebida **antes** de publicar a próxima na cadeia — queda nesse intervalo perde a publicação sem redelivery (a mensagem de entrada já foi consumida). Corrigir junto com o trabalho de robustez dos handlers (mesma área).
 - [x] ~~Flyway rodando em todos os papéis, não só `web`~~ — regressão introduzida pela unificação dos módulos: antes, `-sagas`/`-timeout` nem tinham Flyway como dependência (só `-web` migrava); ao virar um artefato só, o pom passou a trazer Flyway incondicionalmente pra qualquer profile. Isso só virou bug visível em `sessaocompra-timeout` (pool `maximum-pool-size: 1` herdado do módulo antigo — Flyway precisa de 2 conexões simultâneas pra coordenação de lock durante a migration, e travava contra si mesmo até estourar timeout de 30s); em `reservas-interno`/`pagamento-interno` o pool nunca foi reduzido pro papel `sagas` (ficou em 10), então a mesma corrida nunca chegou a falhar — mas o problema de fundo (múltiplas instâncias tentando migrar ao mesmo tempo) existia igual, só mascarado. Corrigido com `spring.flyway.enabled: false` explícito nos profiles `sagas`/`timeout` dos três domínios, restaurando "só uma instância migra" como já era antes do refactor.
 
 ### Refactor planejado (sessão futura dedicada)
@@ -141,6 +136,7 @@ Estratégia e comandos: [testing-strategy.md](testing-strategy.md). Integrados p
 - `basicQos(1)` limita cada instância de SAGA a processar uma mensagem por vez — teto de throughput conhecido, revisitar se/quando houver medição de carga real.
 - `JWT_PUBLIC_KEY`/`JWT_PRIVATE_KEY` no `.env`/`.env.clientes` não seguem o padrão `<SERVIÇO>_ID`/`_SECRET` do resto do arquivo (são infra compartilhada tipo `DB_HOST`, não credencial de um par específico) — considerar renomear pra algo tipo `CLIENTE_JWT_PUBLIC_KEY` se ficar confuso.
 - ~~Defaults de `jwt.private-key`/`jwt.public-key` embutidos nos `application.yaml`~~ — removidos, as chaves agora são obrigatórias via env var.
+- Sem captura/agregação centralizada de log — cada instância só loga local (SLF4J). Fora de escopo por agora; talvez um dia uma infra pra isso (sidecar → Elasticsearch, CloudWatch ou o que estiver à mão).
 - **Segurança que hoje assume "só roda em localhost"** — sem desenho de deploy de produção ainda, cada item abaixo fica pendente de revisão isolada quando esse desenho começar:
   - JDWP (`JAVA_TOOL_OPTIONS=-agentlib:jdwp=...,address=*:PORT`) exposto e publicado no host em todo serviço, pra attach de debugger — JDWP não tem autenticação (debugger anexado = RCE). Aceitável hoje (dev local); não pode existir fora de `localhost`.
   - Secrets vivem em `.env`/`.env.<serviço>` sem gestão real (vault, secrets manager de nuvem) — aceitável hoje porque são credenciais de dev descartáveis (ver item de hygiene acima).

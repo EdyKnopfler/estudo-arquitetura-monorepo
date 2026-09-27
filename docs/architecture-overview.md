@@ -22,7 +22,7 @@ Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (8
 | `reservas-interno` (profile `voo,web`) | REST de pré-reserva de voo | 8085 | db |
 | `reservas-interno` (profile `hotel,sagas`) | consumidor de fila `hotel` | — | db, broker |
 | `reservas-interno` (profile `voo,sagas`) | consumidor de fila `voo` | — | db, broker |
-| `pagamento-externo` | simulador instável de gateway de pagamento | 8086 | db |
+| `pagamento-externo` | simulador instável de gateway de pagamento (sem banco) | 8086 | — |
 | `pagamento-interno` (profile `web`) | REST de pagamento + webhook (publica o início da SAGA) | 8087 | db, broker |
 | `pagamento-interno` (profile `sagas`) | consumidor de fila `pagamento` (início/fim da cadeia) | — | db, broker |
 

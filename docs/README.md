@@ -3,7 +3,7 @@
 Detalhamento por tópico. O [CLAUDE.md](../CLAUDE.md) na raiz traz o resumo executivo com links para cá — carregue cada arquivo abaixo sob demanda, conforme o que a tarefa exigir, não é necessário ler tudo de uma vez.
 
 - [architecture-overview.md](architecture-overview.md) — mapa de componentes, portas, bancos de dados e fluxo de uma compra ponta a ponta
-- [saga-choreography.md](saga-choreography.md) — mecânica da coreografia SAGA (filas, mensagem, compensação) e o que está ligado vs. stub
+- [saga-choreography.md](saga-choreography.md) — mecânica da coreografia SAGA (filas, mensagem, compensação) e o que foi validado
 - [purchase-flow-design.md](purchase-flow-design.md) — desenho (não implementado) de como `sessaocompra` amarra pré-reservas, pagamento e a SAGA estendida
 - [module-boundaries.md](module-boundaries.md) — organização interna da regra de negócio (`reservas-interno`/`pagamento-interno`) e alternativas avaliadas (hexagonal, contrato tipado da SAGA)
 - [deploy-roles-by-profile.md](deploy-roles-by-profile.md) — como o papel (web vs. sagas) de cada módulo é escolhido por profile Spring, mecanismo e pegadinhas

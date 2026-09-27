@@ -20,13 +20,16 @@ stateDiagram-v2
     INICIADA --> CRIANDO_PAGAMENTO: reservas completas, pagamento solicitado
     CRIANDO_PAGAMENTO --> EFETUANDO_PAGAMENTO: pagamento criado no externo
     CRIANDO_PAGAMENTO --> INICIADA: falha ao criar pagamento
-    INICIADA --> CANCELANDO: timeout, reservas incompletas
+    INICIADA --> CANCELANDO: timeout
 
-    EFETUANDO_PAGAMENTO --> VIAGEM_RESERVADA: SAGA completa (pagamento + hotel + voo)
-    EFETUANDO_PAGAMENTO --> INICIADA: SAGA falhou, compensação completa
-    EFETUANDO_PAGAMENTO --> CANCELANDO: timeout, pagamento não confirmado
+    EFETUANDO_PAGAMENTO --> PAGAMENTO_EFETUADO: webhook, pagamento registrado (SAGA dispara)
+    EFETUANDO_PAGAMENTO --> INICIADA: pagamento recusado
+    EFETUANDO_PAGAMENTO --> INICIADA: timeout do pagamento, pagamento cancelado
 
-    CANCELANDO --> CANCELADA: pré-reservas desfeitas
+    PAGAMENTO_EFETUADO --> VIAGEM_RESERVADA: SAGA completa (pagamento + hotel + voo)
+    PAGAMENTO_EFETUADO --> INICIADA: SAGA falhou, compensação completa
+
+    CANCELANDO --> CANCELADA: pré-reservas efetuadas desfeitas
     CANCELANDO --> FALHA_CANCELAMENTO: erro ao desfazer
 
     VIAGEM_RESERVADA --> [*]
@@ -127,12 +130,12 @@ Pra quem está chegando: cada módulo com as etapas do fluxo em que ele aparece 
   * [X] iniciar pagamento (web)
   * [ ] confirmar viagem, fim da SAGA (fila — só desenho)
   * [ ] reverter, falha na SAGA ou pagamento recusado (fila — só desenho)
-  * [ ] expirar sessão sem reservas completas (timeout — cancela, mas não libera as pré-reservas)
+  * [ ] expirar sessão (timeout)
   * [ ] expirar pagamento não confirmado (timeout)
 * **reservas-interno** — hotel e voo
   * [X] pré-reserva / troca (web)
-  * [ ] confirmar (sagas — handler incompleto)
-  * [ ] cancelar, compensação (sagas — handler incompleto)
+  * [ ] confirmar (sagas)
+  * [ ] cancelar, compensação (sagas)
 * **reservas-externo** — simula fornecedor _instável_ de hotel/voo
   * [X] criar pré-reserva
   * [X] confirmar
@@ -143,7 +146,8 @@ Pra quem está chegando: cada módulo com as etapas do fluxo em que ele aparece 
   * [ ] confirmar pagamento (sagas — stub)
   * [ ] estornar (sagas — stub)
 * **pagamento-externo** — simula gateway de pagamento _instável_
-  * [ ] efetuar
+  * [X] efetuar
+  * [ ] chamar o webhook
   * [ ] estornar
 * **web-base** (biblioteca: autenticação e tratamento de erro) — [X] pronto
 * **sagas-common** (biblioteca: coreografia SAGA sobre RabbitMQ) — [ ] mecânica pronta; faltam reconexão ao broker e ordem ack/publish

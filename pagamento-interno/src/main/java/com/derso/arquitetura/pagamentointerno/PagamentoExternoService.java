@@ -17,7 +17,7 @@ import com.derso.arquitetura.pagamentointerno.dto.EfetuarPagamentoResponse;
 public class PagamentoExternoService {
 
     // Sem timeout aqui, um hang do lado de lá trava a chamada síncrona indefinidamente sem nunca
-    // cair no catch de SessaoCompraService.iniciarPagamento — ver docs/todo.md. Valores generosos
+    // cair no catch de SessaoCompraService.iniciarPagamento. Valores generosos
     // pra um endpoint que só gera um id e devolve; os outros RestClient do projeto ainda não têm
     // isso (avaliar depois).
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);

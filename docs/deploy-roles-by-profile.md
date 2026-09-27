@@ -13,11 +13,11 @@ SPRING_PROFILES_ACTIVE=voo,web
 SPRING_PROFILES_ACTIVE=voo,sagas
 ```
 
-Arquivo por papel: `application-web.yaml` / `application-sagas.yaml`, ao lado dos `application-hotel.yaml` / `application-voo.yaml` de domínio.
-
 ## `@Profile` controla quais beans existem
 
-`@Profile("web")` num `@RestController`/`@Service`, `@Profile("sagas")` num listener/`@Component` — se o profile não está ativo, o bean **não é instanciado** (não é "existe desligado").
+`@Profile` vai só no **entrypoint** de cada papel: `@Profile("web")` no `@RestController`, `@Profile("sagas")` no listener de fila, `@Profile("timeout")` no job — se o profile não está ativo, o bean **não é instanciado** (não é "existe desligado").
+
+`@Service` e repositórios ficam **sem** `@Profile`: são a regra de negócio compartilhada, a mesma acionada por portas diferentes (REST, fila, job). Ex.: `ReservasExternoService` serve tanto a pré-reserva (`web`) quanto o `confirmar`/`cancelar` do `ReservasSagas` (`sagas`).
 
 ```java
 @RestController
@@ -72,7 +72,7 @@ Deixa o `docker-compose.yml` mais legível (`SPRING_PROFILES_ACTIVE: reservas-ho
 
 ## Aplicado em cada domínio
 
-`reservas-interno` e `pagamento-interno`: todo `@RestController`/`@Service` do papel REST leva `@Profile("web")`; todo listener/`SmartLifecycle` do papel fila leva `@Profile("sagas")`, junto com a cadeia de `@Configuration` da qual depende — via a classe-ponte `SagasWiring` (ver seção acima; em `pagamento-interno` ela também vale pro `web`, que publica). `application-sagas.yaml` seta `spring.main.web-application-type: none`; não foi necessário um `application-web.yaml` em nenhum dos dois domínios (nada específico do papel web além do que já está em `application.yaml`/`application-<domínio>.yaml`).
+`reservas-interno` e `pagamento-interno`: o `@RestController` leva `@Profile("web")`; o listener/`SmartLifecycle` do papel fila leva `@Profile("sagas")`, junto com a cadeia de `@Configuration` da qual depende — via a classe-ponte `SagasWiring` (ver seção acima; em `pagamento-interno` ela também vale pro `web`, que publica). `application-sagas.yaml` seta `spring.main.web-application-type: none`; não foi necessário um `application-web.yaml` em nenhum dos dois domínios (nada específico do papel web além do que já está em `application.yaml`/`application-<domínio>.yaml`).
 
 `sessaocompra` segue o mesmo mecanismo com uma variação: como esse domínio não participa da coreografia SAGA, o segundo papel se chama `timeout` (não `sagas`) e não tem `SagasWiring`/dependência de `sagas-common` — é só `@Profile("timeout")` no `TimeoutTask` (`@Scheduled`) + `application-timeout.yaml` com `web-application-type: none`. (Desenho ainda não implementado adiciona um papel de fila a `sessaocompra` — ver [purchase-flow-design.md](purchase-flow-design.md).)
 

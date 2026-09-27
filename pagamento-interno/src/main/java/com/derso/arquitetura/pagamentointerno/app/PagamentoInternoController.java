@@ -47,8 +47,7 @@ public class PagamentoInternoController {
     // pagamento-externo também precisa desse campo, ver TODO lá). Buscar `pagamentos WHERE id_externo =
     // idTransacao` e montar a mensagem completa (idPagamento, idSessaoCompra, idReservaHotel,
     // idReservaVooIda, idReservaVooVolta — só ids internos) em vez de só tipo+rastreio.
-    // Ver docs/purchase-flow-design.md#payload-da-mensagem-da-saga e docs/todo.md
-    // ("validação de assinatura/origem e proteção contra reprocessamento" — pendência separada, mesma seção).
+    // Ver docs/purchase-flow-design.md#payload-da-mensagem-da-saga e docs/todo.md.
     @PostMapping("/webhook")
     public void webhookServicoExterno() throws IOException {
         String rastreio = UUID.randomUUID().toString();
