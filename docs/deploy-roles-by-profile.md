@@ -37,12 +37,13 @@ public class ReservasSagas implements SmartLifecycle { ... }
 
 ```java
 // com.derso.arquitetura.reservasinterno.sagas.SagasWiring
-// (mesma estrutura em com.derso.arquitetura.pagamentointerno.sagas.SagasWiring)
 @Configuration
 @Profile("sagas")
 @Import({ JacksonConfig.class, RabbitConfig.class, Messaging.class })
 public class SagasWiring {}
 ```
+
+Em `pagamento-interno` a ponte é `@Profile({ "web", "sagas" })`: o papel `web` também precisa de `Messaging`, porque o webhook publica a primeira mensagem da SAGA na fila `pagamento`. O mecanismo é o mesmo, só a lista de profiles muda.
 
 Funciona porque `@Profile` é um `@Conditional` avaliado pelo `ConfigurationClassParser` **antes** de processar `@Import` — se o profile não bate, a classe inteira (e tudo que ela importaria) é ignorada. `@Import` aceita `@Component` puro além de `@Configuration`, por isso dá pra importar `Messaging` (que é `@Component`) junto com os dois `@Configuration`. Consequência prática: `com.derso.arquitetura.sagas` **não entra** no `@ComponentScan` do app (senão seria varrido incondicionalmente, contornando a gate) — a única porta de entrada pro pacote da lib passa a ser esse `@Import` explícito.
 
@@ -71,7 +72,7 @@ Deixa o `docker-compose.yml` mais legível (`SPRING_PROFILES_ACTIVE: reservas-ho
 
 ## Aplicado em cada domínio
 
-`reservas-interno` e `pagamento-interno`: todo `@RestController`/`@Service` do papel REST leva `@Profile("web")`; todo listener/`SmartLifecycle` do papel fila leva `@Profile("sagas")`, junto com a cadeia de `@Configuration` da qual depende — via a classe-ponte `SagasWiring` (ver seção acima). `application-sagas.yaml` seta `spring.main.web-application-type: none`; não foi necessário um `application-web.yaml` em nenhum dos dois domínios (nada específico do papel web além do que já está em `application.yaml`/`application-<domínio>.yaml`).
+`reservas-interno` e `pagamento-interno`: todo `@RestController`/`@Service` do papel REST leva `@Profile("web")`; todo listener/`SmartLifecycle` do papel fila leva `@Profile("sagas")`, junto com a cadeia de `@Configuration` da qual depende — via a classe-ponte `SagasWiring` (ver seção acima; em `pagamento-interno` ela também vale pro `web`, que publica). `application-sagas.yaml` seta `spring.main.web-application-type: none`; não foi necessário um `application-web.yaml` em nenhum dos dois domínios (nada específico do papel web além do que já está em `application.yaml`/`application-<domínio>.yaml`).
 
 `sessaocompra` segue o mesmo mecanismo com uma variação: como esse domínio não participa da coreografia SAGA, o segundo papel se chama `timeout` (não `sagas`) e não tem `SagasWiring`/dependência de `sagas-common` — é só `@Profile("timeout")` no `TimeoutTask` (`@Scheduled`) + `application-timeout.yaml` com `web-application-type: none`. (Desenho ainda não implementado adiciona um papel de fila a `sessaocompra` — ver [purchase-flow-design.md](purchase-flow-design.md).)
 

@@ -13,7 +13,7 @@ import com.derso.arquitetura.pagamentointerno.entity.Pagamento;
 @Service
 public class PagamentoService {
 
-    // TODO método/valor fixos — regra de precificação ainda não existe (checklist de domínio em README.md).
+    // TODO método/valor fixos — regra de precificação ainda não existe (docs/todo.md).
     private static final String METODO_PLACEHOLDER = "cartao";
     private static final BigDecimal VALOR_PLACEHOLDER = new BigDecimal("100.00");
 

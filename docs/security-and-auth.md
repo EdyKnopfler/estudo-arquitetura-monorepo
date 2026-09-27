@@ -4,13 +4,26 @@ Duas identidades distintas, deliberadamente separadas — não misturar ao mexer
 
 ## JWT — cliente final
 
-`web-base/jwt/JwtIssuerService.java`+`JwtValidatorService.java`: RSA assimétrico (RS256), expiração de 10 minutos, claims `id`/`email`/`userType`/`iss`, `kid` no header. Emitido por `clientes` (`AuthController`) após login. `clientes` e `sessaocompra` (profile `web`) validam esse JWT (`JwtAuthenticationFilter`, component-scan de `webbase.jwt`) — `reservas-interno` e `pagamento-interno` ainda não importam esse filtro, porque não são chamados pelo front (só client-id/secret, ver seção seguinte). `sessaocompra` é o único ponto de contato do front ("porteiro": ela mesma chama `reservas-interno` internamente, front nunca fala direto com esses serviços — ver [purchase-flow-design.md](purchase-flow-design.md)).
+`web-base/jwt/JwtIssuerService.java`+`JwtValidatorService.java`: RSA assimétrico (RS256), expiração de 10 minutos, claims `id`/`email`/`userType`/`iss`, `kid` no header. Emitido por `clientes` (`AuthController`) após login. `clientes` e `sessaocompra` (profile `web`) validam esse JWT (`JwtAuthenticationFilter`, ligado pela autoconfiguração do `web-base` com `security.auth-type: jwt`, ver [web-base-hardening.md](web-base-hardening.md)) — `reservas-interno` e `pagamento-interno` ainda não importam esse filtro, porque não são chamados pelo front (só client-id/secret, ver seção seguinte). `sessaocompra` é o único ponto de contato do front ("porteiro": ela mesma chama `reservas-interno` internamente, front nunca fala direto com esses serviços — ver [purchase-flow-design.md](purchase-flow-design.md)).
 
 **Validação não assume "é tudo meu, confio"**: `JwtValidatorService` resolve a chave pelo `kid` do header (parte do que é assinado — um `kid` forjado só faz a verificação falhar contra a chave errada) via `TrustedJwtIssuersConfig` (`jwt.trusted-issuers`, uma lista de `{kid, issuer, public-key}` por serviço), e só aceita o token se o `iss` do payload bater com o emissor esperado *para aquele kid específico* — pega até o caso de token assinado pela chave certa mas alegando ser de outro emissor. Hoje só existe um emissor (`clientes`), mas o design já suporta múltiplas chaves/emissores confiados sem mudar código, só config. `aud` foi deliberadamente deixado de fora: `clientes` e `sessaocompra` validam o mesmo token por design (não é confusão a fechar) — ver [web-base-hardening.md](web-base-hardening.md#2-jwt-issaud-kid).
 
+### Gerar o par de chaves local
+
+Cada clone gera o seu, não reaproveita o de outro:
+
+```bash
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private.pem  # PKCS#8
+openssl pkey -in private.pem -pubout -out public.pem                           # X.509
+grep -v -- '-----' private.pem | tr -d '\n'   # valor de JWT_PRIVATE_KEY em .env.clientes
+grep -v -- '-----' public.pem  | tr -d '\n'   # valor de JWT_PUBLIC_KEY em .env
+```
+
+Os dois valores são base64 numa linha só, sem os headers PEM.
+
 ### Ownership por sessão — `@PreAuthorize` como aspecto
 
-Além de autenticar o cliente, `sessaocompra` precisa garantir que a sessão de compra referenciada em cada endpoint (`/sessoes/{id}/...`) pertence a quem está autenticado — um cliente pode ter múltiplas sessões simultâneas (decisão de negócio, não técnica), então isso não pode ser "uma sessão só por cliente" implícita. Em vez de repetir essa checagem manualmente em cada método (risco real de esquecer num endpoint novo), o projeto usa Spring Security method security: `@EnableMethodSecurity` em `SecurityConfiguration` + `@PreAuthorize("@sessaoOwnership.pertence(#id, authentication)")` em cada método protegido, com `SessaoOwnership` (`sessaocompra/config`) fazendo uma checagem de existência simples (`SessaoCompraRepository.existePorIdEIdCustomer`). `TrataErros` (`web-base`, compartilhado) mapeia `AccessDeniedException` → 403.
+Além de autenticar o cliente, `sessaocompra` precisa garantir que a sessão de compra referenciada em cada endpoint (`/sessoes/{id}/...`) pertence a quem está autenticado — um cliente pode ter múltiplas sessões simultâneas (decisão de negócio, não técnica), então isso não pode ser "uma sessão só por cliente" implícita. Em vez de repetir essa checagem manualmente em cada método (risco real de esquecer num endpoint novo), o projeto usa Spring Security method security: `@EnableMethodSecurity` em `SecurityConfiguration` + `@PreAuthorize("@sessaoOwnership.pertence(#id, authentication)")` em cada método protegido, com `SessaoOwnership` (`sessaocompra/config`) fazendo uma checagem de existência simples (`SessaoCompraRepository.existsByIdAndIdCustomer`). `TrataErros` (`web-base`, compartilhado) mapeia `AccessDeniedException` → 403.
 
 Um teste estrutural (`SessaoCompraControllerOwnershipGuardTest`, via reflection) garante que todo método do controller com um `UUID id` de sessão no path tenha `@PreAuthorize` — quebra sozinho se alguém esquecer ao adicionar um endpoint novo.
 
@@ -18,13 +31,13 @@ Um teste estrutural (`SessaoCompraControllerOwnershipGuardTest`, via reflection)
 
 ## Client-ID/Secret — serviço a serviço
 
-`web-base/internalclient/ClientSecretAuthFilter.java`: cada `-web` mantém um mapa `client-id → client-secret` (`InternalClientsConfig`, carregado de `internal-backend.clients` no `application-<profile>.yaml`). Quem chama envia `X-Client-Id`/`X-Client-Secret` nos headers; sem match exato, 401. Usado tanto para chamadas legítimas entre serviços internos (`reservas-interno` profile `web` → `reservas-externo`, `sessaocompra` profile `web` → `reservas-interno-{hotel,voo}`) quanto para o webhook do `pagamento-externo` responder ao `pagamento-interno` profile `web`. O par `sessaocompra` → `reservas-interno-{hotel,voo}` reaproveita as credenciais que já existiam do lado de `reservas-interno` (`RESERVAS_INTERNO_WEB_HOTEL_ID/SECRET`, `RESERVAS_INTERNO_WEB_VOO_ID/SECRET`) — nenhum segredo novo foi criado.
+`web-base/internalclient/ClientSecretAuthFilter.java`: cada `-web` mantém um mapa `client-id → client-secret` (`InternalClientsConfig`, carregado de `internal-backend.clients` no `application-<profile>.yaml`). Quem chama envia `X-Client-Id`/`X-Client-Secret` nos headers; sem match exato, 401. Usado tanto para chamadas legítimas entre serviços internos (`reservas-interno` → `reservas-externo`, `pagamento-interno` → `pagamento-externo`, `sessaocompra` → `reservas-interno-{hotel,voo}`, `sessaocompra` → `pagamento-interno` com `SESSAO_COMPRA_ID/SECRET`) quanto para o webhook do `pagamento-externo` responder ao `pagamento-interno` profile `web`. O par `sessaocompra` → `reservas-interno-{hotel,voo}` reaproveita as credenciais que já existiam do lado de `reservas-interno` (`RESERVAS_INTERNO_WEB_HOTEL_ID/SECRET`, `RESERVAS_INTERNO_WEB_VOO_ID/SECRET`) — nenhum segredo novo foi criado.
 
 Cada par de serviços (chamador/chamado) tem client-id/secret próprios configurados nos dois lados — ver `external-backend.*` (para quem chama) e `internal-backend.clients` (para quem aceita) em cada `application-<profile>.yaml`.
 
 ## Tratamento de erro
 
-`web-base/config/TrataErros.java` é um `@RestControllerAdvice` global usado por todos os `-web`. Mapeia `EntityNotFoundException`→404, `BusinessException`→409, `MethodArgumentNotValidException`/`ConstraintViolationException`→400 com mensagens de campo, `AccessDeniedException`/`UsuarioInvalidoException`→403, e qualquer outra `Exception`→500 — logada via SLF4J, devolvendo mensagem genérica ao cliente (não o `e.getMessage()` cru, que podia vazar detalhe interno tipo erro de SQL). Todos os handlers padronizados em `ErroDTO`.
+`@RestControllerAdvice` globais do `web-base`, usados por todos os `-web` — mapeamento exceção → status em [TrataErros.java](../web-base/src/main/java/com/derso/arquitetura/webbase/config/TrataErros.java) e [TrataErrosDeBanco.java](../web-base/src/main/java/com/derso/arquitetura/webbase/config/TrataErrosDeBanco.java). Por que o 500 devolve mensagem genérica: [web-base-hardening.md](web-base-hardening.md#tratamento-de-erro-trataerros).
 
 ## Limitações conhecidas (aceitáveis para estudo local, não levar adiante sem revisar)
 

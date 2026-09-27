@@ -23,7 +23,7 @@ Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (8
 | `reservas-interno` (profile `hotel,sagas`) | consumidor de fila `hotel` | — | db, broker |
 | `reservas-interno` (profile `voo,sagas`) | consumidor de fila `voo` | — | db, broker |
 | `pagamento-externo` | simulador instável de gateway de pagamento | 8086 | db |
-| `pagamento-interno` (profile `web`) | REST de pagamento + webhook | 8087 | db |
+| `pagamento-interno` (profile `web`) | REST de pagamento + webhook (publica o início da SAGA) | 8087 | db, broker |
 | `pagamento-interno` (profile `sagas`) | consumidor de fila `pagamento` (início/fim da cadeia) | — | db, broker |
 
 `reservas-externo` e `reservas-interno` são o **mesmo artefato** (cada um o seu) rodando várias vezes com `SPRING_PROFILES_ACTIVE` combinando domínio (`hotel`/`voo`) — e, no caso de `reservas-interno`, também papel (`web`/`sagas`) — cada instância com seu próprio database/fila. `pagamento-interno` não tem eixo de domínio (só existe um pagamento), então só varia por papel (`web`/`sagas`).
@@ -49,11 +49,11 @@ flowchart LR
   C[Cliente] -->|login| clientes
   clientes -->|JWT| C
   C -->|JWT| sessaocompra-web
-  C -->|pré-reserva| reservas-interno-hotel-web
-  C -->|pré-reserva| reservas-interno-voo-web
+  sessaocompra-web -->|pré-reserva, client-id/secret REST| reservas-interno-hotel-web
+  sessaocompra-web -->|pré-reserva, client-id/secret REST| reservas-interno-voo-web
   reservas-interno-hotel-web -->|client-id/secret REST| reservas-externo-hotel
   reservas-interno-voo-web -->|client-id/secret REST| reservas-externo-voo
-  C -->|pagar| pagamento-interno-web
+  sessaocompra-web -->|iniciar pagamento, client-id/secret REST| pagamento-interno-web
   pagamento-interno-web -->|client-id/secret REST| pagamento-externo
   pagamento-externo -.webhook.-> pagamento-interno-web
 
@@ -64,13 +64,13 @@ flowchart LR
     Qhotel -.compensação.-> Qpag
   end
 
-  pagamento-interno-web -.TODO: publicar em Qpag.-> Qpag
+  pagamento-interno-web -->|webhook publica| Qpag
   Qpag -.consome.-> pagamento-interno-sagas
   Qhotel -.consome.-> reservas-interno-hotel-sagas
   Qvoo -.consome.-> reservas-interno-voo-sagas
 ```
 
-Pontos de ligação que ainda são TODO no código (não apenas na intenção) estão detalhados em [todo.md](todo.md) — em especial, `sessaocompra-web` está desenhada como "árbitro" (deveria ser chamada pelos outros serviços para mudar de estado, sem ela mesma orquestrar), mas as chamadas que fariam essa ligação ainda não existem. O desenho de como fechar essa ligação (endpoints incrementais por reserva, gate de completude, SAGA estendida até `sessaocompra`) está em [purchase-flow-design.md](purchase-flow-design.md).
+`sessaocompra-web` é o único ponto de contato do front ("porteiro"): chama `reservas-interno` e `pagamento-interno` por trás. A volta do resultado da SAGA até `sessaocompra` ainda não existe — desenho em [purchase-flow-design.md](purchase-flow-design.md), lacunas em [todo.md](todo.md).
 
 ## Convenção de configuração
 

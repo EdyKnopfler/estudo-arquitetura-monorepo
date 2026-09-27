@@ -1,6 +1,6 @@
 # `web-base`: decisões de segurança
 
-`web-base` centraliza toda a mecânica de segurança dos 6 serviços `-web` — autenticação (JWT ou client-secret), montagem da `SecurityFilterChain` e tratamento de erro. Descoberto automaticamente via `@AutoConfiguration` (`META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`), não `@ComponentScan` manual. Coberto por 37 testes (`web-base/src/test`, JUnit+Mockito puro, sem contexto Spring).
+`web-base` centraliza toda a mecânica de segurança dos 6 serviços `-web` — autenticação (JWT ou client-secret), montagem da `SecurityFilterChain` e tratamento de erro. Descoberto automaticamente via `@AutoConfiguration` (`META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`), não `@ComponentScan` manual. Testes em `web-base/src/test` (JUnit+Mockito puro, sem contexto Spring).
 
 ## Wiring da `SecurityFilterChain`
 

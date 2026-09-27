@@ -26,6 +26,15 @@ Java 25 (virtual threads), Spring Boot 4.0.1, Maven multi-módulo (8 módulos + 
   - desenho ainda não implementado: detalhe completo (é a única fonte de verdade nesse momento)
   - depois de implementado: código vira fonte de verdade do *como*; a doc encolhe pro *porquê* (decisão de negócio/projeto, armadilhas encontradas)
   - cada fato mora num lugar só — duplicar entre código e doc(s) tende a ficar desatualizado
+    - outros docs linkam pro dono do fato, não resumem
+  - estado ("ainda não existe", "hoje é stub", "feito") só em `docs/todo.md` (detalhado) e no `README.md` (resumo)
+    - `README.md`: por módulo, uma entrada por etapa do fluxo em que ele aparece (as caixas dos diagramas) — pra quem está chegando; sem detalhe de implementação
+    - `docs/todo.md`: toda tarefa detalhada (features por domínio, lacunas de arquitetura)
+    - docs de tópico descrevem desenho e porquê; pra saber o que falta, linkam o todo
+    - "próximos passos" também vão pro todo, não pra dentro do doc de desenho
+  - nada que o código responde sozinho: contagem de testes, tamanho de arquivo, listas que espelham um mapa do código
+    - nome de classe/método/config: preferir link pro arquivo a repetir o nome solto
+- Ao fim de uma tarefa que mexeu em código: conferir quais docs, itens do todo e o resumo por módulo do README o diff afeta, e atualizar junto (marcar checkbox faz parte de terminar a tarefa)
 - Escrita em geral (docs, TODOs, mensagens): bullets aninhados e frases curtas em vez de parágrafo denso
 
 ## Testes
@@ -34,4 +43,4 @@ Estratégia e regras obrigatórias em [docs/testing-strategy.md](docs/testing-st
 
 ## Pendências
 
-A mecânica de infraestrutura (filas, auth, config) está mais madura que a regra de negócio que deveria carregar. Destaques: handlers da SAGA ainda são stub (só logam), webhook de pagamento é método vazio (nem confirma pagamento nem publica a primeira mensagem da SAGA) — e por isso ainda sem teste, assim como SAGA e timeout. Lista completa e categorizada: [docs/todo.md](docs/todo.md). Checklist de features por domínio (hotel/voo/pagamento): [README.md](README.md).
+A mecânica de infraestrutura (filas, auth, config) está mais madura que a regra de negócio que deveria carregar. Em que pé está cada módulo: [README.md](README.md); lista detalhada: [docs/todo.md](docs/todo.md).
