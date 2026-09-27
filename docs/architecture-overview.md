@@ -70,7 +70,6 @@ flowchart LR
   end
 
   pagamento-interno-web -->|webhook publica: sucesso| Qpag
-  pagamento-interno-web -.webhook publica: pagamento recusado.-> Qsc
   Qsc -.consome.-> sessaocompra-sagas
   Qpag -.consome.-> pagamento-interno-sagas
   Qhotel -.consome.-> reservas-interno-hotel-sagas

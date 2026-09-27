@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 import com.derso.arquitetura.sessaocompra.pagamentointerno.dto.CriarPagamentoInternoRequest;
+import com.derso.arquitetura.sessaocompra.pagamentointerno.dto.PagamentoInternoResponse;
 
 @Service
 public class PagamentoInternoClient {
@@ -26,13 +27,13 @@ public class PagamentoInternoClient {
             .build();
     }
 
-    public void criar(UUID idSessaoCompra, UUID idReservaHotel, UUID idReservaVooIda, UUID idReservaVooVolta) {
-        restClient.put()
+    public PagamentoInternoResponse criar(UUID idSessaoCompra, UUID idReservaHotel, UUID idReservaVooIda, UUID idReservaVooVolta) {
+        return restClient.put()
             .uri("/pagamentos/{idSessaoCompra}", idSessaoCompra)
             .contentType(MediaType.APPLICATION_JSON)
             .body(new CriarPagamentoInternoRequest(idReservaHotel, idReservaVooIda, idReservaVooVolta))
             .retrieve()
-            .toBodilessEntity();
+            .body(PagamentoInternoResponse.class);
     }
 
 }

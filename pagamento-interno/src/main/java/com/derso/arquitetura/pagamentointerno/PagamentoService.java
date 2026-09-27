@@ -60,6 +60,10 @@ public class PagamentoService {
             throw new BusinessException("Gateway recusou a criação do pagamento");
         }
 
+        if (resposta.urlPagamento() == null) {
+            throw new IllegalStateException("Gateway não devolveu URL de pagamento: " + pagamento.getId());
+        }
+
         int linhas = transactionTemplate.execute(status -> repositorio.registrarUrl(
             pagamento.getId(), pagamento.getChaveIdempotencia(), resposta.idTransacao(), resposta.urlPagamento()
         ));

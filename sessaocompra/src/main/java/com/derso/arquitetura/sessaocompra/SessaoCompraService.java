@@ -12,6 +12,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.derso.arquitetura.sessaocompra.entity.SessaoCompra;
 import com.derso.arquitetura.sessaocompra.entity.SessaoCompraStatus;
 import com.derso.arquitetura.sessaocompra.pagamentointerno.PagamentoInternoClient;
+import com.derso.arquitetura.sessaocompra.pagamentointerno.dto.PagamentoInternoResponse;
 import com.derso.arquitetura.sessaocompra.reservasinterno.ReservasInternoHotelClient;
 import com.derso.arquitetura.sessaocompra.reservasinterno.ReservasInternoVooClient;
 import com.derso.arquitetura.webbase.config.BusinessException;
@@ -110,33 +111,33 @@ public class SessaoCompraService {
     }
 
     // Nunca chamar pagamento-interno dentro de transação (mesma convenção de reservas-interno acima).
-    // Falha aqui só reverte o status local: o PUT em pagamento-interno é idempotente por sessão, então
-    // tentar de novo retoma o mesmo pagamento — ver docs/purchase-flow-design.md#criação-do-pagamento.
-    public void iniciarPagamento(UUID id) {
+    // Falha não reverte a sessão, e já iniciado repete o PUT (pagamento-interno guarda a URL) —
+    // ver docs/purchase-flow-design.md#cadeia-idempotente.
+    public String iniciarPagamento(UUID id) {
         int linhas = transactionTemplate.execute(status -> repositorio.iniciarPagamento(id));
-        if (linhas == 0) {
-            SessaoCompra sessao = repositorio.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Sessão de compra não encontrada: " + id));
-
-            if (sessao.getStatus() != SessaoCompraStatus.INICIADA) {
-                throw new BusinessException("Sessão de compra não está mais aceitando alterações: " + sessao.getStatus());
-            }
-
-            throw new BusinessException("Sessão de compra incompleta: faltam reservas de hotel e/ou voo");
-        }
-
         SessaoCompra sessao = repositorio.findById(id)
             .orElseThrow(() -> new EntityNotFoundException("Sessão de compra não encontrada: " + id));
 
+        if (linhas == 0) {
+            switch (sessao.getStatus()) {
+                case CRIANDO_PAGAMENTO, EFETUANDO_PAGAMENTO -> { }
+                case INICIADA -> throw new BusinessException("Sessão de compra incompleta: faltam reservas de hotel e/ou voo");
+                default -> throw new BusinessException("Sessão de compra não está mais aceitando alterações: " + sessao.getStatus());
+            }
+        }
+
+        PagamentoInternoResponse pagamento;
         try {
-            pagamentoInternoClient.criar(id, sessao.getIdReservaHotel(), sessao.getIdReservaVooIda(), sessao.getIdReservaVooVolta());
+            pagamento = pagamentoInternoClient.criar(
+                id, sessao.getIdReservaHotel(), sessao.getIdReservaVooIda(), sessao.getIdReservaVooVolta()
+            );
         } catch (Exception e) {
-            log.warn("Falha ao iniciar pagamento para sessão {}, revertendo status", id, e);
-            transactionTemplate.execute(status -> repositorio.reverterPagamento(id));
+            log.warn("Falha ao criar pagamento para sessão {}, status mantido", id, e);
             throw new BusinessException("Falha ao iniciar pagamento, tente novamente");
         }
 
         transactionTemplate.execute(status -> repositorio.pagamentoCriado(id));
+        return pagamento.urlPagamento();
     }
 
     @Transactional

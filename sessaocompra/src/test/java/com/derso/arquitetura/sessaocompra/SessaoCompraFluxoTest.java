@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -13,6 +12,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.ArrayList;
@@ -41,6 +41,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import com.derso.arquitetura.webbase.teste.PostgresTestcontainersConfig;
 import com.derso.arquitetura.sessaocompra.app.dto.CriacaoSessaoResponse;
 import com.derso.arquitetura.sessaocompra.pagamentointerno.PagamentoInternoClient;
+import com.derso.arquitetura.sessaocompra.pagamentointerno.dto.PagamentoInternoResponse;
 import com.derso.arquitetura.sessaocompra.reservasinterno.ReservasInternoHotelClient;
 import com.derso.arquitetura.sessaocompra.reservasinterno.ReservasInternoVooClient;
 import com.derso.arquitetura.webbase.jwt.UsuarioAutenticado;
@@ -53,6 +54,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @ActiveProfiles({ "web", "test" })
 @Import({ PostgresTestcontainersConfig.class, ChavesJwtDeTeste.class })
 class SessaoCompraFluxoTest {
+
+    private static final String URL_PAGAMENTO = "http://gateway/pagar/123";
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final List<UUID> sessoesCriadas = new ArrayList<>();
@@ -78,7 +81,8 @@ class SessaoCompraFluxoTest {
         when(hotelClient.trocar(any(), any())).thenAnswer(invocation -> UUID.randomUUID());
         when(vooClient.criar(any())).thenAnswer(invocation -> UUID.randomUUID());
         when(vooClient.trocar(any(), any())).thenAnswer(invocation -> UUID.randomUUID());
-        // pagamentoInternoClient.criar é void — no-op padrão do Mockito já simula sucesso.
+        when(pagamentoInternoClient.criar(any(), any(), any(), any()))
+            .thenReturn(new PagamentoInternoResponse(UUID.randomUUID(), URL_PAGAMENTO));
     }
 
     @AfterEach
@@ -142,7 +146,9 @@ class SessaoCompraFluxoTest {
         putComoCliente(sessao, "/iniciando-pagamento", cliente).andExpect(status().isConflict());
 
         putComoCliente(sessao, "/voo-ida", cliente).andExpect(status().isOk());
-        putComoCliente(sessao, "/iniciando-pagamento", cliente).andExpect(status().isOk());
+        putComoCliente(sessao, "/iniciando-pagamento", cliente)
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.urlPagamento").value(URL_PAGAMENTO));
 
         assertEquals("EFETUANDO_PAGAMENTO", linha(sessao).get("status"));
     }
@@ -163,27 +169,62 @@ class SessaoCompraFluxoTest {
     }
 
     @Test
-    void falhaAoCriarPagamentoReverteParaIniciada() throws Exception {
+    void falhaAoCriarPagamentoMantemCriandoERetentativaRepeteOPut() throws Exception {
         UUID cliente = UUID.randomUUID();
         UUID sessao = criarSessaoCompleta(cliente);
-        doThrow(new RuntimeException("pagamento-interno fora")).when(pagamentoInternoClient)
-            .criar(any(), any(), any(), any());
+        when(pagamentoInternoClient.criar(any(), any(), any(), any()))
+            .thenThrow(new RuntimeException("pagamento-interno fora"))
+            .thenReturn(new PagamentoInternoResponse(UUID.randomUUID(), URL_PAGAMENTO));
 
         putComoCliente(sessao, "/iniciando-pagamento", cliente).andExpect(status().isConflict());
+        assertEquals("CRIANDO_PAGAMENTO", linha(sessao).get("status"));
 
-        assertEquals("INICIADA", linha(sessao).get("status"));
+        putComoCliente(sessao, "/iniciando-pagamento", cliente)
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.urlPagamento").value(URL_PAGAMENTO));
+
+        verify(pagamentoInternoClient, times(2)).criar(any(), any(), any(), any());
+        assertEquals("EFETUANDO_PAGAMENTO", linha(sessao).get("status"));
     }
 
     @Test
-    void iniciarPagamentoDuasVezesRecusaASegundaSemCriarOutroPagamento() throws Exception {
+    void alteracaoComCriacaoDoPagamentoPendenteRecusaSemTocarReservas() throws Exception {
+        UUID cliente = UUID.randomUUID();
+        UUID sessao = criarSessaoCompleta(cliente);
+        when(pagamentoInternoClient.criar(any(), any(), any(), any()))
+            .thenThrow(new RuntimeException("pagamento-interno fora"));
+        putComoCliente(sessao, "/iniciando-pagamento", cliente).andExpect(status().isConflict());
+        Object hotelAntes = linha(sessao).get("id_reserva_hotel");
+
+        putComoCliente(sessao, "/hotel", cliente).andExpect(status().isConflict());
+
+        verify(hotelClient, never()).trocar(any(), any());
+        assertEquals(hotelAntes, linha(sessao).get("id_reserva_hotel"));
+    }
+
+    @Test
+    void iniciarPagamentoDeNovoRepeteOPutEDevolveAMesmaUrl() throws Exception {
         UUID cliente = UUID.randomUUID();
         UUID sessao = criarSessaoCompleta(cliente);
 
         putComoCliente(sessao, "/iniciando-pagamento", cliente).andExpect(status().isOk());
+        putComoCliente(sessao, "/iniciando-pagamento", cliente)
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.urlPagamento").value(URL_PAGAMENTO));
+
+        verify(pagamentoInternoClient, times(2)).criar(any(), any(), any(), any());
+        assertEquals("EFETUANDO_PAGAMENTO", linha(sessao).get("status"));
+    }
+
+    @Test
+    void iniciarPagamentoEmSessaoFinalizadaRecusaSemChamarPagamentoInterno() throws Exception {
+        UUID cliente = UUID.randomUUID();
+        UUID sessao = criarSessaoCompleta(cliente);
+        jdbc.update("update sessao_compra set status = 'CANCELADA' where id = ?", sessao);
+
         putComoCliente(sessao, "/iniciando-pagamento", cliente).andExpect(status().isConflict());
 
-        verify(pagamentoInternoClient, times(1)).criar(any(), any(), any(), any());
-        assertEquals("EFETUANDO_PAGAMENTO", linha(sessao).get("status"));
+        verify(pagamentoInternoClient, never()).criar(any(), any(), any(), any());
     }
 
     @Test

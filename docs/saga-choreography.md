@@ -47,4 +47,4 @@ Fiação em `sagas.*` de [application-sagas.yaml](../pagamento-interno/src/main/
 
 ## Extensão — sessaocompra como bookend do anel
 
-Dois nós (`confirma` depois de `voo`, `reverte` antes de `pagamento`) fazem `sessaocompra` participar do mesmo anel de coreografia, reaproveitando este mecanismo em vez de um consumo de fila à parte. Detalhe e diagrama em [purchase-flow-design.md](purchase-flow-design.md).
+Dois nós (`confirma` depois de `voo`, `reverte` antes de `pagamento`) fazem `sessaocompra` participar do mesmo anel de coreografia, reaproveitando este mecanismo em vez de um consumo de fila à parte. Detalhe em [purchase-flow-design.md](purchase-flow-design.md#saga-estendida--sessaocompra-como-bookend-do-anel), diagrama no [README](../README.md#saga-disparada-a-partir-do-webhook-de-pagamento).

@@ -23,12 +23,11 @@ stateDiagram-v2
     INICIADA --> CANCELANDO: timeout
 
     EFETUANDO_PAGAMENTO --> PAGAMENTO_EFETUADO: webhook, pagamento registrado (SAGA dispara)
-    EFETUANDO_PAGAMENTO --> INICIADA: pagamento recusado
     EFETUANDO_PAGAMENTO --> INICIADA: cancelado pelo usuário
     EFETUANDO_PAGAMENTO --> INICIADA: timeout do pagamento, pagamento cancelado
 
     PAGAMENTO_EFETUADO --> VIAGEM_RESERVADA: SAGA completa (pagamento + hotel + voo)
-    PAGAMENTO_EFETUADO --> INICIADA: SAGA falhou, compensação completa
+    PAGAMENTO_EFETUADO --> INICIADA: SAGA falhou, compensação cancela o que foi fechado
 
     CANCELANDO --> CANCELADA: pré-reservas efetuadas desfeitas
     CANCELANDO --> FALHA_CANCELAMENTO: erro ao desfazer
@@ -44,7 +43,6 @@ stateDiagram-v2
 flowchart TD
   WH[["webhook pagamento"]]
   WH -->|sucesso| PAGC["pagamento (confirmação)"]
-  WH -.->|falha| SCR["sessão compra (reversão)"]
 
   PAGC -->|EXECUTE| HOT[hotel]
   HOT -->|EXECUTE| VOO[voo]
@@ -53,7 +51,7 @@ flowchart TD
   SCC -.->|"DESFACA, se falhar"| VOO
   VOO -.->|DESFACA| HOT
   HOT -.->|DESFACA| PAGE["pagamento (estorno)"]
-  PAGE -.->|DESFACA| SCR
+  PAGE -.->|DESFACA| SCR["sessão compra (reversão)"]
 ```
 
 Desenho completo (inclui o que já está implementado vs. planejado) em [docs/purchase-flow-design.md](docs/purchase-flow-design.md); mecânica de fila já implementada (`pagamento → hotel → voo`) em [docs/saga-choreography.md](docs/saga-choreography.md).
@@ -131,7 +129,7 @@ Pra quem está chegando: cada módulo com as etapas do fluxo em que ele aparece 
   * [X] iniciar pagamento (web)
   * [ ] cancelar pagamento (web)
   * [ ] confirmar viagem, fim da SAGA (fila — só desenho)
-  * [ ] reverter, falha na SAGA ou pagamento recusado (fila — só desenho)
+  * [ ] reverter, falha na SAGA (fila — só desenho)
   * [ ] expirar sessão (timeout)
   * [ ] expirar pagamento não confirmado (timeout)
 * **reservas-interno** — hotel e voo

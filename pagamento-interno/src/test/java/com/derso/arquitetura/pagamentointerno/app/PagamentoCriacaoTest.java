@@ -18,6 +18,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -33,10 +39,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 
 import com.derso.arquitetura.webbase.teste.PostgresTestcontainersConfig;
 import com.derso.arquitetura.pagamentointerno.PagamentoExternoService;
@@ -170,6 +178,109 @@ class PagamentoCriacaoTest {
     void semCredencialRetorna401() throws Exception {
         mockMvc.perform(put("/pagamentos/{id}", novaSessao()).contentType(MediaType.APPLICATION_JSON).content(json(novoPedido())))
             .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void timeoutMantemCriandoEARetentativaRepeteAMesmaChave() throws Exception {
+        UUID idSessao = novaSessao();
+        when(externo.efetuar(anyString(), any(BigDecimal.class), any(UUID.class)))
+            .thenThrow(new ResourceAccessException("Read timed out"))
+            .thenReturn(respostaDoGateway());
+
+        criar(idSessao, novoPedido()).andExpect(status().is5xxServerError());
+        assertEquals("CRIANDO", linhaDaSessao(idSessao).get("status"));
+
+        criar(idSessao, novoPedido()).andExpect(status().isOk());
+
+        List<UUID> chaves = chavesEnviadas(2);
+        assertEquals(chaves.get(0), chaves.get(1));
+    }
+
+    @Test
+    void respostaSemUrlMantemCriandoEARetentativaRepeteAMesmaChave() throws Exception {
+        UUID idSessao = novaSessao();
+        when(externo.efetuar(anyString(), any(BigDecimal.class), any(UUID.class)))
+            .thenReturn(new EfetuarPagamentoResponse(UUID.randomUUID(), "processando", null))
+            .thenReturn(respostaDoGateway());
+
+        criar(idSessao, novoPedido()).andExpect(status().is5xxServerError());
+        Map<String, Object> depoisDaFalha = linhaDaSessao(idSessao);
+        assertEquals("CRIANDO", depoisDaFalha.get("status"));
+        assertNull(depoisDaFalha.get("id_externo"));
+
+        criar(idSessao, novoPedido()).andExpect(status().isOk());
+
+        List<UUID> chaves = chavesEnviadas(2);
+        assertEquals(chaves.get(0), chaves.get(1));
+    }
+
+    @Test
+    void putsConcorrentesDaMesmaSessaoGravamUmaLinhaEDevolvemOMesmoPagamento() throws Exception {
+        UUID idSessao = novaSessao();
+        EfetuarPagamentoResponse resposta = respostaDoGateway();
+        // os dois só saem do gateway depois de ambos terem lido a linha em CRIANDO
+        CountDownLatch ambosNoGateway = new CountDownLatch(2);
+        when(externo.efetuar(anyString(), any(BigDecimal.class), any(UUID.class))).thenAnswer(invocacao -> {
+            ambosNoGateway.countDown();
+            if (!ambosNoGateway.await(10, TimeUnit.SECONDS)) {
+                throw new AssertionError("segunda chamada não chegou ao gateway");
+            }
+            return resposta;
+        });
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<MvcResult> a = pool.submit(() -> criar(idSessao, novoPedido()).andReturn());
+            Future<MvcResult> b = pool.submit(() -> criar(idSessao, novoPedido()).andReturn());
+            MvcResult resultadoA = a.get(20, TimeUnit.SECONDS);
+            MvcResult resultadoB = b.get(20, TimeUnit.SECONDS);
+
+            assertEquals(200, resultadoA.getResponse().getStatus());
+            assertEquals(200, resultadoB.getResponse().getStatus());
+            assertEquals(lerDTO(resultadoA.getResponse().getContentAsString()), lerDTO(resultadoB.getResponse().getContentAsString()));
+        } finally {
+            pool.shutdownNow();
+        }
+
+        List<UUID> chaves = chavesEnviadas(2);
+        assertEquals(chaves.get(0), chaves.get(1));
+        assertEquals(1, jdbc.queryForObject("select count(*) from pagamentos where id_sessao_compra = ?", Integer.class, idSessao));
+    }
+
+    @Test
+    void tentativaTrocadaDuranteACriacaoFalhaSemRegistrarAUrlDaAntiga() throws Exception {
+        UUID idSessao = novaSessao();
+        CountDownLatch primeiraNoGateway = new CountDownLatch(1);
+        CountDownLatch liberaPrimeira = new CountDownLatch(1);
+        AtomicInteger chamadas = new AtomicInteger();
+        when(externo.efetuar(anyString(), any(BigDecimal.class), any(UUID.class))).thenAnswer(invocacao -> {
+            if (chamadas.incrementAndGet() == 1) {
+                primeiraNoGateway.countDown();
+                liberaPrimeira.await(10, TimeUnit.SECONDS);
+                return respostaDoGateway();
+            }
+            throw HttpClientErrorException.create(HttpStatus.CONFLICT, "Conflict", HttpHeaders.EMPTY, new byte[0], null);
+        });
+
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            Future<MvcResult> primeira = pool.submit(() -> criar(idSessao, novoPedido()).andReturn());
+            primeiraNoGateway.await(10, TimeUnit.SECONDS);
+
+            // segunda chamada é recusada e troca a chave enquanto a primeira ainda espera o gateway
+            criar(idSessao, novoPedido()).andExpect(status().isConflict());
+            liberaPrimeira.countDown();
+
+            assertEquals(500, primeira.get(20, TimeUnit.SECONDS).getResponse().getStatus());
+        } finally {
+            pool.shutdownNow();
+        }
+
+        List<UUID> chaves = chavesEnviadas(2);
+        Map<String, Object> linha = linhaDaSessao(idSessao);
+        assertEquals("CRIANDO", linha.get("status"));
+        assertNull(linha.get("url_pagamento"));
+        assertNotEquals(chaves.get(0), linha.get("chave_idempotencia"));
     }
 
     private ResultActions criar(UUID idSessao, CriarPagamentoRequest pedido) throws Exception {

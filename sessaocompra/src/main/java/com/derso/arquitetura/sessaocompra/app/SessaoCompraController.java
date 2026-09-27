@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.derso.arquitetura.sessaocompra.SessaoCompraService;
 import com.derso.arquitetura.sessaocompra.app.dto.CriacaoSessaoResponse;
+import com.derso.arquitetura.sessaocompra.app.dto.IniciarPagamentoResponse;
 import com.derso.arquitetura.webbase.jwt.UsuarioAutenticado;
 
 import lombok.RequiredArgsConstructor;
@@ -53,8 +54,8 @@ public class SessaoCompraController {
 
     @PutMapping("/{id}/iniciando-pagamento")
     @PreAuthorize("@sessaoOwnership.pertence(#id, authentication)")
-    public void iniciarPagamento(@PathVariable("id") UUID id) {
-        service.iniciarPagamento(id);
+    public IniciarPagamentoResponse iniciarPagamento(@PathVariable("id") UUID id) {
+        return new IniciarPagamentoResponse(service.iniciarPagamento(id));
     }
 
     // Sem @PreAuthorize de propósito: este endpoint é candidato a virar consumidor de fila SAGA

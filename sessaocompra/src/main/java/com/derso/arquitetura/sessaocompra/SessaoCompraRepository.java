@@ -45,10 +45,8 @@ public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID
     """)
     int atualizarVooVolta(@Param("idSessao") UUID idSessao, @Param("idReservaVooVolta") UUID idReservaVooVolta);
 
-    // CRIANDO_PAGAMENTO = fase síncrona (esta chamada + PagamentoInternoClient.criar), curta e sob
-    // nosso controle — travar aqui por mais que alguns segundos é bug/infra, nunca demora legítima
-    // do usuário. Só vira EFETUANDO_PAGAMENTO depois do /efetuar responder (pagamentoCriado abaixo),
-    // que é quando a espera passa a ser pelo usuário/webhook — ver docs/purchase-flow-design.md.
+    // CRIANDO_PAGAMENTO = ainda sem URL; falha na criação deixa aqui até o front retentar.
+    // Vira EFETUANDO_PAGAMENTO quando pagamento-interno devolve a URL (pagamentoCriado abaixo).
     @Modifying
     @Query("""
         UPDATE SessaoCompra s
@@ -61,18 +59,6 @@ public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID
             AND s.idReservaVooVolta IS NOT NULL
     """)
     int iniciarPagamento(@Param("idSessao") UUID id);
-
-    // Reversão da transição acima — chamada a `pagamento-interno` falhou; o que ficou por lá é
-    // retomado na próxima tentativa (PUT idempotente por sessão).
-    @Modifying
-    @Query("""
-        UPDATE SessaoCompra s
-        SET
-            s.status = 'INICIADA'
-        WHERE s.id = :idSessao
-            AND s.status = 'CRIANDO_PAGAMENTO'
-    """)
-    int reverterPagamento(@Param("idSessao") UUID id);
 
     // pagamento-interno confirmou a criação (id_externo já existe do lado de lá) — a partir daqui
     // a espera é pelo usuário interagir no serviço externo + retorno do webhook, não mais por nós.

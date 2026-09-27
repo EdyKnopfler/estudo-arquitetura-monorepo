@@ -10,24 +10,23 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
   * [ ] sessão em `INICIADA` expirada (`TimeoutTask`, já agendado): **cancela e desfaz as pré-reservas efetuadas**, via REST em `reservas-interno` — não é SAGA
   * [ ] pagamento não efetuado a tempo (`TimeoutPagamentoTask`): mesma operação do cancelamento — ver [purchase-flow-design.md](purchase-flow-design.md#dois-timeouts)
   * [ ] modelar os registros de tempo: o tempo da sessão não conta enquanto corre o do pagamento
-  * [ ] sessão presa em `CRIANDO_PAGAMENTO` (processo caiu no meio): nenhum timeout pega — destino em aberto
+  * [ ] sessão presa em `CRIANDO_PAGAMENTO` (front desistiu de retentar, ou processo caiu no meio): nenhum timeout pega — destino em aberto
 
 * [ ] **Sessão de compra — ponta da SAGA** (decidido, ver [purchase-flow-design.md](purchase-flow-design.md#saga-estendida--sessaocompra-como-bookend-do-anel)):
   * [ ] papel `sagas` em `sessaocompra` (passa a depender de `sagas-common`), fila `sessaocompra`; `voo.proximafila` e `pagamento.filaanterior` apontando pra ela
   * [ ] `EXECUTE` (fim da cadeia de sucesso): marca `VIAGEM_RESERVADA`
-  * [ ] `DESFACA` (fim da reversão, ou pagamento recusado no webhook): volta a sessão pra `INICIADA` e reinicia o timer de expiração
+  * [ ] `DESFACA` (fim da compensação — cancelamento explícito do que foi fechado): volta a sessão pra `INICIADA` e reinicia o timer de expiração
     * [ ] **decidir** a modelagem de status da reversão:
       * diferenciar falha de negócio × erro de execução (inclui serviço externo) — status próprio (`REVERTENDO`?) ou informação no payload
       * terminar em `ERRO` depende dessa distinção (erro de execução, não falha de negócio)
-      * [ ] diagramas (README, purchase-flow-design) só depois de fechar essa modelagem
+      * [ ] diagramas do README só depois de fechar essa modelagem
     * a considerar: remover as reservas que falharam, resetar o tempo e notificar o usuário, que decide se volta pra tentar outras opções
 
 * [ ] **Pagamentos** — fluxo, criação desenhada em [purchase-flow-design.md](purchase-flow-design.md#criação-do-pagamento):
   * [X] criação no interno (`PUT /pagamentos/{idSessao}`, chamado por `sessaocompra`; unique em `id_sessao_compra`): pagamento por sessão, intenção gravada antes do externo, troca de tentativa até obter URL, depois devolve sempre a mesma
     * [X] chave de idempotência por tentativa: repetida em falha ambígua, trocada em falha certa
-    * [ ] **decidir** retentativa ativa enquanto `CRIANDO` (na própria requisição, com backoff, ou job) — sem ela, só a próxima chamada retenta
-  * [ ] `sessaocompra` repassa a URL de pagamento na resposta de `iniciando-pagamento`
-  * [ ] `sessaocompra` não reverte a sessão quando a criação falha — fica em `CRIANDO_PAGAMENTO` e o front retenta
+    * [ ] **decidir** como o gateway distingue recusa × "mesma chave ainda em processamento" — hoje todo 4xx troca a chave, mas o segundo caso é falha ambígua (deveria repetir)
+  * [X] `iniciando-pagamento` idempotente ([cadeia](purchase-flow-design.md#cadeia-idempotente)): falha não reverte a sessão; em `CRIANDO_PAGAMENTO`/`EFETUANDO_PAGAMENTO` repete o `PUT`; devolve a URL
   * [ ] cancelar pagamento, com ou sem URL ([desenho](purchase-flow-design.md#cancelamento-e-prazo--gateway-como-juiz)): endpoint em `sessaocompra` e em `pagamento-interno`; o `PUT` seguinte abre tentativa nova com os ids de reserva atuais
   * [ ] **externo:** criar
     * [X] _deve falhar às vezes de propósito_
@@ -44,7 +43,7 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
     * [ ] outbox + transição de status do pagamento pelo webhook — ver [Dual-write](#dual-write-pagamentoreservas-outbox-das-reservas-descartado--ver-desenho)
     * [ ] sucesso: sessão vai pra `PAGAMENTO_EFETUADO` — mecanismo em aberto (hoje `PUT /sessoes/{id}/pagamento-efetuado`, sem auth de serviço — ver [Testes](#testes))
     * [ ] sucesso: publica `EXECUTE` na fila `pagamento` com os ids internos ([desenho do payload](purchase-flow-design.md#payload-da-mensagem-da-saga))
-    * [ ] falha: publica `DESFACA` direto na fila `sessaocompra` (nada a desfazer em hotel/voo/pagamento ainda)
+    * [ ] **decidir** recusa: o que acontece com o pagamento e a sessão
   * [ ] **sagas:** eventos de confirmação e cancelamento
     * [X] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
     * [ ] compensação: estorna e repassa `DESFACA` até `sessaocompra` (`filaanterior: sessaocompra`, ver [saga-choreography.md](saga-choreography.md#cadeia))

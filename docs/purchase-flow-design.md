@@ -1,6 +1,6 @@
 # Fluxo de compra — desenho
 
-Resultado de uma sessão de arquitetura (2026-08-02) sobre como `sessaocompra` amarra pré-reservas, pagamento e a SAGA. Complementa [saga-choreography.md](saga-choreography.md) (mecânica de fila). O que falta implementar: [todo.md](todo.md).
+Resultado de uma sessão de arquitetura (2026-08-02) sobre como `sessaocompra` amarra pré-reservas, pagamento e a SAGA. Complementa [saga-choreography.md](saga-choreography.md) (mecânica de fila). O que falta implementar: [todo.md](todo.md). Diagramas (estados da sessão e SAGA): [README](../README.md#como-funciona).
 
 ## Interação do usuário
 
@@ -24,6 +24,18 @@ Os dois competem com a mudança de estado pelo mesmo tipo de update condicional 
 ## Criação do pagamento
 
 Desenho de 2026-09-27. O que falta decidir e implementar: [todo.md](todo.md#features-por-domínio).
+
+### Cadeia idempotente
+
+front → `sessaocompra` (`iniciando-pagamento`) → `pagamento-interno` (`PUT /pagamentos/{idSessao}`) → gateway (criar)
+
+- em cada salto, retentar = "consultar ou gerar": se a tentativa anterior gerou algo, a retentativa devolve isso; senão, gera
+- nenhum salto reverte o próprio estado ao falhar — quem chamou só retenta
+- nenhum salto retenta sozinho (nem na requisição, nem por job): quem dispara retentativa é o front
+  - sessão volta pra `INICIADA` só por timeout do pagamento ou cancelamento explícito ([abaixo](#cancelamento-e-prazo--gateway-como-juiz)) — inclusive o pedido pela [compensação da SAGA](#saga-estendida--sessaocompra-como-bookend-do-anel)
+- `pagamento-interno` é o guardião da URL do nosso lado: `sessaocompra` não guarda, repete o `PUT` a cada `iniciando-pagamento`
+  - vale com a sessão em `CRIANDO_PAGAMENTO` ou já em `EFETUANDO_PAGAMENTO` (o front pode ter perdido a resposta)
+- URL obtida só é substituída depois de cancelada
 
 ### Premissas do gateway simulado (`pagamento-externo`)
 
@@ -57,7 +69,6 @@ Criar envolve o gateway e o nosso banco, sem transação comum. Chamar o gateway
   - falha certa (recusa): troca a chave e devolve o erro, sem repetir na hora — a próxima chamada usa a chave nova; a linha continua em `CRIANDO`
   - troca de chave é update condicional (`WHERE chave = :antiga`), contra chamadas concorrentes
   - obtida a URL: toda chamada seguinte devolve a mesma, sem chamar o gateway
-- enquanto não há URL, a sessão fica em `CRIANDO_PAGAMENTO` e o front retenta — falha na criação não reverte a sessão
 - a regra é "já obtivemos URL", não "já entregamos": se ela chegou ao usuário não sabemos, e não importa — devolvemos a mesma
 - consequência: só a tentativa vigente pode ser paga, então o webhook sempre correlaciona por `id_externo` (passo 5 da cadeia abaixo)
 
@@ -76,29 +87,14 @@ Cancelar × pagar e prazo × pagar são corridas; quem decide é o gateway, font
 
 A cadeia base é `pagamento → hotel → voo` (mecânica em [saga-choreography.md](saga-choreography.md)). O desenho estende o anel com dois nós que fazem update local em `SessaoCompra`, reaproveitando o mesmo mecanismo de compensação pra trás do `sagas-common` — sem framework novo.
 
-```mermaid
-flowchart LR
-  W[webhook pagamento] -->|sucesso| PAG
-  W -->|falha| REV[sessaocompra: reverte]
-
-  PAG[pagamento: confirma] -->|EXECUTE| HOT[hotel: confirma]
-  HOT -->|EXECUTE| VOO[voo: confirma]
-  VOO -->|EXECUTE| CONF[sessaocompra: confirma → VIAGEM_RESERVADA]
-
-  CONF -.DESFACA, se falhar.-> VOO
-  VOO -.DESFACA.-> HOT
-  HOT -.DESFACA.-> PAG
-  PAG -.DESFACA, estorno.-> REV
-```
+Diagrama: [README](../README.md#saga-disparada-a-partir-do-webhook-de-pagamento).
 
 - **Sucesso**: webhook de pagamento marca a sessão como `PAGAMENTO_EFETUADO` e dispara o anel → confirma em `pagamento` → `hotel` → `voo` → `sessaocompra` marca `VIAGEM_RESERVADA`. Fim de cadeia.
-- **Falha em qualquer etapa (inclusive em `sessaocompra: confirma`)**: propaga DESFACA pra trás até `sessaocompra: reverte`, que volta a sessão pro estado anterior e reseta o timer de expiração (dá mais tempo pro usuário escolher outra opção de voo/hotel/pagamento).
+- **Falha em qualquer etapa (inclusive em `sessaocompra: confirma`)**: propaga DESFACA pra trás até `sessaocompra: reverte` — cancelamento explícito do que já foi fechado na sessão: volta pra `INICIADA` e reseta o timer de expiração (dá mais tempo pro usuário escolher outra opção de voo/hotel/pagamento).
   - modelagem de status da reversão (falha de negócio × erro de execução, quando terminar em `ERRO`): em aberto — ver [todo.md](todo.md#features-por-domínio)
-- **Falha direto no webhook** (pagamento recusado, nada chegou a ser confirmado): pula o anel inteiro, vai direto pra `sessaocompra: reverte` — não há nada em `pagamento`/`hotel`/`voo` pra desfazer.
 - **Discard vs. reverter**: quem detecta a falha de confirmação (ex. `voo`, item não disponível mais no fornecedor) trata isso como erro local *antes* de publicar DESFACA — zera a própria pré-reserva. Quem só recebe DESFACA nunca é quem falhou (por construção da coreografia), então sempre faz a mesma ação: reverter pra pré-. Não precisa de flag na mensagem pra essa distinção — mas precisa saber qual linha local afetar (ver "Payload da mensagem da SAGA" abaixo).
 - Consequência: `sessaocompra` vira a ponta final da reversão da SAGA (e do sucesso) — ganha um papel `sagas` mínimo pros dois nós e passa a depender de `sagas-common`.
-- **Mecanismo de fiação — reaproveita `proximafila`/`filaanterior`, não precisa de "dois nós" de verdade.** Os dois pontos de contato do diagrama colapsam numa única fila (`sessaocompra`): `proximafila: sessaocompra` em `voo` e `filaanterior: sessaocompra` em `pagamento` bastam — `Messaging.iniciarConsumo` publica na próxima fila no encaminhamento pra frente e na anterior no encaminhamento pra trás (ver [saga-choreography.md](saga-choreography.md)). Um único handler em `sessaocompra`, igual aos outros, recebe as duas direções na mesma fila e decide pelo campo `tipo` (`EXECUTE` → confirma; `DESFACA` → reverte) — mesmo padrão de `ReservasSagas`/`PagamentoSagas`.
-- **Caso "falha direto no webhook" é publish fora do fluxo normal.** `DESFACA` direto na fila `sessaocompra`, sem passar pelo anel, publicado pelo profile `web` de `pagamento-interno` — o mesmo que publica o `EXECUTE` inicial em `pagamento` no caso de sucesso.
+- **Mecanismo de fiação — reaproveita `proximafila`/`filaanterior`, não precisa de "dois nós" de verdade.** Os dois pontos de contato de `sessaocompra` no anel colapsam numa única fila (`sessaocompra`): `proximafila: sessaocompra` em `voo` e `filaanterior: sessaocompra` em `pagamento` bastam — `Messaging.iniciarConsumo` publica na próxima fila no encaminhamento pra frente e na anterior no encaminhamento pra trás (ver [saga-choreography.md](saga-choreography.md)). Um único handler em `sessaocompra`, igual aos outros, recebe as duas direções na mesma fila e decide pelo campo `tipo` (`EXECUTE` → confirma; `DESFACA` → reverte) — mesmo padrão de `ReservasSagas`/`PagamentoSagas`.
 
 ## Payload da mensagem da SAGA
 
