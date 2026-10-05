@@ -12,4 +12,9 @@ public class SimuladorAleatorio implements Simulador {
         return Simulador.sortear();
     }
 
+    @Override
+    public ResultadoPagar decidirPagar() {
+        return Simulador.sortearPagar();
+    }
+
 }

@@ -1,13 +1,20 @@
 package com.derso.arquitetura.pagamentointerno;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -26,12 +33,12 @@ import com.derso.arquitetura.webbase.teste.ServicoEmContainer;
 // Black-box: pagamento-interno e pagamento-externo como containers reais (ServicoEmContainer),
 // conversando por HTTP numa network isolada, sem mock. RabbitMQ é exigido pelo boot do profile "web"
 // (o /webhook publica a 1ª mensagem da SAGA). Integrado: só roda com -Pintegrado (docs/testing-strategy.md).
-@Disabled("fluxo passa pelo webhook síncrono — volta após o desacoplamento (TODO em PagamentoController de pagamento-externo)")
 @Tag("integrado")
 class PagamentoCriacaoIntegradoTest {
 
     private static Network network;
     private static PostgreSQLContainer postgres;
+    private static PostgreSQLContainer postgresExterno;
     private static RabbitMQContainer rabbit;
     private static GenericContainer<?> pagamentoExterno;
     private static GenericContainer<?> pagamentoInterno;
@@ -48,6 +55,15 @@ class PagamentoCriacaoIntegradoTest {
             .withNetworkAliases("db");
         postgres.start();
 
+        // Servidor próprio: os dois serviços têm tabela `pagamentos` e histórico do Flyway
+        postgresExterno = new PostgreSQLContainer("postgres:18.1")
+            .withDatabaseName("externo_pagamento")
+            .withUsername("app")
+            .withPassword("app")
+            .withNetwork(network)
+            .withNetworkAliases("db-externo");
+        postgresExterno.start();
+
         rabbit = new RabbitMQContainer("rabbitmq:4.2.2-management-alpine")
             .withNetwork(network)
             .withNetworkAliases("broker");
@@ -58,7 +74,9 @@ class PagamentoCriacaoIntegradoTest {
             .withNetworkAliases("pagamento-externo")
             .withEnv("PAGAMENTO_INTERNO_HOST", "pagamento-interno")
             .withEnv("PAGAMENTO_INTERNO_PORT", "8087")
-            // profile `test` + desfecho fixo: sem isso /efetuar cai no chaos aleatório (25% de falha)
+            .withEnv("DB_HOST", "db-externo")
+            .withEnv("DB_PORT", "5432")
+            // profile `test` + desfecho fixo: sem isso /criar cai no chaos aleatório (25% de falha)
             .withEnv("SPRING_PROFILES_ACTIVE", "test")
             .withEnv("SIMULACAO_RESULTADO", "SUCESSO")
             .waitingFor(Wait.forLogMessage(".*Started PagamentoExternoApplication.*\\n", 1)
@@ -99,6 +117,9 @@ class PagamentoCriacaoIntegradoTest {
         if (postgres != null) {
             postgres.stop();
         }
+        if (postgresExterno != null) {
+            postgresExterno.stop();
+        }
         if (network != null) {
             network.close();
         }
@@ -117,8 +138,9 @@ class PagamentoCriacaoIntegradoTest {
             UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()
         );
 
+        UUID idSessao = UUID.randomUUID();
         PagamentoDTO resposta = restClient.put()
-            .uri("/pagamentos/{id}", UUID.randomUUID())
+            .uri("/pagamentos/{id}", idSessao)
             .contentType(MediaType.APPLICATION_JSON)
             .body(pedido)
             .retrieve()
@@ -126,6 +148,35 @@ class PagamentoCriacaoIntegradoTest {
 
         assertNotNull(resposta);
         assertNotNull(resposta.id());
+        assertNotNull(resposta.urlPagamento());
+
+        Map<String, Object> interno = linha(postgres,
+            "select status, id_externo, url_pagamento from pagamentos where id_sessao_compra = ?", idSessao);
+        assertEquals("AGUARDANDO_PAGAMENTO", interno.get("status"));
+        assertEquals(resposta.urlPagamento(), interno.get("url_pagamento"));
+
+        Map<String, Object> externo = linha(postgresExterno,
+            "select status from pagamentos where id = ?", interno.get("id_externo"));
+        assertEquals("PENDENTE", externo.get("status"));
+    }
+
+    private static Map<String, Object> linha(PostgreSQLContainer banco, String sql, Object parametro) {
+        try (Connection conexao = DriverManager.getConnection(banco.getJdbcUrl(), banco.getUsername(), banco.getPassword());
+             PreparedStatement consulta = conexao.prepareStatement(sql)) {
+            consulta.setObject(1, parametro);
+            try (ResultSet resultado = consulta.executeQuery()) {
+                if (!resultado.next()) {
+                    throw new AssertionError("nenhuma linha: " + sql);
+                }
+                Map<String, Object> colunas = new HashMap<>();
+                for (int i = 1; i <= resultado.getMetaData().getColumnCount(); i++) {
+                    colunas.put(resultado.getMetaData().getColumnName(i), resultado.getObject(i));
+                }
+                return colunas;
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
 }

@@ -9,6 +9,7 @@ import org.springframework.web.client.RestClient;
 
 import com.derso.arquitetura.reservasinterno.dto.ReservaExternoRequest;
 import com.derso.arquitetura.reservasinterno.dto.ReservaExternoResponse;
+import com.derso.arquitetura.webbase.http.TimeoutHttp;
 
 @Service
 public class ReservasExternoService {
@@ -21,6 +22,7 @@ public class ReservasExternoService {
     @Value("${external-backend.client-secret}") String clientSecret
   ) {
     this.restClient = RestClient.builder()
+      .requestFactory(TimeoutHttp.padrao())
       .baseUrl(urlServico)
       .defaultHeader("X-Client-Id", clientId)
       .defaultHeader("X-Client-Secret", clientSecret)

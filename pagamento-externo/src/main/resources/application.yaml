@@ -9,16 +9,47 @@ spring:
     virtual:
       enabled: true
 
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/externo_pagamento
+    username: ${DB_USER:app}
+    password: ${DB_PASSWORD:app}
+    driver-class-name: org.postgresql.Driver
+
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      pool-name: ExternoPagamentoPool
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+
+    show-sql: true
+
+  flyway:
+    enabled: true
+    validate-on-migrate: true
+
 security:
   auth-type: client-secret
+
+simulacao:
+  # aberta pelo navegador do usuário, no host — por isso localhost, não o nome do serviço no compose
+  url-pagamento-base: http://localhost:${PAGAMENTO_EXTERNO_PORT:8086}/pagar
 
 # Clientes aceitos
 internal-backend:
   clients:
     - client-id: ${PAGAMENTO_EXTERNO_ID:pagamentoExternoId}
       client-secret: ${PAGAMENTO_EXTERNO_SECRET:pagamentoExternoSecret}
-  # WebhookService.enviarResposta ecoa de volta o MESMO client-id/secret de quem chamou /efetuar
-  # (idCliente = authentication.getPrincipal(), "mesmo segredo" no comentário do WebhookService) —
+  # WebhookService.avisar ecoa de volta o MESMO client-id/secret de quem chamou /criar
+  # (id_cliente gravado na transação = principal do /criar, "mesmo segredo" no WebhookService) —
   # então a chave de lookup aqui tem que ser a identidade REAL do chamador, não um nome fixo à
   # parte. Hoje só existe um chamador real (pagamento-interno, autenticado como PAGAMENTO_EXTERNO_ID
   # via external-backend.client-id de lá) — daí o mesmo par aqui. Ver nota em application.yaml de

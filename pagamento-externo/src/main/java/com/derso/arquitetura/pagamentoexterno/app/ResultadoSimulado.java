@@ -4,6 +4,7 @@ package com.derso.arquitetura.pagamentoexterno.app;
 // sempre sorteio (CHANCE_FALHA).
 public enum ResultadoSimulado {
     SUCESSO,
-    FALHA_NEGOCIO,
-    FALHA_INFRA
+    FALHA_ANTES_DE_GRAVAR,
+    // transação criada, resposta perdida: a falha ambígua que o chamador resolve repetindo a chave
+    FALHA_DEPOIS_DE_GRAVAR
 }

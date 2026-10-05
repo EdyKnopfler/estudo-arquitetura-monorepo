@@ -76,8 +76,8 @@ public class WebSecurityAutoConfiguration {
                 }
                 auth.anyRequest().authenticated();
             })
-            // sem isso, requisição não autenticada no modo jwt vira 403 (entry point default) —
-            // o filtro jwt não rejeita sozinho, só deixa de autenticar; client-secret já seta 401 no filtro
+            // sem isso, requisição não autenticada vira 403 (entry point default) — os filtros
+            // não rejeitam sozinhos, só deixam de autenticar (senão rota pública também cairia)
             .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
             .addFilterBefore(authFilter, UsernamePasswordAuthenticationFilter.class)
             .build();

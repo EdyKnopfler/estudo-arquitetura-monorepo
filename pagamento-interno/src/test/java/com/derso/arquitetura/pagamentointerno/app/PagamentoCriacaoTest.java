@@ -49,7 +49,7 @@ import org.springframework.web.client.ResourceAccessException;
 import com.derso.arquitetura.webbase.teste.PostgresTestcontainersConfig;
 import com.derso.arquitetura.pagamentointerno.PagamentoExternoService;
 import com.derso.arquitetura.pagamentointerno.dto.CriarPagamentoRequest;
-import com.derso.arquitetura.pagamentointerno.dto.EfetuarPagamentoResponse;
+import com.derso.arquitetura.pagamentointerno.dto.CriarTransacaoResponse;
 import com.derso.arquitetura.pagamentointerno.dto.PagamentoDTO;
 import com.derso.arquitetura.sagas.RabbitMQTestcontainersConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -86,8 +86,8 @@ class PagamentoCriacaoTest {
     void sucessoGravaLinhaAguardandoEDevolveIdInternoEUrl() throws Exception {
         UUID idSessao = novaSessao();
         CriarPagamentoRequest pedido = novoPedido();
-        EfetuarPagamentoResponse resposta = respostaDoGateway();
-        when(externo.efetuar(anyString(), any(BigDecimal.class), any(UUID.class))).thenReturn(resposta);
+        CriarTransacaoResponse resposta = respostaDoGateway();
+        when(externo.criar(anyString(), any(BigDecimal.class), any(UUID.class))).thenReturn(resposta);
 
         PagamentoDTO dto = criar(idSessao, pedido)
             .andExpect(status().isOk())
@@ -107,9 +107,29 @@ class PagamentoCriacaoTest {
     }
 
     @Test
+    void transacaoExpiradaNoGatewayAbreTentativaNovaNaMesmaChamada() throws Exception {
+        UUID idSessao = novaSessao();
+        CriarTransacaoResponse nova = respostaDoGateway();
+        when(externo.criar(anyString(), any(BigDecimal.class), any(UUID.class)))
+            .thenReturn(new CriarTransacaoResponse(UUID.randomUUID(), "EXPIRADO", "http://gateway/pagar/vencida"))
+            .thenReturn(nova);
+
+        PagamentoDTO dto = criar(idSessao, novoPedido())
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString().transform(this::lerDTO);
+
+        List<UUID> chaves = chavesEnviadas(2);
+        assertNotEquals(chaves.get(0), chaves.get(1));
+        assertEquals(nova.urlPagamento(), dto.urlPagamento());
+        Map<String, Object> linha = linhaDaSessao(idSessao);
+        assertEquals("AGUARDANDO_PAGAMENTO", linha.get("status"));
+        assertEquals(nova.idTransacao(), linha.get("id_externo"));
+    }
+
+    @Test
     void comUrlJaObtidaDevolveAMesmaSemChamarOGateway() throws Exception {
         UUID idSessao = novaSessao();
-        when(externo.efetuar(anyString(), any(BigDecimal.class), any(UUID.class))).thenReturn(respostaDoGateway());
+        when(externo.criar(anyString(), any(BigDecimal.class), any(UUID.class))).thenReturn(respostaDoGateway());
 
         String primeira = criar(idSessao, novoPedido()).andReturn().getResponse().getContentAsString();
         String segunda = criar(idSessao, novoPedido())
@@ -117,13 +137,13 @@ class PagamentoCriacaoTest {
             .andReturn().getResponse().getContentAsString();
 
         assertEquals(lerDTO(primeira), lerDTO(segunda));
-        verify(externo, times(1)).efetuar(anyString(), any(BigDecimal.class), any(UUID.class));
+        verify(externo, times(1)).criar(anyString(), any(BigDecimal.class), any(UUID.class));
     }
 
     @Test
     void falhaAmbiguaMantemCriandoEARetentativaRepeteAMesmaChave() throws Exception {
         UUID idSessao = novaSessao();
-        when(externo.efetuar(anyString(), any(BigDecimal.class), any(UUID.class)))
+        when(externo.criar(anyString(), any(BigDecimal.class), any(UUID.class)))
             .thenThrow(HttpServerErrorException.create(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", HttpHeaders.EMPTY, new byte[0], null))
             .thenReturn(respostaDoGateway());
 
@@ -140,9 +160,9 @@ class PagamentoCriacaoTest {
     }
 
     @Test
-    void recusaDevolve409MantemCriandoEARetentativaUsaChaveNova() throws Exception {
+    void falhaCertaDevolve409MantemCriandoEARetentativaUsaChaveNova() throws Exception {
         UUID idSessao = novaSessao();
-        when(externo.efetuar(anyString(), any(BigDecimal.class), any(UUID.class)))
+        when(externo.criar(anyString(), any(BigDecimal.class), any(UUID.class)))
             .thenThrow(HttpClientErrorException.create(HttpStatus.CONFLICT, "Conflict", HttpHeaders.EMPTY, new byte[0], null))
             .thenReturn(respostaDoGateway());
 
@@ -163,7 +183,7 @@ class PagamentoCriacaoTest {
         mockMvc.perform(comCredencial(put("/pagamentos/{id}", novaSessao()), CLIENT_SECRET).content(semReservaHotel))
             .andExpect(status().isBadRequest());
 
-        verify(externo, never()).efetuar(anyString(), any(BigDecimal.class), any(UUID.class));
+        verify(externo, never()).criar(anyString(), any(BigDecimal.class), any(UUID.class));
     }
 
     @Test
@@ -171,7 +191,7 @@ class PagamentoCriacaoTest {
         mockMvc.perform(comCredencial(put("/pagamentos/{id}", novaSessao()), "secret-errado").content(json(novoPedido())))
             .andExpect(status().isUnauthorized());
 
-        verify(externo, never()).efetuar(anyString(), any(BigDecimal.class), any(UUID.class));
+        verify(externo, never()).criar(anyString(), any(BigDecimal.class), any(UUID.class));
     }
 
     @Test
@@ -183,7 +203,7 @@ class PagamentoCriacaoTest {
     @Test
     void timeoutMantemCriandoEARetentativaRepeteAMesmaChave() throws Exception {
         UUID idSessao = novaSessao();
-        when(externo.efetuar(anyString(), any(BigDecimal.class), any(UUID.class)))
+        when(externo.criar(anyString(), any(BigDecimal.class), any(UUID.class)))
             .thenThrow(new ResourceAccessException("Read timed out"))
             .thenReturn(respostaDoGateway());
 
@@ -199,8 +219,8 @@ class PagamentoCriacaoTest {
     @Test
     void respostaSemUrlMantemCriandoEARetentativaRepeteAMesmaChave() throws Exception {
         UUID idSessao = novaSessao();
-        when(externo.efetuar(anyString(), any(BigDecimal.class), any(UUID.class)))
-            .thenReturn(new EfetuarPagamentoResponse(UUID.randomUUID(), "processando", null))
+        when(externo.criar(anyString(), any(BigDecimal.class), any(UUID.class)))
+            .thenReturn(new CriarTransacaoResponse(UUID.randomUUID(), "PENDENTE", null))
             .thenReturn(respostaDoGateway());
 
         criar(idSessao, novoPedido()).andExpect(status().is5xxServerError());
@@ -217,10 +237,10 @@ class PagamentoCriacaoTest {
     @Test
     void putsConcorrentesDaMesmaSessaoGravamUmaLinhaEDevolvemOMesmoPagamento() throws Exception {
         UUID idSessao = novaSessao();
-        EfetuarPagamentoResponse resposta = respostaDoGateway();
+        CriarTransacaoResponse resposta = respostaDoGateway();
         // os dois só saem do gateway depois de ambos terem lido a linha em CRIANDO
         CountDownLatch ambosNoGateway = new CountDownLatch(2);
-        when(externo.efetuar(anyString(), any(BigDecimal.class), any(UUID.class))).thenAnswer(invocacao -> {
+        when(externo.criar(anyString(), any(BigDecimal.class), any(UUID.class))).thenAnswer(invocacao -> {
             ambosNoGateway.countDown();
             if (!ambosNoGateway.await(10, TimeUnit.SECONDS)) {
                 throw new AssertionError("segunda chamada não chegou ao gateway");
@@ -253,7 +273,7 @@ class PagamentoCriacaoTest {
         CountDownLatch primeiraNoGateway = new CountDownLatch(1);
         CountDownLatch liberaPrimeira = new CountDownLatch(1);
         AtomicInteger chamadas = new AtomicInteger();
-        when(externo.efetuar(anyString(), any(BigDecimal.class), any(UUID.class))).thenAnswer(invocacao -> {
+        when(externo.criar(anyString(), any(BigDecimal.class), any(UUID.class))).thenAnswer(invocacao -> {
             if (chamadas.incrementAndGet() == 1) {
                 primeiraNoGateway.countDown();
                 liberaPrimeira.await(10, TimeUnit.SECONDS);
@@ -267,7 +287,7 @@ class PagamentoCriacaoTest {
             Future<MvcResult> primeira = pool.submit(() -> criar(idSessao, novoPedido()).andReturn());
             primeiraNoGateway.await(10, TimeUnit.SECONDS);
 
-            // segunda chamada é recusada e troca a chave enquanto a primeira ainda espera o gateway
+            // segunda chamada leva falha certa e troca a chave enquanto a primeira ainda espera o gateway
             criar(idSessao, novoPedido()).andExpect(status().isConflict());
             liberaPrimeira.countDown();
 
@@ -289,7 +309,7 @@ class PagamentoCriacaoTest {
 
     private List<UUID> chavesEnviadas(int chamadas) {
         ArgumentCaptor<UUID> chave = ArgumentCaptor.forClass(UUID.class);
-        verify(externo, times(chamadas)).efetuar(anyString(), any(BigDecimal.class), chave.capture());
+        verify(externo, times(chamadas)).criar(anyString(), any(BigDecimal.class), chave.capture());
         return chave.getAllValues();
     }
 
@@ -303,9 +323,9 @@ class PagamentoCriacaoTest {
         return new CriarPagamentoRequest(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
     }
 
-    private static EfetuarPagamentoResponse respostaDoGateway() {
+    private static CriarTransacaoResponse respostaDoGateway() {
         UUID idTransacao = UUID.randomUUID();
-        return new EfetuarPagamentoResponse(idTransacao, "processando", "http://gateway/pagar/" + idTransacao);
+        return new CriarTransacaoResponse(idTransacao, "PENDENTE", "http://gateway/pagar/" + idTransacao);
     }
 
     private Map<String, Object> linhaDaSessao(UUID idSessao) {

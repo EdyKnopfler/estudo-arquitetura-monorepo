@@ -16,7 +16,7 @@ Mecanismo em [SessaoCompraController](../sessaocompra/src/main/java/com/derso/ar
 - **timeout da sessão** (`TimeoutTask`): só pega sessão em `INICIADA` (pendente de criar pagamento) → cancela e **desfaz as pré-reservas efetuadas**.
   - serviços dão erro e nem o cancelamento consegue seguir → `FALHA_CANCELAMENTO`, terminal — registra o caso em vez de perdê-lo
 - **timeout do pagamento** (`TimeoutPagamentoTask`): tempo pro cliente pagar, sessão em `EFETUANDO_PAGAMENTO` — janela própria, alinhada à validade do meio de pagamento (PIX/redirect de gateway)
-  - estourou → cancela aquele pagamento e volta a sessão pra `INICIADA`, pro cliente iniciar outro pagamento — mesma operação do [cancelamento](#cancelamento-e-prazo--gateway-como-juiz)
+  - estourou → mesma operação do [cancelamento](#cancelamento-e-prazo--gateway-como-juiz): pede cancelamento ao gateway; já pago segue o fluxo, senão volta a sessão pra `INICIADA`, pro cliente iniciar outro pagamento
 - relógio: enquanto corre o timeout do pagamento, o tempo da sessão não conta
 
 Os dois competem com a mudança de estado pelo mesmo tipo de update condicional guardado por `status` (`WHERE status = '...'`) de `iniciarPagamento`/`marcarLoteComoCancelando` — quem mudar o status primeiro no banco "vence"; o outro não encontra mais linha pra afetar.
@@ -32,23 +32,39 @@ front → `sessaocompra` (`iniciando-pagamento`) → `pagamento-interno` (`PUT /
 - em cada salto, retentar = "consultar ou gerar": se a tentativa anterior gerou algo, a retentativa devolve isso; senão, gera
 - nenhum salto reverte o próprio estado ao falhar — quem chamou só retenta
 - nenhum salto retenta sozinho (nem na requisição, nem por job): quem dispara retentativa é o front
+  - gerar outra transação quando o gateway devolve uma expirada não é retentativa, é reconciliação ([abaixo](#pagamento-da-sessão-tentativa-trocável))
   - sessão volta pra `INICIADA` só por timeout do pagamento ou cancelamento explícito ([abaixo](#cancelamento-e-prazo--gateway-como-juiz)) — inclusive o pedido pela [compensação da SAGA](#saga-estendida--sessaocompra-como-bookend-do-anel)
 - `pagamento-interno` é o guardião da URL do nosso lado: `sessaocompra` não guarda, repete o `PUT` a cada `iniciando-pagamento`
   - vale com a sessão em `CRIANDO_PAGAMENTO` ou já em `EFETUANDO_PAGAMENTO` (o front pode ter perdido a resposta)
-- URL obtida só é substituída depois de cancelada
+- URL obtida só é substituída depois de cancelada ou vencida no gateway
 
 ### Premissas do gateway simulado (`pagamento-externo`)
 
-Imita gateways reais no que importa pro backend — o front é abstraído, não há tela:
+Imita gateways reais no que importa pro backend — o front é abstraído, não há tela. Simples e ruim de propósito: resiliência e reconciliação ficam do nosso lado ([reconciliation.md](reconciliation.md)).
 
 - criar e pagar são endpoints separados
   - criar: chamado por `pagamento-interno` (client-id/secret), devolve `idTransacao` + URL de pagamento fictícia
-  - pagar: simula o usuário na tela do gateway — chamado por quem tem a URL, sorteia o desfecho (sucesso, recusa, falha técnica) e dispara o webhook
+    - só cria se o par (chave de idempotência, cliente) não existe; se existe, devolve o estado atual da transação
+    - falha de propósito (chaos): falhou em criar — não existe "recusa" na criação
+      - antes ou depois de gravar; depois é a falha ambígua (transação criada, resposta perdida), que o chamador resolve repetindo a chave
+  - pagar: simula o usuário na tela do gateway — chamado por quem tem a URL, sorteia o desfecho (aceito ou recusado) e chama o webhook de forma síncrona
+    - síncrono: a simulação mais simples, por enquanto
+    - marca pago e avisa sem outbox (um gateway real precisaria): webhook que falha só vai pro log, a transação continua paga e quem pagou recebe sucesso — o nosso lado descobre pelo consultar; o dual-write bem tratado é o da confirmação no interno
+    - pagar de novo uma transação já paga responde pago, sem reenviar o webhook
+    - falha de propósito (chaos) em dois momentos:
+      - recusa: nada gravado, webhook de recusa
+      - pago sem aviso: marca pago e cai antes do webhook — falha técnica não é reportada (limitação do simulador); o nosso lado só descobre pelo consultar
+    - só sucesso responde 2xx; recusa e expiração, 4xx; falha simulada, 5xx
+    - recusa é entre o usuário e o gateway: a transação continua pendente e a URL segue valendo pra tentar de outra forma
   - pagar não autentica: a URL é a credencial — valor e destino já foram fixados na criação
-- criar aceita chave de idempotência: mesma chave devolve a mesma transação, em vez de criar outra
-- criar define o prazo da transação; depois dele, pagar recusa
+- prazo fixo desde a criação ([Pagamento](../pagamento-externo/src/main/java/com/derso/arquitetura/pagamentoexterno/entity/Pagamento.java)), por relógio (sem job); depois dele, pagar responde expirado
+  - ninguém é avisado da expiração — gateways reais costumam notificar; aqui o nosso lado descobre pelo próprio timeout + consulta
   - transação cuja URL nunca foi entregue nunca é paga — só expira
-- expirar: encerra uma transação não paga; se já foi paga, responde isso em vez de expirar
+- consultar: devolve a situação atual da transação — base da reconciliação
+- cancelar: encerra a transação pendente antes do prazo (cancelada ≠ expirada: expirada é a pendente fora do prazo, sem pedido de ninguém)
+  - já paga: responde 4xx e continua paga — quem pediu reconcilia a partir disso
+  - já expirada: responde expirada
+- consultar e cancelar só enxergam transações do cliente que as criou
 
 ### Dual-write na criação
 
@@ -65,23 +81,23 @@ Criar envolve o gateway e o nosso banco, sem transação comum. Chamar o gateway
   - `PUT /pagamentos/{idSessao}`: repetir leva ao mesmo estado (mesmo pagamento, mesma URL)
 - a tentativa é a chave de idempotência da linha (e o `id_externo` que ela rende), trocada no lugar:
   - cada tentativa nasce com uma chave nova, gravada antes da chamada
-  - falha ambígua (timeout, 5xx, gateway ainda processando a mesma chave): próxima chamada repete com a mesma chave — se a transação foi criada, o gateway devolve a mesma, sem criar outra
-  - falha certa (recusa): troca a chave e devolve o erro, sem repetir na hora — a próxima chamada usa a chave nova; a linha continua em `CRIANDO`
+  - falha ambígua (timeout, 5xx): próxima chamada repete com a mesma chave — se a transação foi criada, o gateway devolve a mesma, sem criar outra
+  - gateway devolve transação expirada (chave repetida tarde, depois de uma falha ambígua): troca a chave e cria outra na mesma chamada — o `PUT` só chega com a sessão viva, então o prazo do gateway não importa ao interno
   - troca de chave é update condicional (`WHERE chave = :antiga`), contra chamadas concorrentes
   - obtida a URL: toda chamada seguinte devolve a mesma, sem chamar o gateway
 - a regra é "já obtivemos URL", não "já entregamos": se ela chegou ao usuário não sabemos, e não importa — devolvemos a mesma
-- consequência: só a tentativa vigente pode ser paga, então o webhook sempre correlaciona por `id_externo` (passo 5 da cadeia abaixo)
+- o webhook correlaciona por `id_externo` (passo 5 da cadeia abaixo)
 
 ### Cancelamento e prazo — gateway como juiz
 
-Cancelar × pagar e prazo × pagar são corridas; quem decide é o gateway, fonte da verdade de "foi pago a tempo".
+Cancelar × pagar e prazo × pagar são corridas; quem decide é o gateway, fonte da verdade de "foi pago" — critério em [reconciliation.md](reconciliation.md).
 
 - o front pode cancelar o pagamento a qualquer momento antes de pago, com ou sem URL — sessão volta pra `INICIADA`
-  - sem URL: nada a pedir ao gateway
-  - com URL: pede ao gateway pra expirar — "expirei" cancela; "já foi paga" faz o pagamento vencer e seguir o fluxo
-  - cancelado, a URL corrente deixa de valer: o próximo `PUT` abre tentativa nova — chave nova, ids de reserva atuais
-- timeout do pagamento é a mesma operação, com outro gatilho; nosso prazo é maior que o do gateway
-- rede de segurança: webhook só aceita pagamento da tentativa vigente em estado válido — qualquer outro é estornado
+  - sem URL: nada a consultar
+  - com URL: pede cancelamento ao gateway — já pago faz o pagamento vencer e seguir o fluxo
+  - cancelado, o próximo `PUT` abre tentativa nova — chave nova, ids de reserva atuais
+- timeout do pagamento é a mesma operação, com outro gatilho; nosso prazo é maior que o do gateway — quando ele dispara, a URL já venceu e a consulta é definitiva
+- pagamento aceito que chega pelo webhook é reconciliado a favor da venda, mesmo fora da tentativa vigente
 
 ## SAGA estendida — sessaocompra como bookend do anel
 

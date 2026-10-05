@@ -6,7 +6,7 @@ Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (8
 
 ## Infra compartilhada
 
-- **Postgres**: um único container, mas **um database por bounded context** (não é compartilhamento de schema): `clientes`, `sessaocompra`, `externo_hotel`, `externo_voo`, `interno_hotel`, `interno_voo`, `interno_pagamento` — ver [databases.sql](../databases.sql).
+- **Postgres**: um único container, mas **um database por bounded context** (não é compartilhamento de schema): `clientes`, `sessaocompra`, `externo_hotel`, `externo_voo`, `interno_hotel`, `interno_voo`, `interno_pagamento`, `externo_pagamento` — ver [databases.sql](../databases.sql).
 - **RabbitMQ**: broker único para a coreografia SAGA. Detalhe da mecânica em [saga-choreography.md](saga-choreography.md).
 
 ## Módulos e portas (via `.env` / `docker-compose.yml`)
@@ -23,7 +23,7 @@ Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (8
 | `reservas-interno` (profile `voo,web`) | REST de pré-reserva de voo | 8085 | db |
 | `reservas-interno` (profile `hotel,sagas`) | consumidor de fila `hotel` | — | db, broker |
 | `reservas-interno` (profile `voo,sagas`) | consumidor de fila `voo` | — | db, broker |
-| `pagamento-externo` | simulador instável de gateway de pagamento (sem banco) | 8086 | — |
+| `pagamento-externo` | simulador instável de gateway de pagamento | 8086 | db |
 | `pagamento-interno` (profile `web`) | REST de pagamento + webhook (publica o início da SAGA) | 8087 | db, broker |
 | `pagamento-interno` (profile `sagas`) | consumidor de fila `pagamento` (início/fim da cadeia) | — | db, broker |
 
@@ -32,7 +32,7 @@ Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (8
 ## Interno x externo
 
 - **`-interno`**: controle de reservas no nível da **agência de viagens** — é quem participa da cadeia da SAGA e decide confirmar ou cancelar. Chama o `-externo` correspondente via REST (client-id/secret) pra efetivar a reserva do lado de fora.
-- **`-externo`**: simula o **fornecedor real** (a companhia aérea, a rede de hotel) sendo chamado. Não participa da coreografia da SAGA — só responde a quem o chama, com falha e latência aleatórias propositais (chaos engineering — ver `ReservasService.seraQueVaiFalhar()` em `reservas-externo`).
+- **`-externo`**: simula o **fornecedor real** (a companhia aérea, a rede de hotel, o gateway de pagamento) sendo chamado. Não participa da coreografia da SAGA — só responde a quem o chama (exceção: o gateway de pagamento avisa o resultado por webhook), com falha e latência aleatórias propositais (chaos engineering — ver `ReservasService.seraQueVaiFalhar()` em `reservas-externo`).
 
 ## Padrão de módulos por domínio
 
@@ -40,7 +40,7 @@ Reservas, pagamento e sessão de compra são cada um um artefato único por dom�
 
 Bibliotecas transversais, usadas por praticamente todo `-web`/`-externo`:
 
-- **`web-base`**: autenticação (JWT para cliente final em `jwt/`, client-id/secret entre serviços em `internalclient/`) e tratamento de erro padronizado (`TrataErros`). Detalhe em [security-and-auth.md](security-and-auth.md).
+- **`web-base`**: autenticação (JWT para cliente final em `jwt/`, client-id/secret entre serviços em `internalclient/`), tratamento de erro padronizado (`TrataErros`) e timeout padrão das chamadas HTTP entre serviços (`http/`). Detalhe em [security-and-auth.md](security-and-auth.md).
 - **`sagas-common`**: toda a comunicação com RabbitMQ e a mecânica de coreografia SAGA. Detalhe em [saga-choreography.md](saga-choreography.md).
 
 ## Fluxo de uma compra (como as peças se encaixam)

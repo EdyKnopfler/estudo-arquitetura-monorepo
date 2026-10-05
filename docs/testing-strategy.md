@@ -2,6 +2,16 @@
 
 Dois tipos de teste, cada um com o modo que ele exige — nenhum teste roda em dois modos.
 
+## Rodar
+
+- tudo: `./mvnw install && ./mvnw test -Pintegrado`
+  - o reactor roda um módulo por vez, em ordem de dependência, e para na primeira falha
+  - `install` antes: gera os jars que o integrado sobe (ver [abaixo](#teste-integrado-mvnw-package--dskiptests--mvnw-test--pintegrado))
+  - nunca os dois em paralelo: o integrado precisa dos jars, e a RAM não aguenta
+- um módulo: `./mvnw -pl <módulo> install`, depois `./mvnw -pl <módulo> test -Pintegrado`
+  - `web-base` e `sagas-common` precisam estar instalados (test-jars)
+- no fim, liberar RAM: comando em [Reuse de containers](#reuse-de-containers)
+
 ## Teste de microsserviço (`./mvnw test`)
 
 Um serviço isolado, rodando no próprio processo do teste.
@@ -52,6 +62,7 @@ Os simuladores sorteiam falha de propósito (`CHANCE_FALHA`). Teste precisa de d
 
 - só com profile `test` ativo no simulador (`SimuladorDeTeste`); fora dele, sempre sorteio
 - desfecho só por config do processo: propriedade `simulacao.resultado` (env `SIMULACAO_RESULTADO`)
+  - no `pagamento-externo`, o pagar tem a sua (`simulacao.resultado-pagar`): criar e pagar combinam desfechos diferentes no mesmo processo
   - teste de microsserviço: `@TestPropertySource` por classe; outro desfecho vai num `@Nested` com o seu (outro contexto Spring)
   - teste integrado: um container por desfecho, um de cada vez
 - sem header por requisição: ele só existia pro modo contra o compose já no ar (descartado, ver abaixo)

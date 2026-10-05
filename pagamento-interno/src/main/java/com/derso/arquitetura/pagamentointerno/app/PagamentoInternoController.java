@@ -43,10 +43,10 @@ public class PagamentoInternoController {
         );
     }
 
-    // TODO corpo do webhook hoje é vazio — precisa receber idTransacao+status (WebhookRequestDTO em
-    // pagamento-externo também precisa desse campo, ver TODO lá). Buscar `pagamentos WHERE id_externo =
-    // idTransacao` e montar a mensagem completa (idPagamento, idSessaoCompra, idReservaHotel,
-    // idReservaVooIda, idReservaVooVolta — só ids internos) em vez de só tipo+rastreio.
+    // TODO receber o corpo que pagamento-externo já manda ({idTransacao, status}, status PAGO | RECUSADO).
+    // Buscar `pagamentos WHERE id_externo = idTransacao` e montar a mensagem completa (idPagamento,
+    // idSessaoCompra, idReservaHotel, idReservaVooIda, idReservaVooVolta — só ids internos) em vez de
+    // só tipo+rastreio.
     // Ver docs/purchase-flow-design.md#payload-da-mensagem-da-saga e docs/todo.md.
     @PostMapping("/webhook")
     public void webhookServicoExterno() throws IOException {

@@ -22,7 +22,7 @@ stateDiagram-v2
     CRIANDO_PAGAMENTO --> INICIADA: cancelado pelo usuário
     INICIADA --> CANCELANDO: timeout
 
-    EFETUANDO_PAGAMENTO --> PAGAMENTO_EFETUADO: webhook, pagamento registrado (SAGA dispara)
+    EFETUANDO_PAGAMENTO --> PAGAMENTO_EFETUADO: webhook ou reconciliação, pagamento registrado (SAGA dispara)
     EFETUANDO_PAGAMENTO --> INICIADA: cancelado pelo usuário
     EFETUANDO_PAGAMENTO --> INICIADA: timeout do pagamento, pagamento cancelado
 
@@ -147,9 +147,10 @@ Pra quem está chegando: cada módulo com as etapas do fluxo em que ele aparece 
   * [ ] confirmar pagamento (sagas — stub)
   * [ ] estornar (sagas — stub)
 * **pagamento-externo** — simula gateway de pagamento _instável_
-  * [ ] criar pagamento (sendo refeito)
-  * [ ] pagar (simula o usuário na tela do gateway; chama o webhook)
-  * [ ] expirar
+  * [X] criar pagamento
+  * [X] pagar (simula o usuário na tela do gateway; chama o webhook)
+  * [X] consultar situação do pagamento
+  * [X] cancelar pagamento pendente
   * [ ] estornar
-* **web-base** (biblioteca: autenticação e tratamento de erro) — [X] pronto
+* **web-base** (biblioteca: autenticação, tratamento de erro e timeout HTTP) — [X] pronto
 * **sagas-common** (biblioteca: coreografia SAGA sobre RabbitMQ) — [ ] mecânica pronta; falta ordem ack/publish

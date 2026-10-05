@@ -1,49 +1,65 @@
 package com.derso.arquitetura.pagamentoexterno.app;
 
+import java.time.Instant;
 import java.util.UUID;
 
-import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.derso.arquitetura.pagamentoexterno.webhook.WebhookService;
-import com.derso.arquitetura.webbase.config.BusinessException;
+import com.derso.arquitetura.pagamentoexterno.PagamentoService;
+import com.derso.arquitetura.pagamentoexterno.entity.Pagamento;
 
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequiredArgsConstructor
 public class PagamentoController {
 
-    private final WebhookService webhook;
-    private final Simulador simulador;
+    private final PagamentoService servico;
+    private final String urlPagamentoBase;
 
-    @PostMapping("/efetuar")
-    public ResponseEntity<PagamentoResponseDTO> efetuarPagamento(
+    public PagamentoController(PagamentoService servico, @Value("${simulacao.url-pagamento-base}") String urlPagamentoBase) {
+        this.servico = servico;
+        this.urlPagamentoBase = urlPagamentoBase;
+    }
+
+    @PostMapping("/criar")
+    public PagamentoResponseDTO criar(
         @Valid @RequestBody PagamentoRequestDTO dados,
+        @RequestHeader("Idempotency-Key") UUID chave,
         Authentication authentication
     ) {
-        ResultadoSimulado resultado = simulador.decidir();
-
-        if (resultado == ResultadoSimulado.FALHA_INFRA) {
-            throw new RuntimeException("Falhou por motivo de: " + UUID.randomUUID().toString());
-        }
-        if (resultado == ResultadoSimulado.FALHA_NEGOCIO) {
-            throw new BusinessException("Pagamento recusado (simulado)");
-        }
-
         String idCliente = authentication.getPrincipal().toString();
-        UUID idTransacao = UUID.randomUUID();
+        return resposta(servico.criar(idCliente, chave, dados.metodo(), dados.valor()));
+    }
 
-        // TODO desacoplar: webhook chamado síncrono, ANTES do 202 — pagamento-interno recebe o callback
-        // antes de gravar a linha em `pagamentos`, e falha no webhook vira 500 no /efetuar. Gateway real
-        // responde primeiro e notifica depois (assíncrono).
-        webhook.enviarResposta(idCliente, idTransacao);
+    // Simula o usuário na tela do gateway: rota pública (SecurityConfiguration)
+    @PostMapping("/pagar/{idTransacao}")
+    public PagamentoResponseDTO pagar(@PathVariable("idTransacao") UUID idTransacao) {
+        return resposta(servico.pagar(idTransacao));
+    }
 
-        return ResponseEntity.accepted().body(new PagamentoResponseDTO(idTransacao, "processando"));
+    @GetMapping("/consultar/{idTransacao}")
+    public PagamentoResponseDTO consultar(@PathVariable("idTransacao") UUID idTransacao, Authentication authentication) {
+        return resposta(servico.consultar(authentication.getPrincipal().toString(), idTransacao));
+    }
+
+    @PostMapping("/cancelar/{idTransacao}")
+    public PagamentoResponseDTO cancelar(@PathVariable("idTransacao") UUID idTransacao, Authentication authentication) {
+        return resposta(servico.cancelar(authentication.getPrincipal().toString(), idTransacao));
+    }
+
+    private PagamentoResponseDTO resposta(Pagamento pagamento) {
+        return new PagamentoResponseDTO(
+            pagamento.getId(),
+            pagamento.statusEm(Instant.now()).name(),
+            urlPagamentoBase + "/" + pagamento.getId()
+        );
     }
 
 }

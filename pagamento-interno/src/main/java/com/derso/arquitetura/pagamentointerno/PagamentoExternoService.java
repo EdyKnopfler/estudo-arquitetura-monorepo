@@ -1,27 +1,19 @@
 package com.derso.arquitetura.pagamentointerno;
 
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
-import com.derso.arquitetura.pagamentointerno.dto.EfetuarPagamentoRequest;
-import com.derso.arquitetura.pagamentointerno.dto.EfetuarPagamentoResponse;
+import com.derso.arquitetura.pagamentointerno.dto.CriarTransacaoRequest;
+import com.derso.arquitetura.pagamentointerno.dto.CriarTransacaoResponse;
+import com.derso.arquitetura.webbase.http.TimeoutHttp;
 
 @Service
 public class PagamentoExternoService {
-
-    // Sem timeout aqui, um hang do lado de lá trava a chamada síncrona indefinidamente sem nunca
-    // cair no catch de SessaoCompraService.iniciarPagamento. Valores generosos
-    // pra um endpoint que só gera um id e devolve; os outros RestClient do projeto ainda não têm
-    // isso (avaliar depois).
-    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);
-    private static final Duration READ_TIMEOUT = Duration.ofSeconds(5);
 
     private static final String HEADER_IDEMPOTENCIA = "Idempotency-Key";
 
@@ -32,26 +24,23 @@ public class PagamentoExternoService {
         @Value("${external-backend.client-id}") String clientId,
         @Value("${external-backend.client-secret}") String clientSecret
     ) {
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(CONNECT_TIMEOUT);
-        requestFactory.setReadTimeout(READ_TIMEOUT);
-
+        // timeout vira falha ambígua no PagamentoService, em vez de travar o PUT
         this.restClient = RestClient.builder()
             .baseUrl(urlServico)
-            .requestFactory(requestFactory)
+            .requestFactory(TimeoutHttp.padrao())
             .defaultHeader("X-Client-Id", clientId)
             .defaultHeader("X-Client-Secret", clientSecret)
             .build();
     }
 
-    public EfetuarPagamentoResponse efetuar(String metodo, BigDecimal valor, UUID chaveIdempotencia) {
+    public CriarTransacaoResponse criar(String metodo, BigDecimal valor, UUID chaveIdempotencia) {
         return restClient.post()
-            .uri("/efetuar")
+            .uri("/criar")
             .contentType(MediaType.APPLICATION_JSON)
             .header(HEADER_IDEMPOTENCIA, chaveIdempotencia.toString())
-            .body(new EfetuarPagamentoRequest(metodo, valor))
+            .body(new CriarTransacaoRequest(metodo, valor))
             .retrieve()
-            .body(EfetuarPagamentoResponse.class);
+            .body(CriarTransacaoResponse.class);
     }
 
 }

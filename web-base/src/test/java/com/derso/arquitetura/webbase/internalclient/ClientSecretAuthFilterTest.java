@@ -51,52 +51,51 @@ class ClientSecretAuthFilterTest {
     }
 
     @Test
-    void secretErradaRejeitaCom401() throws Exception {
+    void secretErradaSegueSemAutenticar() throws Exception {
         HttpServletRequest req = requestCom(CLIENT_ID, "segredo-errado");
         HttpServletResponse res = mock(HttpServletResponse.class);
         FilterChain chain = mock(FilterChain.class);
 
         filter.doFilter(req, res, chain);
 
-        verify(res).setStatus(401);
-        verify(chain, never()).doFilter(req, res);
+        verify(chain).doFilter(req, res);
         assertNull(SecurityContextHolder.getContext().getAuthentication());
     }
 
     @Test
-    void clientIdDesconhecidoRejeitaCom401() throws Exception {
+    void clientIdDesconhecidoSegueSemAutenticar() throws Exception {
         HttpServletRequest req = requestCom("client-inexistente", CLIENT_SECRET);
         HttpServletResponse res = mock(HttpServletResponse.class);
         FilterChain chain = mock(FilterChain.class);
 
         filter.doFilter(req, res, chain);
 
-        verify(res).setStatus(401);
-        verify(chain, never()).doFilter(req, res);
+        verify(chain).doFilter(req, res);
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
     }
 
     @Test
-    void headerIdAusenteRejeitaCom401() throws Exception {
+    void headerIdAusenteSegueSemAutenticar() throws Exception {
         HttpServletRequest req = requestCom(null, CLIENT_SECRET);
         HttpServletResponse res = mock(HttpServletResponse.class);
         FilterChain chain = mock(FilterChain.class);
 
         filter.doFilter(req, res, chain);
 
-        verify(res).setStatus(401);
-        verify(chain, never()).doFilter(req, res);
+        verify(chain).doFilter(req, res);
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
     }
 
     @Test
-    void headerSecretAusenteRejeitaCom401() throws Exception {
+    void headerSecretAusenteSegueSemAutenticar() throws Exception {
         HttpServletRequest req = requestCom(CLIENT_ID, null);
         HttpServletResponse res = mock(HttpServletResponse.class);
         FilterChain chain = mock(FilterChain.class);
 
         filter.doFilter(req, res, chain);
 
-        verify(res).setStatus(401);
-        verify(chain, never()).doFilter(req, res);
+        verify(chain).doFilter(req, res);
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
     }
 
     private static HttpServletRequest requestCom(String clientId, String clientSecret) {

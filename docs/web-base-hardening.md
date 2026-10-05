@@ -22,7 +22,7 @@ public List<RotaPublica> rotasPublicas() {
 
 Sem esse bean, `WebSecurityAutoConfiguration` cai num default vazio (`@ConditionalOnMissingBean(name = "rotasPublicas")`).
 
-`pagamento-externo`, `pagamento-interno`, `reservas-interno`, `reservas-externo` não têm `SecurityConfiguration.java` próprio — não sobrou nada específico deles nesse assunto. `clientes` mantém um arquivo mínimo só pro `PasswordEncoder` (BCrypt) e as rotas públicas. `sessaocompra` mantém um mínimo só pro `@EnableMethodSecurity` (ownership de sessão, ortogonal ao tipo de auth).
+`pagamento-interno`, `reservas-interno`, `reservas-externo` não têm `SecurityConfiguration.java` próprio — não sobrou nada específico deles nesse assunto. `pagamento-externo` mantém um mínimo só pra rota pública do pagar. `clientes` mantém um arquivo mínimo só pro `PasswordEncoder` (BCrypt) e as rotas públicas. `sessaocompra` mantém um mínimo só pro `@EnableMethodSecurity` (ownership de sessão, ortogonal ao tipo de auth).
 
 **Por que `@ConditionalOnWebApplication(type = SERVLET)` em vez de `@Profile("web")`**: nos papéis `sagas`/`timeout` (`web-application-type: none`), a filter chain não deve existir. Reagir ao tipo real da aplicação é mais robusto que depender de todo serviço nomear seu profile web como `"web"` — não exige lembrar de replicar uma convenção de nome.
 
@@ -54,7 +54,7 @@ Emissor (`JwtIssuerService`) e validador (`JwtValidatorService`) usam RSA (RS256
 
 **Gaps aceitos, não esquecidos**:
 - Sem rate limit em tentativas de client-secret — é infra de borda, não lógica de autenticação em si; fora do escopo do `web-base`.
-- O 401 que `ClientSecretAuthFilter` devolve não tem corpo estruturado em `ErroDTO` — o filtro responde antes do Spring MVC (e do `@RestControllerAdvice`) entrarem em jogo, então não dá pra reusar o mesmo mecanismo de `TrataErros` sem reestruturar o filtro.
+- O 401 de requisição não autenticada não tem corpo estruturado em `ErroDTO` — vem do entry point da filter chain, antes do Spring MVC (e do `@RestControllerAdvice`) entrarem em jogo, então não reusa o mecanismo de `TrataErros`.
 - Hash em repouso dos secrets (ex. SHA-256) fica de fora — sem ganho real enquanto todos os segredos vivem juntos no mesmo `.env` compartilhado; secrets são de alta entropia, então nem seria o caso de usar BCrypt.
 
 ## Tratamento de erro (`TrataErros`)

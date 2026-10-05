@@ -8,7 +8,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.HttpClientErrorException;
 
-import com.derso.arquitetura.pagamentointerno.dto.EfetuarPagamentoResponse;
+import com.derso.arquitetura.pagamentointerno.dto.CriarTransacaoResponse;
 import com.derso.arquitetura.pagamentointerno.dto.PagamentoDTO;
 import com.derso.arquitetura.pagamentointerno.entity.Pagamento;
 import com.derso.arquitetura.pagamentointerno.entity.StatusPagamento;
@@ -21,6 +21,9 @@ public class PagamentoService {
     // TODO método/valor fixos — regra de precificação ainda não existe (docs/todo.md).
     private static final String METODO_PLACEHOLDER = "cartao";
     private static final BigDecimal VALOR_PLACEHOLDER = new BigDecimal("100.00");
+
+    // StatusPagamento de pagamento-externo (módulo separado, sem tipos compartilhados)
+    private static final String STATUS_EXPIRADO_NO_GATEWAY = "EXPIRADO";
 
     private final TransactionTemplate transactionTemplate;
     private final PagamentoRepository repositorio;
@@ -48,16 +51,36 @@ public class PagamentoService {
             return new PagamentoDTO(pagamento.getId(), pagamento.getUrlPagamento());
         }
 
+        return obterUrl(pagamento, true);
+    }
+
+    private PagamentoDTO obterUrl(Pagamento pagamento, boolean podeRenovar) {
         // NUNCA chamamos o serviço externo dentro de uma transação — convenção de ReservasService.
         // Falha ambígua (5xx, timeout) propaga sem mexer na linha: a próxima chamada repete a mesma chave.
-        EfetuarPagamentoResponse resposta;
+        CriarTransacaoResponse resposta;
         try {
-            resposta = servicoExterno.efetuar(METODO_PLACEHOLDER, VALOR_PLACEHOLDER, pagamento.getChaveIdempotencia());
+            resposta = servicoExterno.criar(METODO_PLACEHOLDER, VALOR_PLACEHOLDER, pagamento.getChaveIdempotencia());
         } catch (HttpClientErrorException e) {
             transactionTemplate.execute(status ->
                 repositorio.trocarChave(pagamento.getId(), pagamento.getChaveIdempotencia(), UUID.randomUUID())
             );
-            throw new BusinessException("Gateway recusou a criação do pagamento");
+            throw new BusinessException("Gateway rejeitou a criação do pagamento");
+        }
+
+        if (STATUS_EXPIRADO_NO_GATEWAY.equals(resposta.status())) {
+            // Venceu lá antes da URL chegar aqui (ex.: falha ambígua retentada tarde). O PUT só chega
+            // com a sessão viva, então abre tentativa nova — o prazo do gateway não importa ao interno.
+            if (!podeRenovar) {
+                throw new IllegalStateException("Gateway devolveu transação expirada para chave nova: " + pagamento.getId());
+            }
+            transactionTemplate.execute(status ->
+                repositorio.trocarChave(pagamento.getId(), pagamento.getChaveIdempotencia(), UUID.randomUUID())
+            );
+            Pagamento atual = repositorio.findById(pagamento.getId()).orElseThrow();
+            if (atual.getStatus() == StatusPagamento.AGUARDANDO_PAGAMENTO) {
+                return new PagamentoDTO(atual.getId(), atual.getUrlPagamento());
+            }
+            return obterUrl(atual, false);
         }
 
         if (resposta.urlPagamento() == null) {

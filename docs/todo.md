@@ -8,7 +8,7 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
 
 * [ ] **Timeout:**
   * [ ] sessão em `INICIADA` expirada (`TimeoutTask`, já agendado): **cancela e desfaz as pré-reservas efetuadas**, via REST em `reservas-interno` — não é SAGA
-  * [ ] pagamento não efetuado a tempo (`TimeoutPagamentoTask`): mesma operação do cancelamento — ver [purchase-flow-design.md](purchase-flow-design.md#dois-timeouts)
+  * [ ] pagamento não efetuado a tempo (`TimeoutPagamentoTask`): mesma operação do cancelamento (pede cancelamento ao externo; já pago segue o fluxo) — ver [purchase-flow-design.md](purchase-flow-design.md#dois-timeouts)
   * [ ] modelar os registros de tempo: o tempo da sessão não conta enquanto corre o do pagamento
   * [ ] sessão presa em `CRIANDO_PAGAMENTO` (front desistiu de retentar, ou processo caiu no meio): nenhum timeout pega — destino em aberto
 
@@ -24,26 +24,31 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
 
 * [ ] **Pagamentos** — fluxo, criação desenhada em [purchase-flow-design.md](purchase-flow-design.md#criação-do-pagamento):
   * [X] criação no interno (`PUT /pagamentos/{idSessao}`, chamado por `sessaocompra`; unique em `id_sessao_compra`): pagamento por sessão, intenção gravada antes do externo, troca de tentativa até obter URL, depois devolve sempre a mesma
-    * [X] chave de idempotência por tentativa: repetida em falha ambígua, trocada em falha certa
-    * [ ] **decidir** como o gateway distingue recusa × "mesma chave ainda em processamento" — hoje todo 4xx troca a chave, mas o segundo caso é falha ambígua (deveria repetir)
+    * [X] chave de idempotência por tentativa: repetida em falha, trocada quando a transação expira no gateway
   * [X] `iniciando-pagamento` idempotente ([cadeia](purchase-flow-design.md#cadeia-idempotente)): falha não reverte a sessão; em `CRIANDO_PAGAMENTO`/`EFETUANDO_PAGAMENTO` repete o `PUT`; devolve a URL
-  * [ ] cancelar pagamento, com ou sem URL ([desenho](purchase-flow-design.md#cancelamento-e-prazo--gateway-como-juiz)): endpoint em `sessaocompra` e em `pagamento-interno`; o `PUT` seguinte abre tentativa nova com os ids de reserva atuais
-  * [ ] **externo:** criar
-    * [X] _deve falhar às vezes de propósito_
-    * [ ] devolve URL de pagamento fictícia
-    * [ ] aceita chave de idempotência
-    * [ ] define prazo da transação; pagar recusa depois dele
-  * [ ] **externo:** expirar — responde se expirou ou se já foi paga
-  * [ ] **externo:** pagar — sorteia o desfecho e dispara o webhook (substitui o webhook chamado dentro da criação)
-    * [ ] **decidir** webhook síncrono ou em background com retentativa
-    * [ ] **decidir** falha técnica simulada: webhook de falha ou só erro pra quem paga
+  * [ ] cancelar pagamento, com ou sem URL ([desenho](purchase-flow-design.md#cancelamento-e-prazo--gateway-como-juiz)): endpoint em `sessaocompra` e em `pagamento-interno`; com URL, pede cancelamento ao externo (já pago segue o fluxo); o `PUT` seguinte abre tentativa nova com os ids de reserva atuais
+  * [X] **externo:** criar ([premissas](purchase-flow-design.md#premissas-do-gateway-simulado-pagamento-externo))
+    * [X] banco próprio (`externo_pagamento`) e tabela `pagamentos`
+    * [X] _deve falhar às vezes de propósito_ — metade antes de gravar, metade depois
+    * [X] devolve URL de pagamento fictícia
+    * [X] par (chave, cliente): cria só se não existe; se existe, devolve o estado atual
+    * [X] prazo por relógio a partir da criação
+    * [X] não chama mais o webhook
+  * [X] **externo:** pagar — sorteia aceito/recusado e chama o webhook síncrono; recusa mantém a transação pendente; expirado responde expirado, sem webhook
+  * [X] **externo:** consultar — devolve a situação atual da transação ([reconciliação](reconciliation.md))
+  * [X] **externo:** cancelar transação pendente
+  * [ ] **decidir** se consultar e cancelar do externo têm falha proposital (chaos)
+  * [X] criar no interno: gateway devolve transação expirada → tentativa nova na mesma chamada
+  * [ ] URL já obtida que venceu no externo → tentativa nova (consultar antes de trocar)
   * [ ] implementação do webhook no interno
     * [ ] validar assinatura/origem e proteger contra reprocessamento
-    * [ ] aceita só pagamento da tentativa vigente em estado válido; outro é estornado
+    * [ ] pagamento aceito é reconciliado a favor da venda, mesmo fora da tentativa vigente ([reconciliação](reconciliation.md))
+      * [ ] **decidir** como correlacionar webhook de tentativa antiga — a linha só guarda o `id_externo` vigente
+      * [ ] **decidir** duas tentativas pagas na mesma sessão
     * [ ] outbox + transição de status do pagamento pelo webhook — ver [Dual-write](#dual-write-pagamentoreservas-outbox-das-reservas-descartado--ver-desenho)
     * [ ] sucesso: sessão vai pra `PAGAMENTO_EFETUADO` — mecanismo em aberto (hoje `PUT /sessoes/{id}/pagamento-efetuado`, sem auth de serviço — ver [Testes](#testes))
     * [ ] sucesso: publica `EXECUTE` na fila `pagamento` com os ids internos ([desenho do payload](purchase-flow-design.md#payload-da-mensagem-da-saga))
-    * [ ] **decidir** recusa: o que acontece com o pagamento e a sessão
+    * [ ] **decidir** o que o interno faz com o webhook de recusa (no externo, a transação continua pendente)
   * [ ] **sagas:** eventos de confirmação e cancelamento
     * [X] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
     * [ ] compensação: estorna e repassa `DESFACA` até `sessaocompra` (`filaanterior: sessaocompra`, ver [saga-choreography.md](saga-choreography.md#cadeia))
@@ -123,9 +128,9 @@ Estratégia e comandos: [testing-strategy.md](testing-strategy.md). Integrados p
 - [x] ~~Testes automatizados para `web-base`~~ — decisões em [web-base-hardening.md](web-base-hardening.md).
 - [x] ~~Testes automatizados para `sagas-common`~~ — `MessagingTest` (desfechos do `ResultadoHandler` e compensação por exceção).
 - [ ] **Depois de separar criar/pagar no externo** ([desenho](purchase-flow-design.md#criação-do-pagamento)):
-  - reativar caso `SUCESSO` de `PagamentoExternoServiceIntegrationTest` e a classe `PagamentoCriacaoIntegradoTest` (hoje `@Disabled`); conferir o banco via JDBC
-  - desfecho do pagar respeitar a simulação (`SimuladorDeTeste`) — hoje o "recusado" do `WebhookService` sorteia por fora
-  - corpo do webhook com `idTransacao`
+  - [x] ~~reativar caso `SUCESSO` de `PagamentoExternoServiceIntegrationTest` e a classe `PagamentoCriacaoIntegradoTest`; conferir o banco via JDBC~~
+  - [x] ~~desfecho do pagar respeitar a simulação (`SimuladorDeTeste`)~~
+  - [x] ~~corpo do webhook com `idTransacao`~~
   - webhook publica `EXECUTE` na fila `pagamento`: fila temporária ligada à exchange `sagas` + `basicGet`
 - [ ] **Com os handlers da SAGA e o timeout implementados:**
   - handlers de `ReservasSagas`/`PagamentoSagas` ponta a ponta — `ReservasSagasTest` já cobre os desfechos de `confirmar`/`cancelar` isolados; falta com id real na mensagem, e `PagamentoSagas`

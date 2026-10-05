@@ -9,6 +9,7 @@ import org.springframework.web.client.RestClient;
 
 import com.derso.arquitetura.sessaocompra.pagamentointerno.dto.CriarPagamentoInternoRequest;
 import com.derso.arquitetura.sessaocompra.pagamentointerno.dto.PagamentoInternoResponse;
+import com.derso.arquitetura.webbase.http.TimeoutHttp;
 
 @Service
 public class PagamentoInternoClient {
@@ -21,6 +22,7 @@ public class PagamentoInternoClient {
         @Value("${pagamento-interno.client-secret}") String clientSecret
     ) {
         this.restClient = RestClient.builder()
+            .requestFactory(TimeoutHttp.padrao())
             .baseUrl(urlServico)
             .defaultHeader("X-Client-Id", clientId)
             .defaultHeader("X-Client-Secret", clientSecret)

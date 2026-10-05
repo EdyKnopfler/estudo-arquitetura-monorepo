@@ -48,9 +48,9 @@ security:
 # para ACEITAR requisições
 # nota: PAGAMENTO_EXTERNO_ID é reaproveitado nas duas direções da MESMA relação bidirecional
 # (mesmo padrão de reservas-interno/reservas-externo, um par por relação): é a identidade que
-# pagamento-interno usa pra chamar POST /efetuar (external-backend abaixo) E a que volta como
-# X-Client-Id quando pagamento-externo chama nosso /webhook — WebhookService.enviarResposta
-# (pagamento-externo) ecoa de volta o MESMO client-id/secret de quem chamou /efetuar ("mesmo
+# pagamento-interno usa pra chamar POST /criar (external-backend abaixo) E a que volta como
+# X-Client-Id quando pagamento-externo chama nosso /webhook — WebhookService.avisar
+# (pagamento-externo) ecoa de volta o MESMO client-id/secret de quem chamou /criar ("mesmo
 # segredo" no comentário de lá), não uma identidade própria fixa. Ver application.yaml de
 # pagamento-externo (internal-backend.webhooks). PAGAMENTO_INTERNO_ID/SECRET ficaram órfãos
 # depois dessa correção (nada mais referencia) — removidos do .env.

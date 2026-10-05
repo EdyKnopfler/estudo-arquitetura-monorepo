@@ -50,6 +50,8 @@ services:
       - "${PAGAMENTO_EXTERNO_DEBUG_PORT}:${PAGAMENTO_EXTERNO_DEBUG_PORT}"
     environment:
       JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:${PAGAMENTO_EXTERNO_DEBUG_PORT}
+    depends_on:
+      - db
 
   reservas-externo-hotel:
     build:

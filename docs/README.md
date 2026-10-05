@@ -5,6 +5,7 @@ Detalhamento por tópico. O [CLAUDE.md](../CLAUDE.md) na raiz traz o resumo exec
 - [architecture-overview.md](architecture-overview.md) — mapa de componentes, portas, bancos de dados e fluxo de uma compra ponta a ponta
 - [saga-choreography.md](saga-choreography.md) — mecânica da coreografia SAGA (filas, mensagem, compensação)
 - [purchase-flow-design.md](purchase-flow-design.md) — desenho de como `sessaocompra` amarra pré-reservas, pagamento e a SAGA estendida
+- [reconciliation.md](reconciliation.md) — critério de reconciliação de estado com os `-externo` (a favor da venda) e divisão de papéis simulador × nosso lado
 - [module-boundaries.md](module-boundaries.md) — organização interna da regra de negócio (`reservas-interno`/`pagamento-interno`) e alternativas avaliadas (hexagonal, contrato tipado da SAGA)
 - [deploy-roles-by-profile.md](deploy-roles-by-profile.md) — como o papel (web vs. sagas) de cada módulo é escolhido por profile Spring, mecanismo e pegadinhas
 - [security-and-auth.md](security-and-auth.md) — JWT, client-id/secret entre serviços, limitações conhecidas

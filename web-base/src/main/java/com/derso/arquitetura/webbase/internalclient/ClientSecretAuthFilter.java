@@ -32,11 +32,12 @@ public class ClientSecretAuthFilter extends OncePerRequestFilter {
         String id = req.getHeader("X-Client-Id");
         String secret = req.getHeader("X-Client-Secret");
 
+        // sem credencial válida, só não autentica: rota pública segue, o resto vira 401 no entry point
         if (!(
             id != null && secret != null &&
             clientIdsAndSecrets.containsKey(id) && secretsMatch(clientIdsAndSecrets.get(id), secret)
         )) {
-            res.setStatus(401);
+            chain.doFilter(req, res);
             return;
         }
 
