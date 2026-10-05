@@ -40,6 +40,8 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
   * [ ] **decidir** se consultar e cancelar do externo têm falha proposital (chaos)
   * [X] criar no interno: gateway devolve transação expirada → tentativa nova na mesma chamada
   * [ ] URL já obtida que venceu no externo → tentativa nova (consultar antes de trocar)
+    * [ ] **decidir** quando consultar: todo `PUT` em `AGUARDANDO_PAGAMENTO` (simples, interno não conhece o prazo do externo) ou só depois do vencimento (exige o criar devolver o vencimento)
+    * [ ] **decidir** o que o `PUT` devolve quando a consulta diz pago — "sucesso até o front" pede status na resposta do interno, repassado pelo `sessaocompra`
   * [ ] implementação do webhook no interno
     * [ ] validar assinatura/origem e proteger contra reprocessamento
     * [ ] pagamento aceito é reconciliado a favor da venda, mesmo fora da tentativa vigente ([reconciliação](reconciliation.md))
