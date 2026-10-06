@@ -11,4 +11,10 @@ Resuma em poucos bullets:
 - o que está pendente
 - divergências entre doc e código
 
+Se eu indicar o item a implementar, termine com um briefing dele:
+- item
+- arquivos envolvidos
+- critério de pronto
+- fora do escopo
+
 Não edite nada.

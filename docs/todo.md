@@ -126,13 +126,7 @@ Transversais ou de "amarração", não de regra de negócio de um domínio — l
 
 Estratégia e comandos: [testing-strategy.md](testing-strategy.md). Integrados por domínio: seção [Features por domínio](#features-por-domínio).
 
-- [x] ~~Cobertura ~zero (só `contextLoads`)~~ — testes de microsserviço em todos os módulos web + integrados de contrato interno↔externo (`ReservasExternoServiceIntegrationTest`, `PagamentoExternoServiceIntegrationTest`).
-- [x] ~~Testes automatizados para `web-base`~~ — decisões em [web-base-hardening.md](web-base-hardening.md).
-- [x] ~~Testes automatizados para `sagas-common`~~ — `MessagingTest` (desfechos do `ResultadoHandler` e compensação por exceção).
 - [ ] **Depois de separar criar/pagar no externo** ([desenho](purchase-flow-design.md#criação-do-pagamento)):
-  - [x] ~~reativar caso `SUCESSO` de `PagamentoExternoServiceIntegrationTest` e a classe `PagamentoCriacaoIntegradoTest`; conferir o banco via JDBC~~
-  - [x] ~~desfecho do pagar respeitar a simulação (`SimuladorDeTeste`)~~
-  - [x] ~~corpo do webhook com `idTransacao`~~
   - webhook publica `EXECUTE` na fila `pagamento`: fila temporária ligada à exchange `sagas` + `basicGet`
 - [ ] **Com os handlers da SAGA e o timeout implementados:**
   - handlers de `ReservasSagas`/`PagamentoSagas` ponta a ponta — `ReservasSagasTest` já cobre os desfechos de `confirmar`/`cancelar` isolados; falta com id real na mensagem, e `PagamentoSagas`
@@ -143,32 +137,15 @@ Estratégia e comandos: [testing-strategy.md](testing-strategy.md). Integrados p
 
 ### Hygiene / housekeeping
 
-- [x] ~~`.env` está commitado no git com credenciais de dev.~~ — `.env`/`.env.clientes` viraram `.env.example`/`.env.clientes.example` versionados; reais fora do índice via `.gitignore` (`.env*` / `!.env*.example`, cobre automaticamente qualquer `.env.<serviço>` futuro sem editar o padrão). Histórico não foi reescrito — decisão consciente, são credenciais de dev descartáveis.
-- [x] ~~Arquivo órfão `reservas-interno-web/Dockerfile copy`~~ — resolvido de graça pela unificação de `reservas-interno` (o diretório antigo, e o arquivo órfão junto, deixaram de existir).
-- [x] ~~`pagamento-interno-web/application.yaml` tinha placeholder malformado~~ — `${FRONT_END_ID}:frontEndId}` (faltava o `:` dentro das chaves) e `FRONT_END_ID`/`FRONT_END_SECRET` não estavam no `.env`, então a aplicação não subia (placeholder não resolvido). Corrigido pra `${FRONT_END_ID:frontEndId}` na migração pra `pagamento-interno`.
 - [ ] `Messaging.iniciarConsumo` dá ack/nack da mensagem recebida **antes** de publicar a próxima na cadeia — queda nesse intervalo perde a publicação sem redelivery (a mensagem de entrada já foi consumida). Corrigir junto com o trabalho de robustez dos handlers (mesma área).
-- [x] ~~Flyway rodando em todos os papéis, não só `web`~~ — regressão introduzida pela unificação dos módulos: antes, `-sagas`/`-timeout` nem tinham Flyway como dependência (só `-web` migrava); ao virar um artefato só, o pom passou a trazer Flyway incondicionalmente pra qualquer profile. Isso só virou bug visível em `sessaocompra-timeout` (pool `maximum-pool-size: 1` herdado do módulo antigo — Flyway precisa de 2 conexões simultâneas pra coordenação de lock durante a migration, e travava contra si mesmo até estourar timeout de 30s); em `reservas-interno`/`pagamento-interno` o pool nunca foi reduzido pro papel `sagas` (ficou em 10), então a mesma corrida nunca chegou a falhar — mas o problema de fundo (múltiplas instâncias tentando migrar ao mesmo tempo) existia igual, só mascarado. Corrigido com `spring.flyway.enabled: false` explícito nos profiles `sagas`/`timeout` dos três domínios, restaurando "só uma instância migra" como já era antes do refactor.
-
-### Refactor planejado (sessão futura dedicada)
-
-- [x] ~~Unificar `-common`/`-web`/`-sagas` de reservas num único artefato~~ — feito, ver `reservas-interno` e [deploy-roles-by-profile.md](deploy-roles-by-profile.md).
-- [x] ~~Fazer o mesmo para pagamento~~ — feito, ver `pagamento-interno`. O papel `sagas` foi criado do zero (nunca existira como módulo). Mecanismo documentado em [deploy-roles-by-profile.md](deploy-roles-by-profile.md).
-- [x] ~~Fazer o mesmo para sessão de compra~~ — feito, ver `sessaocompra`. Variação: papel a mais `timeout` (`TimeoutTask` com `@Profile("timeout")`); o papel `sagas` veio depois, com a SAGA estendida (item acima). De quebra, corrigiu o pacote `com.derso.arquitetura.timeout`/`com.derso.treinohotel.timeout` (nome legado) pra `com.derso.arquitetura.sessaocompra.timeout`, consistente com o resto do domínio.
-
-### Verificação manual da coreografia — feita em 2026-08-02 e 2026-08-08
-
-- [x] ~~Repetir o teste manual de ida-e-volta com as três pontas vivas~~ — feito. Subimos `reservas-interno-{hotel,voo}-sagas` e `pagamento-interno-{web,sagas}`, publicamos `{"tipo":1}` direto na fila `hotel` via management UI do RabbitMQ: consumida em `hotel`, repassada e consumida em `voo` — ida confirmada, filas vazias no final (nada ficou parado).
-- [x] ~~Compensação retroativa com conteúdo de mensagem preservado ainda não foi validada rodando de verdade.~~ — validado em 2026-08-08 com a amarração dummy (handlers logando + falha simulada no fim de cadeia): `docker-compose up` de `pagamento-interno` (`web`+`sagas`) e `reservas-interno` (`hotel`+`voo` no papel `sagas`), `curl -X POST /webhook`. Log confirmou a cadeia completa com o **mesmo `rastreio`** do início ao fim: webhook → `[pagamento] confirmando cobrança` → `[hotel] confirmando reserva` → `[voo] confirmando reserva` (falha simulada, sem `proximafila`) → `[hotel] cancelando reserva` → `[pagamento] ESTORNANDO pagamento`. Filas `pagamento`/`hotel`/`voo` vazias no final; `errors` com 1 mensagem — é a mensagem original que falhou em `voo` sendo dead-lettered pelo `basicNack` sem requeue (esperado: a compensação em si é uma mensagem nova publicada em `hotel`, não a mesma sendo "resgatada" do dead-letter).
-  - **De quebra, achou um gap de infra:** `pagamento-interno-web` agora abre conexão RabbitMQ no boot (por causa da publicação do webhook) mas só tinha `depends_on: db` no `docker-compose.yml` — subia antes do `broker` estar pronto e caía com `Connection refused`. Corrigido adicionando `depends_on: broker (condition: service_healthy)`, no mesmo padrão já usado pelos papéis `sagas`.
 
 ### Decisões em aberto (não são bugs, são pontos a revisitar)
 
 - `basicQos(1)` limita cada instância de SAGA a processar uma mensagem por vez — teto de throughput conhecido, revisitar se/quando houver medição de carga real.
 - `JWT_PUBLIC_KEY`/`JWT_PRIVATE_KEY` no `.env`/`.env.clientes` não seguem o padrão `<SERVIÇO>_ID`/`_SECRET` do resto do arquivo (são infra compartilhada tipo `DB_HOST`, não credencial de um par específico) — considerar renomear pra algo tipo `CLIENTE_JWT_PUBLIC_KEY` se ficar confuso.
-- ~~Defaults de `jwt.private-key`/`jwt.public-key` embutidos nos `application.yaml`~~ — removidos, as chaves agora são obrigatórias via env var.
 - Sem captura/agregação centralizada de log — cada instância só loga local (SLF4J). Fora de escopo por agora; talvez um dia uma infra pra isso (sidecar → Elasticsearch, CloudWatch ou o que estiver à mão).
 - **Segurança que hoje assume "só roda em localhost"** — sem desenho de deploy de produção ainda, cada item abaixo fica pendente de revisão isolada quando esse desenho começar:
   - JDWP (`JAVA_TOOL_OPTIONS=-agentlib:jdwp=...,address=*:PORT`) exposto e publicado no host em todo serviço, pra attach de debugger — JDWP não tem autenticação (debugger anexado = RCE). Aceitável hoje (dev local); não pode existir fora de `localhost`.
-  - Secrets vivem em `.env`/`.env.<serviço>` sem gestão real (vault, secrets manager de nuvem) — aceitável hoje porque são credenciais de dev descartáveis (ver item de hygiene acima).
+  - Secrets vivem em `.env`/`.env.<serviço>` sem gestão real (vault, secrets manager de nuvem) — aceitável hoje porque são credenciais de dev descartáveis (só `.env*.example` é versionado).
   - Nenhuma comunicação usa TLS (front↔`clientes`/`sessaocompra`, serviço↔serviço, app↔Postgres/RabbitMQ) — tudo HTTP/AMQP puro na rede Docker local.
   - Sem rate limit/lockout em `/login` (`clientes`) — decisão consciente de deixar como responsabilidade de borda (gateway/WAF), não da aplicação: throttling por IP não precisa entender o payload, é mais barato bloqueado antes da app, e ajusta sem redeploy. Reavaliar se algum dia precisar de lockout por `email` (semântica de negócio que a borda não enxerga sozinha).

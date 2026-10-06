@@ -43,7 +43,7 @@ Java 25 (virtual threads), Spring Boot 4.0.1, Maven multi-módulo (8 módulos + 
      - separar decidido × em aberto: só vira decisão o que o dono confirmou explicitamente
      - em aberto vira item "decidir" no todo, nunca texto de desenho
   3. aplicar; o que falta fazer vai pro todo (marcar checkbox faz parte de terminar a tarefa)
-  4. conferir de novo: docs entre si e contra o código (links, nomes, estado, afirmações que o diff tornou falsas)
+  4. conferir de novo, só o que o diff tocou: docs entre si e contra o código (links, nomes, estado, afirmações que o diff tornou falsas)
 - Escrita em geral (docs, TODOs, mensagens): bullets aninhados e frases curtas em vez de parágrafo denso
 
 ## Testes
