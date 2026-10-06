@@ -54,7 +54,7 @@ flowchart TD
   PAGE -.->|DESFACA| SCR["sessão compra (reversão)"]
 ```
 
-Desenho completo (inclui o que já está implementado vs. planejado) em [docs/purchase-flow-design.md](docs/purchase-flow-design.md); mecânica de fila já implementada (`pagamento → hotel → voo`) em [docs/saga-choreography.md](docs/saga-choreography.md).
+Desenho completo em [docs/purchase-flow-design.md](docs/purchase-flow-design.md); mecânica de fila em [docs/saga-choreography.md](docs/saga-choreography.md).
 
 ---
 

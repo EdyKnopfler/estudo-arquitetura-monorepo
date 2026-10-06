@@ -1,6 +1,6 @@
 # Autenticação e segurança
 
-Duas identidades distintas, deliberadamente separadas — não misturar ao mexer em qualquer `-web`:
+Duas identidades distintas, deliberadamente separadas — não misturar ao mexer em qualquer serviço web (HTTP):
 
 ## JWT — cliente final
 
@@ -39,7 +39,7 @@ Um teste estrutural (`SessaoCompraControllerOwnershipGuardTest`, via reflection)
 
 ## Tratamento de erro
 
-`@RestControllerAdvice` globais do `web-base`, usados por todos os `-web` — mapeamento exceção → status em [TrataErros.java](../web-base/src/main/java/com/derso/arquitetura/webbase/config/TrataErros.java) e [TrataErrosDeBanco.java](../web-base/src/main/java/com/derso/arquitetura/webbase/config/TrataErrosDeBanco.java). Por que o 500 devolve mensagem genérica: [web-base-hardening.md](web-base-hardening.md#tratamento-de-erro-trataerros).
+`@RestControllerAdvice` globais do `web-base`, usados por todos os serviços web (HTTP) — mapeamento exceção → status em [TrataErros.java](../web-base/src/main/java/com/derso/arquitetura/webbase/config/TrataErros.java) e [TrataErrosDeBanco.java](../web-base/src/main/java/com/derso/arquitetura/webbase/config/TrataErrosDeBanco.java). Por que o 500 devolve mensagem genérica: [web-base-hardening.md](web-base-hardening.md#tratamento-de-erro-trataerros).
 
 ## Limitações conhecidas (aceitáveis para estudo local, não levar adiante sem revisar)
 

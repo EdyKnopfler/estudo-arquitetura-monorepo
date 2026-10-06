@@ -31,7 +31,7 @@ services:
     healthcheck:
       # RabbitMQ (Erlang VM + plugins) demora bem mais pra ficar pronto do que o container
       # leva pra existir — sem isso, quem depende de "broker" sobe antes da hora e cai com
-      # "Connection refused" (ver docs/todo.md).
+      # "Connection refused".
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s
       timeout: 5s

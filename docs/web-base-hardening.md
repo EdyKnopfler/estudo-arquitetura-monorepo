@@ -1,10 +1,10 @@
 # `web-base`: decisões de segurança
 
-`web-base` centraliza toda a mecânica de segurança dos 6 serviços `-web` — autenticação (JWT ou client-secret), montagem da `SecurityFilterChain` e tratamento de erro. Descoberto automaticamente via `@AutoConfiguration` (`META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`), não `@ComponentScan` manual. Testes em `web-base/src/test` (JUnit+Mockito puro, sem contexto Spring).
+`web-base` centraliza toda a mecânica de segurança dos serviços web (HTTP) — autenticação (JWT ou client-secret), montagem da `SecurityFilterChain` e tratamento de erro. Descoberto automaticamente via `@AutoConfiguration` (`META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`), não `@ComponentScan` manual. Testes em `web-base/src/test` (JUnit+Mockito puro, sem contexto Spring).
 
 ## Wiring da `SecurityFilterChain`
 
-Um único `WebSecurityAutoConfiguration` monta a filter chain pra qualquer `-web`; cada serviço escolhe o tipo de auth por config:
+Um único `WebSecurityAutoConfiguration` monta a filter chain pra qualquer serviço web (HTTP); cada serviço escolhe o tipo de auth por config:
 
 ```yaml
 security:
@@ -26,7 +26,7 @@ Sem esse bean, `WebSecurityAutoConfiguration` cai num default vazio (`@Condition
 
 **Por que `@ConditionalOnWebApplication(type = SERVLET)` em vez de `@Profile("web")`**: nos papéis `sagas`/`timeout` (`web-application-type: none`), a filter chain não deve existir. Reagir ao tipo real da aplicação é mais robusto que depender de todo serviço nomear seu profile web como `"web"` — não exige lembrar de replicar uma convenção de nome.
 
-**Por que `@AutoConfiguration` em vez de `@ComponentScan` manual**: antes, cada `Application.java` listava à mão `com.derso.arquitetura.webbase.jwt`/`.internalclient` no `@ComponentScan`. Esquecer isso ao criar um serviço novo fazia o filtro simplesmente não entrar — sem erro de compilação, sem warning, serviço sobe "funcionando" sem proteção nenhuma. `@AutoConfiguration` elimina essa dependência de lembrar: é descoberto automaticamente por qualquer `-web` que tenha `web-base` no classpath.
+**Por que `@AutoConfiguration` em vez de `@ComponentScan` manual**: antes, cada `Application.java` listava à mão `com.derso.arquitetura.webbase.jwt`/`.internalclient` no `@ComponentScan`. Esquecer isso ao criar um serviço novo fazia o filtro simplesmente não entrar — sem erro de compilação, sem warning, serviço sobe "funcionando" sem proteção nenhuma. `@AutoConfiguration` elimina essa dependência de lembrar: é descoberto automaticamente por qualquer serviço web (HTTP) que tenha `web-base` no classpath.
 
 **Duas armadilhas do Spring** que moldaram o código final (só apareceram rodando de verdade, não no `compile`):
 - `@Configuration.enforceUniqueMethods` (default `true`) rejeita dois `@Bean` com o mesmo nome de método mesmo sendo mutuamente exclusivos por `@ConditionalOnProperty` — por isso os dois métodos candidatos a filtro de auth (`jwt` vs `client-secret`) têm nomes de método diferentes.

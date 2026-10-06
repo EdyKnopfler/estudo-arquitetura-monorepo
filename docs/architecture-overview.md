@@ -38,7 +38,7 @@ Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (8
 
 Reservas, pagamento e sessão de compra são cada um um artefato único por domínio (`reservas-interno`, `pagamento-interno`, `sessaocompra`), com controller REST e listener de fila no mesmo processo — o papel ativo em cada instância é escolhido por profile Spring em runtime, ver [deploy-roles-by-profile.md](deploy-roles-by-profile.md) pro mecanismo. `sessaocompra` tem um papel a mais: `timeout` (job `@Scheduled` que cancela sessões expiradas) — mesmo princípio (`@Profile`/`web-application-type: none`).
 
-Bibliotecas transversais, usadas por praticamente todo `-web`/`-externo`:
+Bibliotecas transversais:
 
 - **`web-base`**: autenticação (JWT para cliente final em `jwt/`, client-id/secret entre serviços em `internalclient/`), tratamento de erro padronizado (`TrataErros`) e timeout padrão das chamadas HTTP entre serviços (`http/`). Detalhe em [security-and-auth.md](security-and-auth.md).
 - **`sagas-common`**: toda a comunicação com RabbitMQ e a mecânica de coreografia SAGA. Detalhe em [saga-choreography.md](saga-choreography.md).
@@ -80,4 +80,4 @@ flowchart LR
 
 ## Convenção de configuração
 
-Cada `-web`/`-sagas`/`-externo` tem `application.yaml` (comum) + `application-<profile>.yaml` (hotel/voo, quando aplicável) com porta, URL de datasource e credenciais client-id/secret específicas. Tudo parametrizado por variável de ambiente com default local (`${DB_HOST:localhost}`), o que permite rodar tanto via Docker Compose (`.env`) quanto localmente sem Docker.
+Cada módulo tem `application.yaml` (comum) + `application-<profile>.yaml` (domínio `hotel`/`voo` ou papel `sagas`/`timeout`, quando aplicável) com porta, URL de datasource e credenciais client-id/secret específicas. Tudo parametrizado por variável de ambiente com default local (`${DB_HOST:localhost}`), o que permite rodar tanto via Docker Compose (`.env`) quanto localmente sem Docker.
