@@ -63,10 +63,9 @@ Todos os handlers do `@RestControllerAdvice` devolvem `ErroDTO` (`{error, messag
 
 O handler genérico (qualquer `Exception` não mapeada) loga via SLF4J e devolve uma mensagem genérica ao cliente — **não** `e.getMessage()`. Uma exceção não mapeada é imprevista (bug, falha de infra); a mensagem dela pode conter detalhe interno (erro de SQL, path de arquivo) que não deve vazar pra fora. Os outros handlers (`BusinessException`, `EntityNotFoundException`, `UsuarioInvalidoException` etc.) devolvem a mensagem de propósito — são exceções que a própria aplicação lança com texto pensado pro cliente ler.
 
-Log fica só local (SLF4J) — captura centralizada fora de escopo, ver [todo.md](todo.md#decisões-em-aberto-não-são-bugs-são-pontos-a-revisitar).
+Log fica só local (SLF4J) — captura centralizada fora de escopo.
 
 ## Referências
 
 - Checklist técnico completo item-a-item (o que foi testado e onde): `web-base/src/test/`.
 - `docs/security-and-auth.md` — visão geral de autenticação no projeto (as duas identidades, JWT vs client-id/secret).
-- `docs/todo.md` — pendências.

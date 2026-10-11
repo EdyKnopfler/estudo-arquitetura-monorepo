@@ -14,4 +14,4 @@ Os candidatos reais a "ficar grande" seriam os fornecedores externos de verdade 
 
 ## Contrato tipado para a mensagem da SAGA
 
-Em aberto — ver [todo.md](todo.md#contrato-da-mensagem-da-saga).
+Em aberto.

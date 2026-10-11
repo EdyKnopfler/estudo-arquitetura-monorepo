@@ -1,6 +1,6 @@
 # Reconciliação de estado
 
-Critério que orienta as decisões de fluxo entre os serviços internos e os `-externo`. O que falta implementar: [todo.md](todo.md).
+Critério que orienta as decisões de fluxo entre os serviços internos e os `-externo`.
 
 ## Critério
 
@@ -9,6 +9,7 @@ Critério que orienta as decisões de fluxo entre os serviços internos e os `-e
 - requisições vão chegar em ordem esdrúxula (F5 do usuário, webhook atrasado, queda no meio): conflito de status se resolve pelo estado **atual**, consultado no externo
 - se do lado de lá está o que queremos (negócio fechado), reconciliamos a partir disso, em vez de executar à risca a ação que íamos fazer
   - não cancelar evento favorável ao negócio que vai virar venda
+- forma dos endpoints que aplicam o critério: [state-driven-endpoints.md](state-driven-endpoints.md)
 
 ## Divisão de papéis
 

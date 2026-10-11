@@ -118,7 +118,7 @@ docker rm -f $(docker ps -aq --filter label=org.testcontainers.hash)
 
 ## Módulos e em que pé estão
 
-Pra quem está chegando: cada módulo com as etapas do fluxo em que ele aparece (as caixas dos diagramas acima, mais a pré-reserva e a criação do pagamento, que vêm antes). Papel entre parênteses. Detalhe do que falta: [docs/todo.md](docs/todo.md). Encaixar e conectar tudo **demora** — um pouquinho a cada final de semana e chegamos lá!
+Pra quem está chegando: cada módulo com as etapas do fluxo em que ele aparece (as caixas dos diagramas acima, mais a pré-reserva e a criação do pagamento, que vêm antes). Papel entre parênteses. Encaixar e conectar tudo **demora** — um pouquinho a cada final de semana e chegamos lá!
 
 * **clientes**
   * [X] cadastro
