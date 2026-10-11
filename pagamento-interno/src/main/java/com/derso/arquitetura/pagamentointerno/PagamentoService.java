@@ -48,7 +48,7 @@ public class PagamentoService {
         });
 
         if (pagamento.getStatus() == StatusPagamento.AGUARDANDO_PAGAMENTO) {
-            return new PagamentoDTO(pagamento.getId(), pagamento.getUrlPagamento());
+            return PagamentoDTO.de(pagamento);
         }
 
         return obterUrl(pagamento, true);
@@ -78,17 +78,18 @@ public class PagamentoService {
             );
             Pagamento atual = repositorio.findById(pagamento.getId()).orElseThrow();
             if (atual.getStatus() == StatusPagamento.AGUARDANDO_PAGAMENTO) {
-                return new PagamentoDTO(atual.getId(), atual.getUrlPagamento());
+                return PagamentoDTO.de(atual);
             }
             return obterUrl(atual, false);
         }
 
-        if (resposta.urlPagamento() == null) {
-            throw new IllegalStateException("Gateway não devolveu URL de pagamento: " + pagamento.getId());
+        if (resposta.urlPagamento() == null || resposta.vencimento() == null) {
+            throw new IllegalStateException("Gateway não devolveu URL e vencimento do pagamento: " + pagamento.getId());
         }
 
         int linhas = transactionTemplate.execute(status -> repositorio.registrarUrl(
-            pagamento.getId(), pagamento.getChaveIdempotencia(), resposta.idTransacao(), resposta.urlPagamento()
+            pagamento.getId(), pagamento.getChaveIdempotencia(), resposta.idTransacao(), resposta.urlPagamento(),
+            resposta.vencimento()
         ));
 
         if (linhas == 0) {
@@ -97,10 +98,12 @@ public class PagamentoService {
             if (atual.getStatus() != StatusPagamento.AGUARDANDO_PAGAMENTO) {
                 throw new IllegalStateException("Tentativa de pagamento trocada durante a criação: " + pagamento.getId());
             }
-            return new PagamentoDTO(atual.getId(), atual.getUrlPagamento());
+            return PagamentoDTO.de(atual);
         }
 
-        return new PagamentoDTO(pagamento.getId(), resposta.urlPagamento());
+        return new PagamentoDTO(
+            pagamento.getId(), StatusPagamento.AGUARDANDO_PAGAMENTO, resposta.urlPagamento(), resposta.vencimento()
+        );
     }
 
 }

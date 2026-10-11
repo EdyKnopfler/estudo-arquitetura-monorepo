@@ -1,5 +1,6 @@
 package com.derso.arquitetura.pagamentointerno.entity;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -47,5 +48,8 @@ public class Pagamento {
 
     @Column(name = "url_pagamento")
     private String urlPagamento;
+
+    @Column
+    private Instant vencimento;
 
 }

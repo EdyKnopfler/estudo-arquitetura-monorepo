@@ -1,5 +1,6 @@
 package com.derso.arquitetura.pagamentointerno;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -39,7 +40,8 @@ public interface PagamentoRepository extends JpaRepository<Pagamento, UUID> {
         SET
             p.status = 'AGUARDANDO_PAGAMENTO',
             p.idExterno = :idExterno,
-            p.urlPagamento = :urlPagamento
+            p.urlPagamento = :urlPagamento,
+            p.vencimento = :vencimento
         WHERE p.id = :id
             AND p.chaveIdempotencia = :chave
             AND p.status = 'CRIANDO'
@@ -48,7 +50,8 @@ public interface PagamentoRepository extends JpaRepository<Pagamento, UUID> {
         @Param("id") UUID id,
         @Param("chave") UUID chave,
         @Param("idExterno") UUID idExterno,
-        @Param("urlPagamento") String urlPagamento
+        @Param("urlPagamento") String urlPagamento,
+        @Param("vencimento") Instant vencimento
     );
 
     @Modifying

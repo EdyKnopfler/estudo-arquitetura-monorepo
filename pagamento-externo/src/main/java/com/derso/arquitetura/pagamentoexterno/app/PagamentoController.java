@@ -58,7 +58,8 @@ public class PagamentoController {
         return new PagamentoResponseDTO(
             pagamento.getId(),
             pagamento.statusEm(Instant.now()).name(),
-            urlPagamentoBase + "/" + pagamento.getId()
+            urlPagamentoBase + "/" + pagamento.getId(),
+            pagamento.vencimento()
         );
     }
 

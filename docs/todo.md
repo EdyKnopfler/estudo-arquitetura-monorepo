@@ -25,7 +25,7 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
     * [X] chave de idempotência por tentativa: repetida em falha, trocada quando a transação expira no gateway
   * [ ] **avançar rumo ao pagamento** (`iniciando-pagamento` → `PUT /pagamentos/{idSessao}`), orientado a estado ([diretriz](state-driven-endpoints.md))
     * [X] idempotente ([cadeia](purchase-flow-design.md#cadeia-idempotente)): falha não reverte a sessão; em `CRIANDO_PAGAMENTO`/`EFETUANDO_PAGAMENTO` repete o `PUT`
-    * [ ] caminho feliz: resposta traz a etapa (URL + vencimento), não só a URL
+    * [X] caminho feliz: resposta traz a etapa (URL + vencimento), não só a URL
     * casos, um por vez:
       * [X] (interno) sem pagamento criado → cria e devolve o link
       * [X] (interno) pagamento já criado, link perdido → devolve o mesmo

@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -37,9 +38,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import com.derso.arquitetura.pagamentoexterno.entity.Pagamento;
 import com.derso.arquitetura.pagamentoexterno.webhook.WebhookService;
 import com.derso.arquitetura.webbase.teste.PostgresTestcontainersConfig;
-import com.fasterxml.jackson.databind.ObjectMapper;
+
+import tools.jackson.databind.json.JsonMapper;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -52,7 +55,7 @@ class PagamentoExternoTest {
     private static final String CLIENT_ID = "pagamentoExternoId";
     private static final String CLIENT_SECRET = "pagamentoExternoSecret";
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final JsonMapper objectMapper = new JsonMapper();
     private final List<UUID> chavesUsadas = new ArrayList<>();
 
     @Autowired
@@ -77,6 +80,8 @@ class PagamentoExternoTest {
         assertEquals("http://localhost:8086/pagar/" + resposta.idTransacao(), resposta.urlPagamento());
 
         Map<String, Object> linha = linha(resposta.idTransacao());
+        Instant criacao = ((Timestamp) linha.get("criacao")).toLocalDateTime().toInstant(ZoneOffset.UTC);
+        assertEquals(criacao.plus(Pagamento.PRAZO), resposta.vencimento());
         assertEquals(CLIENT_ID, linha.get("id_cliente"));
         assertEquals("cartao", linha.get("metodo"));
         assertEquals(0, new BigDecimal("100.00").compareTo((BigDecimal) linha.get("valor")));

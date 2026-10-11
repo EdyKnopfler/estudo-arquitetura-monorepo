@@ -70,6 +70,7 @@ class PagamentoExternoServiceIntegrationTest {
 
             assertNotNull(primeira.idTransacao());
             assertNotNull(primeira.urlPagamento());
+            assertNotNull(primeira.vencimento());
             assertEquals("PENDENTE", primeira.status());
             assertEquals(primeira.idTransacao(), segunda.idTransacao());
             assertEquals(1, transacoesComChave(chave));

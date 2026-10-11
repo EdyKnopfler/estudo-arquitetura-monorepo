@@ -149,6 +149,7 @@ class PagamentoCriacaoIntegradoTest {
         assertNotNull(resposta);
         assertNotNull(resposta.id());
         assertNotNull(resposta.urlPagamento());
+        assertNotNull(resposta.vencimento());
 
         Map<String, Object> interno = linha(postgres,
             "select status, id_externo, url_pagamento from pagamentos where id_sessao_compra = ?", idSessao);

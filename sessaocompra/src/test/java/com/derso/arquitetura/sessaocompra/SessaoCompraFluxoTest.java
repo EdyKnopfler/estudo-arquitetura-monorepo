@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +57,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 class SessaoCompraFluxoTest {
 
     private static final String URL_PAGAMENTO = "http://gateway/pagar/123";
+    private static final Instant VENCIMENTO = Instant.parse("2030-01-01T12:15:00Z");
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final List<UUID> sessoesCriadas = new ArrayList<>();
@@ -82,7 +84,7 @@ class SessaoCompraFluxoTest {
         when(vooClient.criar(any())).thenAnswer(invocation -> UUID.randomUUID());
         when(vooClient.trocar(any(), any())).thenAnswer(invocation -> UUID.randomUUID());
         when(pagamentoInternoClient.criar(any(), any(), any(), any()))
-            .thenReturn(new PagamentoInternoResponse(UUID.randomUUID(), URL_PAGAMENTO));
+            .thenReturn(respostaPagamento("AGUARDANDO_PAGAMENTO"));
     }
 
     @AfterEach
@@ -148,7 +150,9 @@ class SessaoCompraFluxoTest {
         putComoCliente(sessao, "/voo-ida", cliente).andExpect(status().isOk());
         putComoCliente(sessao, "/iniciando-pagamento", cliente)
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.urlPagamento").value(URL_PAGAMENTO));
+            .andExpect(jsonPath("$.etapa").value("PAGAR"))
+            .andExpect(jsonPath("$.urlPagamento").value(URL_PAGAMENTO))
+            .andExpect(jsonPath("$.vencimento").value(VENCIMENTO.toString()));
 
         assertEquals("EFETUANDO_PAGAMENTO", linha(sessao).get("status"));
     }
@@ -174,7 +178,7 @@ class SessaoCompraFluxoTest {
         UUID sessao = criarSessaoCompleta(cliente);
         when(pagamentoInternoClient.criar(any(), any(), any(), any()))
             .thenThrow(new RuntimeException("pagamento-interno fora"))
-            .thenReturn(new PagamentoInternoResponse(UUID.randomUUID(), URL_PAGAMENTO));
+            .thenReturn(respostaPagamento("AGUARDANDO_PAGAMENTO"));
 
         putComoCliente(sessao, "/iniciando-pagamento", cliente).andExpect(status().isConflict());
         assertEquals("CRIANDO_PAGAMENTO", linha(sessao).get("status"));
@@ -214,6 +218,17 @@ class SessaoCompraFluxoTest {
 
         verify(pagamentoInternoClient, times(2)).criar(any(), any(), any(), any());
         assertEquals("EFETUANDO_PAGAMENTO", linha(sessao).get("status"));
+    }
+
+    @Test
+    void estadoDePagamentoNaoTratadoFalhaAltoEMantemCriando() throws Exception {
+        UUID cliente = UUID.randomUUID();
+        UUID sessao = criarSessaoCompleta(cliente);
+        when(pagamentoInternoClient.criar(any(), any(), any(), any())).thenReturn(respostaPagamento("PAGO"));
+
+        putComoCliente(sessao, "/iniciando-pagamento", cliente).andExpect(status().is5xxServerError());
+
+        assertEquals("CRIANDO_PAGAMENTO", linha(sessao).get("status"));
     }
 
     @Test
@@ -322,6 +337,10 @@ class SessaoCompraFluxoTest {
         UsuarioAutenticado usuario = new UsuarioAutenticado(idCliente.toString(), idCliente + "@teste.com");
         Authentication autenticacao = new UsernamePasswordAuthenticationToken(usuario, null, List.of());
         return authentication(autenticacao);
+    }
+
+    private static PagamentoInternoResponse respostaPagamento(String status) {
+        return new PagamentoInternoResponse(UUID.randomUUID(), status, URL_PAGAMENTO, VENCIMENTO);
     }
 
 }

@@ -14,6 +14,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -51,8 +56,10 @@ import com.derso.arquitetura.pagamentointerno.PagamentoExternoService;
 import com.derso.arquitetura.pagamentointerno.dto.CriarPagamentoRequest;
 import com.derso.arquitetura.pagamentointerno.dto.CriarTransacaoResponse;
 import com.derso.arquitetura.pagamentointerno.dto.PagamentoDTO;
+import com.derso.arquitetura.pagamentointerno.entity.StatusPagamento;
 import com.derso.arquitetura.sagas.RabbitMQTestcontainersConfig;
-import com.fasterxml.jackson.databind.ObjectMapper;
+
+import tools.jackson.databind.json.JsonMapper;
 
 // Fronteira HTTP com pagamento-externo mockada — contrato real em PagamentoExternoServiceIntegrationTest.
 @SpringBootTest
@@ -65,7 +72,7 @@ class PagamentoCriacaoTest {
     private static final String CLIENT_ID = "sessaoCompraId";
     private static final String CLIENT_SECRET = "sessaoCompraSecret";
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final JsonMapper objectMapper = new JsonMapper();
     private final List<UUID> sessoesUsadas = new ArrayList<>();
 
     @Autowired
@@ -100,6 +107,9 @@ class PagamentoCriacaoTest {
         assertEquals(resposta.idTransacao(), linha.get("id_externo"));
         assertEquals(resposta.urlPagamento(), linha.get("url_pagamento"));
         assertEquals(resposta.urlPagamento(), dto.urlPagamento());
+        assertEquals(StatusPagamento.AGUARDANDO_PAGAMENTO, dto.status());
+        assertEquals(resposta.vencimento(), dto.vencimento());
+        assertEquals(resposta.vencimento(), ((Timestamp) linha.get("vencimento")).toLocalDateTime().toInstant(ZoneOffset.UTC));
         assertEquals(pedido.idReservaHotel(), linha.get("id_reserva_hotel"));
         assertEquals(pedido.idReservaVooIda(), linha.get("id_reserva_voo_ida"));
         assertEquals(pedido.idReservaVooVolta(), linha.get("id_reserva_voo_volta"));
@@ -111,7 +121,7 @@ class PagamentoCriacaoTest {
         UUID idSessao = novaSessao();
         CriarTransacaoResponse nova = respostaDoGateway();
         when(externo.criar(anyString(), any(BigDecimal.class), any(UUID.class)))
-            .thenReturn(new CriarTransacaoResponse(UUID.randomUUID(), "EXPIRADO", "http://gateway/pagar/vencida"))
+            .thenReturn(new CriarTransacaoResponse(UUID.randomUUID(), "EXPIRADO", "http://gateway/pagar/vencida", Instant.now().minus(Duration.ofMinutes(1))))
             .thenReturn(nova);
 
         PagamentoDTO dto = criar(idSessao, novoPedido())
@@ -220,7 +230,7 @@ class PagamentoCriacaoTest {
     void respostaSemUrlMantemCriandoEARetentativaRepeteAMesmaChave() throws Exception {
         UUID idSessao = novaSessao();
         when(externo.criar(anyString(), any(BigDecimal.class), any(UUID.class)))
-            .thenReturn(new CriarTransacaoResponse(UUID.randomUUID(), "PENDENTE", null))
+            .thenReturn(new CriarTransacaoResponse(UUID.randomUUID(), "PENDENTE", null, vencimentoNoGateway()))
             .thenReturn(respostaDoGateway());
 
         criar(idSessao, novoPedido()).andExpect(status().is5xxServerError());
@@ -325,7 +335,12 @@ class PagamentoCriacaoTest {
 
     private static CriarTransacaoResponse respostaDoGateway() {
         UUID idTransacao = UUID.randomUUID();
-        return new CriarTransacaoResponse(idTransacao, "PENDENTE", "http://gateway/pagar/" + idTransacao);
+        return new CriarTransacaoResponse(idTransacao, "PENDENTE", "http://gateway/pagar/" + idTransacao, vencimentoNoGateway());
+    }
+
+    // truncado: o Postgres guarda microssegundos
+    private static Instant vencimentoNoGateway() {
+        return Instant.now().plus(Duration.ofMinutes(15)).truncatedTo(ChronoUnit.MICROS);
     }
 
     private Map<String, Object> linhaDaSessao(UUID idSessao) {

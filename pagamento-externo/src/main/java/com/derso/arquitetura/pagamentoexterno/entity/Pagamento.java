@@ -49,8 +49,12 @@ public class Pagamento {
     @Column(nullable = false)
     private StatusPagamento status;
 
+    public Instant vencimento() {
+        return criacao.plus(PRAZO);
+    }
+
     public StatusPagamento statusEm(Instant agora) {
-        if (status == StatusPagamento.PENDENTE && agora.isAfter(criacao.plus(PRAZO))) {
+        if (status == StatusPagamento.PENDENTE && agora.isAfter(vencimento())) {
             return StatusPagamento.EXPIRADO;
         }
         return status;

@@ -43,7 +43,7 @@ front → `sessaocompra` (`iniciando-pagamento`) → `pagamento-interno` (`PUT /
 Imita gateways reais no que importa pro backend — o front é abstraído, não há tela. Simples e ruim de propósito: resiliência e reconciliação ficam do nosso lado ([reconciliation.md](reconciliation.md)).
 
 - criar e pagar são endpoints separados
-  - criar: chamado por `pagamento-interno` (client-id/secret), devolve `idTransacao` + URL de pagamento fictícia
+  - criar: chamado por `pagamento-interno` (client-id/secret), devolve `idTransacao`, URL de pagamento fictícia e vencimento
     - só cria se o par (chave de idempotência, cliente) não existe; se existe, devolve o estado atual da transação
     - falha de propósito (chaos): falhou em criar — não existe "recusa" na criação
       - antes ou depois de gravar; depois é a falha ambígua (transação criada, resposta perdida), que o chamador resolve repetindo a chave
@@ -71,7 +71,7 @@ Imita gateways reais no que importa pro backend — o front é abstraído, não 
 Criar envolve o gateway e o nosso banco, sem transação comum. Chamar o gateway antes de gravar deixa, num timeout ou numa queda antes do save, uma transação lá sem registro aqui.
 
 - a linha em `pagamentos` é gravada antes da chamada, com status de intenção (`CRIANDO`)
-- a resposta do gateway completa a linha (`id_externo`, URL, `AGUARDANDO_PAGAMENTO`); sem URL, a linha continua em `CRIANDO`
+- a resposta do gateway completa a linha (`id_externo`, URL, vencimento, `AGUARDANDO_PAGAMENTO`); sem URL, a linha continua em `CRIANDO`
 - pior caso vira "registro de algo que talvez não exista lá" (recuperável), em vez de "algo lá sem registro aqui"
 - risco baixo aqui: transação perdida só custa criar outra — a antiga expira no gateway (premissas acima). Bem menos crítico que o dual-write do webhook
 

@@ -9,6 +9,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.derso.arquitetura.sessaocompra.app.dto.EtapaCompra;
+import com.derso.arquitetura.sessaocompra.app.dto.IniciarPagamentoResponse;
 import com.derso.arquitetura.sessaocompra.entity.SessaoCompra;
 import com.derso.arquitetura.sessaocompra.entity.SessaoCompraStatus;
 import com.derso.arquitetura.sessaocompra.pagamentointerno.PagamentoInternoClient;
@@ -23,6 +25,9 @@ import jakarta.persistence.EntityNotFoundException;
 public class SessaoCompraService {
 
     private static final Logger log = LoggerFactory.getLogger(SessaoCompraService.class);
+
+    // StatusPagamento de pagamento-interno (módulo separado, sem tipos compartilhados)
+    private static final String STATUS_AGUARDANDO_PAGAMENTO = "AGUARDANDO_PAGAMENTO";
 
     private final SessaoCompraRepository repositorio;
     private final ReservasInternoHotelClient reservasInternoHotelClient;
@@ -113,7 +118,7 @@ public class SessaoCompraService {
     // Nunca chamar pagamento-interno dentro de transação (mesma convenção de reservas-interno acima).
     // Falha não reverte a sessão, e já iniciado repete o PUT (pagamento-interno guarda a URL) —
     // ver docs/purchase-flow-design.md#cadeia-idempotente.
-    public String iniciarPagamento(UUID id) {
+    public IniciarPagamentoResponse iniciarPagamento(UUID id) {
         int linhas = transactionTemplate.execute(status -> repositorio.iniciarPagamento(id));
         SessaoCompra sessao = repositorio.findById(id)
             .orElseThrow(() -> new EntityNotFoundException("Sessão de compra não encontrada: " + id));
@@ -136,8 +141,13 @@ public class SessaoCompraService {
             throw new BusinessException("Falha ao iniciar pagamento, tente novamente");
         }
 
+        // Só o caminho feliz; outro estado falha alto até ganhar tratamento — docs/state-driven-endpoints.md
+        if (!STATUS_AGUARDANDO_PAGAMENTO.equals(pagamento.status())) {
+            throw new IllegalStateException("Estado de pagamento não tratado para sessão " + id + ": " + pagamento.status());
+        }
+
         transactionTemplate.execute(status -> repositorio.pagamentoCriado(id));
-        return pagamento.urlPagamento();
+        return new IniciarPagamentoResponse(EtapaCompra.PAGAR, pagamento.urlPagamento(), pagamento.vencimento());
     }
 
     @Transactional
