@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -32,6 +33,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -150,6 +153,77 @@ class PagamentoCriacaoTest {
         verify(externo, times(1)).criar(anyString(), any(BigDecimal.class), any(UUID.class));
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = { "CANCELADO", "EXPIRADO" })
+    void linkPertoDeVencerCancelaNoGatewayEEntregaOutro(String desfechoDoCancelamento) throws Exception {
+        UUID idSessao = novaSessao();
+        CriarTransacaoResponse antiga = respostaDoGateway(Duration.ofMinutes(1));
+        CriarTransacaoResponse nova = respostaDoGateway();
+        when(externo.criar(anyString(), any(BigDecimal.class), any(UUID.class))).thenReturn(antiga).thenReturn(nova);
+        when(externo.cancelar(antiga.idTransacao())).thenReturn(situacao(antiga, desfechoDoCancelamento));
+
+        PagamentoDTO primeira = criar(idSessao, novoPedido()).andReturn().getResponse().getContentAsString().transform(this::lerDTO);
+        PagamentoDTO renovada = criar(idSessao, novoPedido())
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString().transform(this::lerDTO);
+
+        verify(externo).cancelar(antiga.idTransacao());
+        List<UUID> chaves = chavesEnviadas(2);
+        assertNotEquals(chaves.get(0), chaves.get(1));
+        assertEquals(primeira.id(), renovada.id());
+        assertEquals(nova.urlPagamento(), renovada.urlPagamento());
+        assertEquals(nova.vencimento(), renovada.vencimento());
+        Map<String, Object> linha = linhaDaSessao(idSessao);
+        assertEquals("AGUARDANDO_PAGAMENTO", linha.get("status"));
+        assertEquals(nova.idTransacao(), linha.get("id_externo"));
+    }
+
+    @Test
+    void renovacaoQueAchaPagoRespondePagoSemTrocarATentativa() throws Exception {
+        UUID idSessao = novaSessao();
+        CriarTransacaoResponse antiga = respostaDoGateway(Duration.ofMinutes(1));
+        when(externo.criar(anyString(), any(BigDecimal.class), any(UUID.class))).thenReturn(antiga);
+        when(externo.cancelar(antiga.idTransacao()))
+            .thenThrow(HttpClientErrorException.create(HttpStatus.CONFLICT, "Conflict", HttpHeaders.EMPTY, new byte[0], null));
+        when(externo.consultar(antiga.idTransacao())).thenReturn(situacao(antiga, "PAGO"));
+
+        criar(idSessao, novoPedido()).andExpect(status().isOk());
+        PagamentoDTO dto = criar(idSessao, novoPedido())
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString().transform(this::lerDTO);
+
+        assertEquals(StatusPagamento.PAGO, dto.status());
+        assertNull(dto.urlPagamento());
+        verify(externo, times(1)).criar(anyString(), any(BigDecimal.class), any(UUID.class));
+        Map<String, Object> linha = linhaDaSessao(idSessao);
+        assertEquals("AGUARDANDO_PAGAMENTO", linha.get("status"));
+        assertEquals(antiga.idTransacao(), linha.get("id_externo"));
+    }
+
+    @Test
+    void falhaAmbiguaNoCancelamentoMantemOLinkEARetentativaCancelaDeNovo() throws Exception {
+        UUID idSessao = novaSessao();
+        CriarTransacaoResponse antiga = respostaDoGateway(Duration.ofMinutes(1));
+        CriarTransacaoResponse nova = respostaDoGateway();
+        when(externo.criar(anyString(), any(BigDecimal.class), any(UUID.class))).thenReturn(antiga).thenReturn(nova);
+        when(externo.cancelar(antiga.idTransacao()))
+            .thenThrow(HttpServerErrorException.create(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", HttpHeaders.EMPTY, new byte[0], null))
+            .thenReturn(situacao(antiga, "CANCELADO"));
+
+        criar(idSessao, novoPedido()).andExpect(status().isOk());
+        criar(idSessao, novoPedido()).andExpect(status().is5xxServerError());
+        Map<String, Object> depoisDaFalha = linhaDaSessao(idSessao);
+        assertEquals("AGUARDANDO_PAGAMENTO", depoisDaFalha.get("status"));
+        assertEquals(antiga.idTransacao(), depoisDaFalha.get("id_externo"));
+
+        PagamentoDTO renovada = criar(idSessao, novoPedido())
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString().transform(this::lerDTO);
+
+        verify(externo, times(2)).cancelar(antiga.idTransacao());
+        assertEquals(nova.urlPagamento(), renovada.urlPagamento());
+    }
+
     @Test
     void falhaAmbiguaMantemCriandoEARetentativaRepeteAMesmaChave() throws Exception {
         UUID idSessao = novaSessao();
@@ -245,36 +319,63 @@ class PagamentoCriacaoTest {
     }
 
     @Test
-    void putsConcorrentesDaMesmaSessaoGravamUmaLinhaEDevolvemOMesmoPagamento() throws Exception {
+    void chamadaDentroDaJanelaDeOutraEmVooRespondeCriandoSemChamarOGateway() throws Exception {
         UUID idSessao = novaSessao();
         CriarTransacaoResponse resposta = respostaDoGateway();
-        // os dois só saem do gateway depois de ambos terem lido a linha em CRIANDO
-        CountDownLatch ambosNoGateway = new CountDownLatch(2);
+        CountDownLatch primeiraNoGateway = new CountDownLatch(1);
+        CountDownLatch liberaPrimeira = new CountDownLatch(1);
         when(externo.criar(anyString(), any(BigDecimal.class), any(UUID.class))).thenAnswer(invocacao -> {
-            ambosNoGateway.countDown();
-            if (!ambosNoGateway.await(10, TimeUnit.SECONDS)) {
-                throw new AssertionError("segunda chamada não chegou ao gateway");
-            }
+            primeiraNoGateway.countDown();
+            liberaPrimeira.await(10, TimeUnit.SECONDS);
             return resposta;
         });
 
-        ExecutorService pool = Executors.newFixedThreadPool(2);
+        ExecutorService pool = Executors.newSingleThreadExecutor();
         try {
-            Future<MvcResult> a = pool.submit(() -> criar(idSessao, novoPedido()).andReturn());
-            Future<MvcResult> b = pool.submit(() -> criar(idSessao, novoPedido()).andReturn());
-            MvcResult resultadoA = a.get(20, TimeUnit.SECONDS);
-            MvcResult resultadoB = b.get(20, TimeUnit.SECONDS);
+            Future<MvcResult> primeira = pool.submit(() -> criar(idSessao, novoPedido()).andReturn());
+            primeiraNoGateway.await(10, TimeUnit.SECONDS);
 
-            assertEquals(200, resultadoA.getResponse().getStatus());
-            assertEquals(200, resultadoB.getResponse().getStatus());
-            assertEquals(lerDTO(resultadoA.getResponse().getContentAsString()), lerDTO(resultadoB.getResponse().getContentAsString()));
+            PagamentoDTO aguarde = criar(idSessao, novoPedido())
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString().transform(this::lerDTO);
+            assertEquals(StatusPagamento.CRIANDO, aguarde.status());
+            assertNull(aguarde.urlPagamento());
+            liberaPrimeira.countDown();
+
+            assertEquals(200, primeira.get(20, TimeUnit.SECONDS).getResponse().getStatus());
         } finally {
             pool.shutdownNow();
         }
 
+        verify(externo, times(1)).criar(anyString(), any(BigDecimal.class), any(UUID.class));
+        assertEquals(resposta.urlPagamento(), criar(idSessao, novoPedido()).andReturn().getResponse().getContentAsString().transform(this::lerDTO).urlPagamento());
+        assertEquals(1, jdbc.queryForObject("select count(*) from pagamentos where id_sessao_compra = ?", Integer.class, idSessao));
+    }
+
+    // processo caiu com a chamada em voo: a linha fica ocupada até a janela passar
+    @Test
+    void janelaOcupadaSemChamadaEmVooSoRepeteAChaveDepoisQueExpira() throws Exception {
+        UUID idSessao = novaSessao();
+        when(externo.criar(anyString(), any(BigDecimal.class), any(UUID.class)))
+            .thenThrow(new ResourceAccessException("Read timed out"))
+            .thenReturn(respostaDoGateway());
+        criar(idSessao, novoPedido()).andExpect(status().is5xxServerError());
+        ocuparJanela(idSessao, Instant.now());
+
+        PagamentoDTO aguarde = criar(idSessao, novoPedido())
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString().transform(this::lerDTO);
+        assertEquals(StatusPagamento.CRIANDO, aguarde.status());
+        verify(externo, times(1)).criar(anyString(), any(BigDecimal.class), any(UUID.class));
+
+        ocuparJanela(idSessao, Instant.now().minus(Duration.ofSeconds(9)));
+        PagamentoDTO dto = criar(idSessao, novoPedido())
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString().transform(this::lerDTO);
+
+        assertEquals(StatusPagamento.AGUARDANDO_PAGAMENTO, dto.status());
         List<UUID> chaves = chavesEnviadas(2);
         assertEquals(chaves.get(0), chaves.get(1));
-        assertEquals(1, jdbc.queryForObject("select count(*) from pagamentos where id_sessao_compra = ?", Integer.class, idSessao));
     }
 
     @Test
@@ -296,8 +397,9 @@ class PagamentoCriacaoTest {
         try {
             Future<MvcResult> primeira = pool.submit(() -> criar(idSessao, novoPedido()).andReturn());
             primeiraNoGateway.await(10, TimeUnit.SECONDS);
+            ocuparJanela(idSessao, Instant.now().minus(Duration.ofSeconds(9)));
 
-            // segunda chamada leva falha certa e troca a chave enquanto a primeira ainda espera o gateway
+            // janela vencida com a primeira ainda pendurada: segunda chamada leva falha certa e troca a chave enquanto a primeira ainda espera o gateway
             criar(idSessao, novoPedido()).andExpect(status().isConflict());
             liberaPrimeira.countDown();
 
@@ -334,13 +436,30 @@ class PagamentoCriacaoTest {
     }
 
     private static CriarTransacaoResponse respostaDoGateway() {
+        return respostaDoGateway(Duration.ofMinutes(15));
+    }
+
+    private static CriarTransacaoResponse respostaDoGateway(Duration prazo) {
         UUID idTransacao = UUID.randomUUID();
-        return new CriarTransacaoResponse(idTransacao, "PENDENTE", "http://gateway/pagar/" + idTransacao, vencimentoNoGateway());
+        return new CriarTransacaoResponse(idTransacao, "PENDENTE", "http://gateway/pagar/" + idTransacao, vencimentoNoGateway(prazo));
+    }
+
+    private static CriarTransacaoResponse situacao(CriarTransacaoResponse transacao, String status) {
+        return new CriarTransacaoResponse(transacao.idTransacao(), status, transacao.urlPagamento(), transacao.vencimento());
+    }
+
+    private static Instant vencimentoNoGateway() {
+        return vencimentoNoGateway(Duration.ofMinutes(15));
     }
 
     // truncado: o Postgres guarda microssegundos
-    private static Instant vencimentoNoGateway() {
-        return Instant.now().plus(Duration.ofMinutes(15)).truncatedTo(ChronoUnit.MICROS);
+    private static Instant vencimentoNoGateway(Duration prazo) {
+        return Instant.now().plus(prazo).truncatedTo(ChronoUnit.MICROS);
+    }
+
+    private void ocuparJanela(UUID idSessao, Instant inicio) {
+        // coluna sem fuso, gravada em UTC pelo Hibernate
+        jdbc.update("update pagamentos set tentativa_em = ? where id_sessao_compra = ?", LocalDateTime.ofInstant(inicio, ZoneOffset.UTC), idSessao);
     }
 
     private Map<String, Object> linhaDaSessao(UUID idSessao) {

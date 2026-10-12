@@ -51,4 +51,11 @@ public class ReservasInternoHotelClient {
         return resposta.id();
     }
 
+    public void cancelar(UUID idReserva) {
+        restClient.delete()
+            .uri("/reservas/{id}", idReserva)
+            .retrieve()
+            .toBodilessEntity();
+    }
+
 }

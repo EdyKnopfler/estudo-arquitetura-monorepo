@@ -52,4 +52,7 @@ public class Pagamento {
     @Column
     private Instant vencimento;
 
+    @Column(name = "tentativa_em")
+    private Instant tentativaEm;
+
 }

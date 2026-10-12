@@ -92,7 +92,7 @@ public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID
             WHERE id IN (
                 SELECT id
                 FROM sessao_compra
-                WHERE status = 'INICIADA'
+                WHERE status IN (:status)
                 AND start_time < :horaRef
                 ORDER BY start_time
                 LIMIT :batchSize
@@ -105,7 +105,11 @@ public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID
                 id_reserva_voo_volta AS idReservaVooVolta;
         """
     )
-    List<CancelamentoDTO> marcarLoteComoCancelando(@Param("batchSize") int tamanhoLote, @Param("horaRef") Instant horaRef);
+    List<CancelamentoDTO> marcarLoteComoCancelando(
+        @Param("status") List<String> status,
+        @Param("batchSize") int tamanhoLote,
+        @Param("horaRef") Instant horaRef
+    );
 
     @Modifying
     @Transactional

@@ -4,6 +4,7 @@ import java.util.UUID;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -36,6 +37,13 @@ public class ReservasInternoController {
     @PutMapping("/{id}/trocar")
     public ReservaDTO trocar(@PathVariable("id") UUID id, @RequestBody @Valid CriarReservaRequest dados) {
         return servico.trocarReserva(id, dados.idCliente());
+    }
+
+    // Chamado por sessaocompra ao cancelar a sessão expirada
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void cancelar(@PathVariable("id") UUID id) {
+        servico.cancelarReserva(id);
     }
 
 }

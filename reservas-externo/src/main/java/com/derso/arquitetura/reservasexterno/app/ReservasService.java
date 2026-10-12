@@ -17,7 +17,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ReservasService {
 
-    private static final Duration TEMPO_MAXIMO = Duration.ofMinutes(15);
+    // Mais que escolher + pagar do nosso lado (sessaocompra) — docs/purchase-flow-design.md#dois-timeouts
+    private static final Duration TEMPO_MAXIMO = Duration.ofHours(1);
 
     private final ReservasRepository repositorio;
     private final Simulador simulador;

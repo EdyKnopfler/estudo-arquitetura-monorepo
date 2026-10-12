@@ -92,7 +92,7 @@ class ReservasExternoTest {
     @Test
     void confirmarReservaExpiradaRetorna404() throws Exception {
         // criacao é gravada em UTC (hibernate.jdbc.time_zone)
-        UUID id = inserirDireto(LocalDateTime.now(ZoneOffset.UTC).minusMinutes(16), false);
+        UUID id = inserirDireto(LocalDateTime.now(ZoneOffset.UTC).minusMinutes(61), false);
 
         mockMvc.perform(comoCliente(put("/reservas/confirmar/" + id))).andExpect(status().isNotFound());
 

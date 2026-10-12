@@ -17,7 +17,9 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.RestClient;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -78,6 +80,35 @@ class PagamentoExternoServiceIntegrationTest {
     }
 
     @Test
+    void cancelarTransacaoPendenteDevolveCanceladaECancelarDeNovoDevolveOMesmo() {
+        try (GenericContainer<?> externo = subirPagamentoExterno("SUCESSO")) {
+            PagamentoExternoService servico = servico(externo);
+            CriarTransacaoResponse criada = servico.criar("cartao", new BigDecimal("100.00"), UUID.randomUUID());
+
+            CriarTransacaoResponse primeira = servico.cancelar(criada.idTransacao());
+            CriarTransacaoResponse segunda = servico.cancelar(criada.idTransacao());
+
+            assertEquals(criada.idTransacao(), primeira.idTransacao());
+            assertEquals("CANCELADO", primeira.status());
+            assertEquals("CANCELADO", segunda.status());
+        }
+    }
+
+    // base da reconciliação na renovação: cancelar paga recusa com 409, consultar confirma
+    @Test
+    void cancelarTransacaoPagaDevolve409EConsultarDevolvePaga() {
+        try (GenericContainer<?> externo = subirPagamentoExterno("SUCESSO")) {
+            PagamentoExternoService servico = servico(externo);
+            CriarTransacaoResponse criada = servico.criar("cartao", new BigDecimal("100.00"), UUID.randomUUID());
+            // simula o usuário na tela do gateway (sem auth: a URL é a credencial); o webhook falha só no log
+            RestClient.create(urlBase(externo)).post().uri("/pagar/{id}", criada.idTransacao()).retrieve().toBodilessEntity();
+
+            assertThrows(HttpClientErrorException.Conflict.class, () -> servico.cancelar(criada.idTransacao()));
+            assertEquals("PAGO", servico.consultar(criada.idTransacao()).status());
+        }
+    }
+
+    @Test
     void falhaAntesDeGravarDevolve500SemTransacao() {
         try (GenericContainer<?> externo = subirPagamentoExterno("FALHA_ANTES_DE_GRAVAR")) {
             UUID chave = UUID.randomUUID();
@@ -108,6 +139,7 @@ class PagamentoExternoServiceIntegrationTest {
             .withEnv("DB_PORT", "5432")
             .withEnv("SPRING_PROFILES_ACTIVE", "test")
             .withEnv("SIMULACAO_RESULTADO", resultado)
+            .withEnv("SIMULACAO_RESULTADOPAGAR", "ACEITO")
             .waitingFor(Wait.forLogMessage(".*Started PagamentoExternoApplication.*\\n", 1)
                 .withStartupTimeout(Duration.ofMinutes(3)));
         externo.start();
@@ -115,11 +147,16 @@ class PagamentoExternoServiceIntegrationTest {
     }
 
     private static CriarTransacaoResponse criar(GenericContainer<?> externo, UUID chave) {
+        return servico(externo).criar("cartao", new BigDecimal("100.00"), chave);
+    }
+
+    private static PagamentoExternoService servico(GenericContainer<?> externo) {
         // credenciais default de internal-backend.clients de pagamento-externo
-        PagamentoExternoService servico = new PagamentoExternoService(
-            "http://" + externo.getHost() + ":" + externo.getMappedPort(PORTA),
-            "pagamentoExternoId", "pagamentoExternoSecret");
-        return servico.criar("cartao", new BigDecimal("100.00"), chave);
+        return new PagamentoExternoService(urlBase(externo), "pagamentoExternoId", "pagamentoExternoSecret");
+    }
+
+    private static String urlBase(GenericContainer<?> externo) {
+        return "http://" + externo.getHost() + ":" + externo.getMappedPort(PORTA);
     }
 
     private static int transacoesComChave(UUID chave) {

@@ -9,41 +9,39 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import com.derso.arquitetura.sessaocompra.SessaoCompraRepository;
+import com.derso.arquitetura.sessaocompra.SessaoCompraService;
 import com.derso.arquitetura.sessaocompra.dto.CancelamentoDTO;
-import com.derso.arquitetura.sessaocompra.entity.SessaoCompraStatus;
+import com.derso.arquitetura.sessaocompra.entity.SessaoCompra;
 
 @Component
 @Profile("timeout")
 public class TimeoutTask {
 
-    private static final Duration TEMPO_MAXIMO = Duration.ofMinutes(15);
     private static final int TAMANHO_LOTE = 100;
 
     private final SessaoCompraRepository repositorio;
+    private final SessaoCompraService servico;
 
-    public TimeoutTask(SessaoCompraRepository repositorio) {
+    public TimeoutTask(SessaoCompraRepository repositorio, SessaoCompraService servico) {
         this.repositorio = repositorio;
+        this.servico = servico;
     }
 
+    // Prazos: docs/purchase-flow-design.md#dois-timeouts
     @Scheduled(fixedDelayString = "PT1M")
     public void processaTimeouts() {
+        processa(List.of("INICIADA"), SessaoCompra.PRAZO_INICIADA);
+        processa(List.of("CRIANDO_PAGAMENTO", "EFETUANDO_PAGAMENTO"), SessaoCompra.TOLERANCIA_LIMPEZA);
+    }
+
+    private void processa(List<String> status, Duration prazo) {
         List<CancelamentoDTO> expiradas;
 
         do {
-            Instant referencia = Instant.now().minus(TEMPO_MAXIMO);
-            expiradas = repositorio.marcarLoteComoCancelando(TAMANHO_LOTE, referencia);
+            Instant referencia = Instant.now().minus(prazo);
+            expiradas = repositorio.marcarLoteComoCancelando(status, TAMANHO_LOTE, referencia);
 
-            for (CancelamentoDTO sessao : expiradas) {
-                try {
-                    // TODO chamada aos serviços externos
-                    // voo.cancelar(sessao.idReservaVooIda());
-                    // hotel.cancelar(sessao.getReservaHotelId());
-                    // voo.cancelar(sessao.idReservaVooVolta());
-                    repositorio.marcarStatusCancelamento(sessao.id(), SessaoCompraStatus.CANCELADA);
-                } catch (Exception e) {
-                    repositorio.marcarStatusCancelamento(sessao.id(), SessaoCompraStatus.FALHA_CANCELAMENTO);
-                }
-            }
+            expiradas.forEach(servico::desfazerPreReservas);
         } while (expiradas.size() > 0);
     }
 

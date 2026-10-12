@@ -4,8 +4,8 @@ Dois tipos de teste, cada um com o modo que ele exige — nenhum teste roda em d
 
 ## Rodar
 
-- tudo: `./mvnw install && ./mvnw test -Pintegrado`
-  - o reactor roda um módulo por vez, em ordem de dependência, e para na primeira falha
+- tudo: [`./run-all-tests.sh`](../run-all-tests.sh) — microsserviço, depois integrado, derrubando os containers de teste ao fim de cada fase
+  - um Maven por módulo: num reactor só, o processo do Maven fica de pé a suíte inteira e a máquina de 8 GB swapa
   - `install` antes: gera os jars que o integrado sobe (ver [abaixo](#teste-integrado-mvnw-package--dskiptests--mvnw-test--pintegrado))
   - nunca os dois em paralelo: o integrado precisa dos jars, e a RAM não aguenta
 - um módulo: `./mvnw -pl <módulo> install`, depois `./mvnw -pl <módulo> test -Pintegrado`

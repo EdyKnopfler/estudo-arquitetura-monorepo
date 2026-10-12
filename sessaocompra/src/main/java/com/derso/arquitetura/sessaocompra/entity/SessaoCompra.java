@@ -5,6 +5,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -13,6 +14,12 @@ import java.util.UUID;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 public class SessaoCompra {
+
+    // Prazo pra escolher e avançar, em INICIADA — docs/purchase-flow-design.md#dois-timeouts
+    public static final Duration PRAZO_INICIADA = Duration.ofMinutes(15);
+
+    // Limpeza de sessão largada com pagamento em criação/criado; o pagamento em si é do timeout do pagamento
+    public static final Duration TOLERANCIA_LIMPEZA = Duration.ofHours(1);
 
     @Id
     @Column(nullable = false, updatable = false)

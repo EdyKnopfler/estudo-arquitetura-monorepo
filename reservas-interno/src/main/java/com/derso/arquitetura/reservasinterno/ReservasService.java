@@ -63,6 +63,14 @@ public class ReservasService {
         return new ReservaDTO(novaReserva.getId());
     }
 
+    // Já apagada (retentativa depois de sucesso) não é erro. Falha do externo propaga: quem chama registra.
+    public void cancelarReserva(UUID id) {
+        repositorio.findById(id).ifPresent(reserva -> {
+            servicoExterno.cancelar(reserva.getIdExterno());
+            repositorio.delete(reserva);
+        });
+    }
+
     private void liberarMelhorEsforco(Reserva reservaAntiga) {
         try {
             servicoExterno.cancelar(reservaAntiga.getIdExterno());

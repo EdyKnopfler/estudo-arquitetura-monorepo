@@ -7,12 +7,12 @@ O que já está decidido e falta implementar. Decisões em aberto: [to-decide.md
 Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, SAGA) está desenhado em [purchase-flow-design.md](purchase-flow-design.md).
 
 * [ ] **Timeout:**
-  * [ ] sessão em `INICIADA` expirada (`TimeoutTask`, já agendado): **cancela e desfaz as pré-reservas efetuadas**, via REST em `reservas-interno` — não é SAGA
-  * [ ] pagamento não efetuado a tempo (`TimeoutPagamentoTask`): mesma operação do cancelamento (pede cancelamento ao externo; já pago segue o fluxo) — ver [purchase-flow-design.md](purchase-flow-design.md#dois-timeouts)
-  * [ ] modelar os registros de tempo: o tempo da sessão não conta enquanto corre o do pagamento
-    * timeout da sessão é pra sessão abandonada: com pagamento criado, não pega mais
+  * [X] sessão em `INICIADA` expirada (`TimeoutTask`, já agendado): **cancela e desfaz as pré-reservas efetuadas**, via REST em `reservas-interno` — não é SAGA
+    * [X] também em `CRIANDO_PAGAMENTO`/`EFETUANDO_PAGAMENTO`, com tolerância bem maior — só limpeza de sessão largada
+  * [ ] pagamento não efetuado a tempo (`TimeoutPagamentoTask`, em `pagamento-interno`): mesma operação do cancelamento (pede cancelamento ao externo; já pago segue o fluxo), sem mexer na sessão — ver [purchase-flow-design.md](purchase-flow-design.md#dois-timeouts)
+  * [ ] modelar os registros de tempo
     * [ ] timeout do pagamento reinicia a cada link criado — é pra pagamento criado e abandonado, mas tem que dar tempo de pagar
-    * [ ] pré-reservas vencem depois da janela de pagamento (X+Y): têm que durar escolher tudo *e* pagar — hoje pré-reserva, sessão e link são todos 15 min
+    * [X] pré-reservas vencem depois da janela de pagamento (X+Y): têm que durar escolher tudo *e* pagar
 
 * [ ] **Sessão de compra — ponta da SAGA** (decidido, ver [purchase-flow-design.md](purchase-flow-design.md#saga-estendida--sessaocompra-como-bookend-do-anel)):
   * [ ] papel `sagas` em `sessaocompra` (passa a depender de `sagas-common`), fila `sessaocompra`; `voo.proximafila` e `pagamento.filaanterior` apontando pra ela
@@ -30,13 +30,13 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
       * [X] (interno) sem pagamento criado → cria e devolve o link
       * [X] (interno) pagamento já criado, link perdido → devolve o mesmo
       * [X] (interno) criação sem resposta, transação já expirada lá → tentativa nova na mesma chamada
-      * [ ] (interno) link perto de vencer → cancela no externo e entrega outro
-        * link recente é entregue sem consultar (ex.: prazo de 15 min, criado há mais de 10 → renova)
-        * âncora (relógio nosso × vencimento do externo): ver [to-decide.md](to-decide.md)
+      * [X] (interno) criação em andamento (dentro da janela da tentativa) → "criando, aguarde"
+      * [X] (interno) link perto de vencer → cancela no externo e entrega outro
+        * link com folga é entregue sem consultar (ex.: faltando mais de 2–3 min pro vencimento devolvido pelo externo)
         * outra aba com o link antigo aberto: renovado, o antigo é rejeitado no gateway — vale o link vigente
-      * [ ] (interno) ao renovar, o cancelamento descobre que já está pago → responde "já pago" e dispara a SAGA ([reconciliação](reconciliation.md))
+      * [X] (interno) ao renovar, o cancelamento descobre que já está pago → responde "já pago", sem disparar a SAGA (fecha pelo webhook) ([reconciliação](reconciliation.md))
       * [X] (sessaocompra) faltam pré-reservas → complete o pedido antes de continuar
-      * [ ] (sessaocompra) sessão expirada (só sem link de pagamento válido) → pré-reservas canceladas, inicie outra sessão
+      * [X] (sessaocompra) sessão já cancelada pelo timeout → falha, inicie outra sessão
   * [ ] **voltar ao pedido** (cancelar o pagamento corrente → sessão `INICIADA`), orientado a estado ([diretriz](state-driven-endpoints.md), [desenho](purchase-flow-design.md#cancelamento-e-prazo--gateway-como-juiz)): endpoint em `sessaocompra` e em `pagamento-interno`; o avanço seguinte abre tentativa nova com os ids de reserva atuais
     * casos, um por vez:
       * [ ] (interno) link criado → cancela no externo
@@ -75,13 +75,13 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
 * [ ] **Hotel:**
   * [X] **web:** interação com usuário (pré-reservas) — chamado por `sessaocompra`, não o inverso
     * [X] chama endpoints do serviço externo
-    * [ ] cancelamento por timeout da sessão (chamado pelo `TimeoutTask` de `sessaocompra`, via REST)
+    * [X] cancelamento por timeout da sessão (chamado pelo `TimeoutTask` de `sessaocompra`, via REST)
   * [ ] **sagas:** eventos de confirmação e cancelamento por reversão
     * [X] fiação das filas de "entrada" e saída
     * [ ] chama endpoints do serviço externo
   * [X] **externo:** simula serviço externo, **introduz erros aleatórios**
     * [X] **pré-reserva:** cria reserva sem confirmação
-    * [X] **confirmação:** confirma pré-reservas feitas _há menos de 15 minutos_
+    * [X] **confirmação:** confirma pré-reservas dentro da validade
     * [X] **cancelamento:** cancela pré-reservas
     * [X] _deve falhar às vezes de propósito_
   * [ ] Testes integrados
@@ -92,7 +92,7 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
 * [ ] **Voo:** para voos ida e volta, mesma estrutura de _Hotel_
   * [X] **web:** interação com usuário (pré-reservas) — chamado por `sessaocompra`, não o inverso
     * [X] chama endpoints do serviço externo
-    * [ ] cancelamento por timeout da sessão (chamado pelo `TimeoutTask` de `sessaocompra`, via REST)
+    * [X] cancelamento por timeout da sessão (chamado pelo `TimeoutTask` de `sessaocompra`, via REST)
   * [ ] **sagas:** eventos de confirmação e cancelamento por reversão
     * [X] fiação das filas de "entrada" e saída
     * [ ] chama endpoints do serviço externo
@@ -100,7 +100,7 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
     * [ ] fim da cadeia de sucesso: publica `EXECUTE` na fila `sessaocompra` (confirma a viagem); recebe `DESFACA` de volta se `sessaocompra` falhar ao confirmar
   * [X] **externo:** simula serviço externo, **introduz erros aleatórios**
     * [X] **pré-reserva:** cria reserva sem confirmação
-    * [X] **confirmação:** confirma pré-reservas feitas _há menos de 15 minutos_
+    * [X] **confirmação:** confirma pré-reservas dentro da validade
     * [X] **cancelamento:** cancela pré-reservas
     * [X] _deve falhar às vezes de propósito_
   * [ ] Testes integrados
@@ -135,7 +135,6 @@ Estratégia e comandos: [testing-strategy.md](testing-strategy.md). Integrados p
   - webhook publica `EXECUTE` na fila `pagamento`: fila temporária ligada à exchange `sagas` + `basicGet`
 - [ ] **Com os handlers da SAGA e o timeout implementados:**
   - handlers de `ReservasSagas`/`PagamentoSagas` ponta a ponta — `ReservasSagasTest` já cobre os desfechos de `confirmar`/`cancelar` isolados; falta com id real na mensagem, e `PagamentoSagas`
-  - jobs de `TimeoutTask` em `sessaocompra`
   - integrados "encaminha sucesso" / "notificação de falha" de [Features por domínio](#features-por-domínio) (pagamento, hotel, voo)
 - [ ] **`PUT /sessoes/{id}/pagamento-efetuado` sem teste de propósito** — qualquer cliente com JWT válido marca qualquer sessão em `EFETUANDO_PAGAMENTO` como `PAGAMENTO_EFETUADO` (sem ownership, sem autenticação de serviço). Teste agora congelaria esse buraco; testar quando virar consumidor de fila (ver comentário no controller e [purchase-flow-design.md](purchase-flow-design.md)).
 

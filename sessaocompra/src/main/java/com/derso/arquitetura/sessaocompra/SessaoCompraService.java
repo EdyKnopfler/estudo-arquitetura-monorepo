@@ -11,6 +11,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.derso.arquitetura.sessaocompra.app.dto.EtapaCompra;
 import com.derso.arquitetura.sessaocompra.app.dto.IniciarPagamentoResponse;
+import com.derso.arquitetura.sessaocompra.dto.CancelamentoDTO;
 import com.derso.arquitetura.sessaocompra.entity.SessaoCompra;
 import com.derso.arquitetura.sessaocompra.entity.SessaoCompraStatus;
 import com.derso.arquitetura.sessaocompra.pagamentointerno.PagamentoInternoClient;
@@ -28,6 +29,8 @@ public class SessaoCompraService {
 
     // StatusPagamento de pagamento-interno (módulo separado, sem tipos compartilhados)
     private static final String STATUS_AGUARDANDO_PAGAMENTO = "AGUARDANDO_PAGAMENTO";
+    private static final String STATUS_PAGO = "PAGO";
+    private static final String STATUS_CRIANDO = "CRIANDO";
 
     private final SessaoCompraRepository repositorio;
     private final ReservasInternoHotelClient reservasInternoHotelClient;
@@ -141,6 +144,16 @@ public class SessaoCompraService {
             throw new BusinessException("Falha ao iniciar pagamento, tente novamente");
         }
 
+        // Só responde: o status da sessão fecha pelo fluxo do webhook, não pela retentativa
+        if (STATUS_PAGO.equals(pagamento.status())) {
+            return new IniciarPagamentoResponse(EtapaCompra.JA_PAGO, null, null);
+        }
+
+        // Outra chamada ainda em voo no pagamento-interno; a sessão segue em CRIANDO_PAGAMENTO
+        if (STATUS_CRIANDO.equals(pagamento.status())) {
+            return new IniciarPagamentoResponse(EtapaCompra.AGUARDAR, null, null);
+        }
+
         // Só o caminho feliz; outro estado falha alto até ganhar tratamento — docs/state-driven-endpoints.md
         if (!STATUS_AGUARDANDO_PAGAMENTO.equals(pagamento.status())) {
             throw new IllegalStateException("Estado de pagamento não tratado para sessão " + id + ": " + pagamento.status());
@@ -148,6 +161,26 @@ public class SessaoCompraService {
 
         transactionTemplate.execute(status -> repositorio.pagamentoCriado(id));
         return new IniciarPagamentoResponse(EtapaCompra.PAGAR, pagamento.urlPagamento(), pagamento.vencimento());
+    }
+
+    // Chamado pelo TimeoutTask, com a sessão já marcada CANCELANDO. Prazo é só do job: a requisição
+    // só olha o status — docs/state-driven-endpoints.md. Falha ao desfazer fica em FALHA_CANCELAMENTO.
+    public void desfazerPreReservas(CancelamentoDTO sessao) {
+        try {
+            if (sessao.idReservaHotel() != null) {
+                reservasInternoHotelClient.cancelar(sessao.idReservaHotel());
+            }
+            if (sessao.idReservaVooIda() != null) {
+                reservasInternoVooClient.cancelar(sessao.idReservaVooIda());
+            }
+            if (sessao.idReservaVooVolta() != null) {
+                reservasInternoVooClient.cancelar(sessao.idReservaVooVolta());
+            }
+            repositorio.marcarStatusCancelamento(sessao.id(), SessaoCompraStatus.CANCELADA);
+        } catch (Exception e) {
+            log.warn("Falha ao desfazer pré-reservas da sessão expirada {}", sessao.id(), e);
+            repositorio.marcarStatusCancelamento(sessao.id(), SessaoCompraStatus.FALHA_CANCELAMENTO);
+        }
     }
 
     @Transactional

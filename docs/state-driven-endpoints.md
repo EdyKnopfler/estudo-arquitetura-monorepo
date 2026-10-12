@@ -11,6 +11,15 @@ Diretriz de projeto pros endpoints que movem o fluxo de compra entre etapas. Apl
   - ex.: "já pago" não é erro do pedido de link — é a etapa atual
 - vale pra cada caminho que o estado permite (2 ou 10, tanto faz): cada um é um endpoint desses
 - repetir a mesma intenção converge — retentativa sai de graça, sem tratamento à parte
+  - lado de lá indicou sucesso: devolve o sucesso pra trás; indicou falha: devolve a falha
+- tentativa que chega com o timeout já estourado: devolve a falha
+- quem recebe a resposta (front, `sessaocompra`) decide o que fazer com ela: retentar, recomeçar, avisar o usuário
+
+## Um estado, um lugar
+
+- o mesmo estado não é tratado em vários pontos do serviço — o que importa é conciliar com o externo e com as retentativas
+- prazo é do job de timeout; a requisição só olha o status
+- disputa rara entre requisição e job não é tratada: se a requisição chega antes, o job cancela depois e a próxima requisição recebe a falha
 
 ## Como evoluir
 

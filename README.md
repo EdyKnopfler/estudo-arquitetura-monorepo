@@ -21,10 +21,11 @@ stateDiagram-v2
     CRIANDO_PAGAMENTO --> EFETUANDO_PAGAMENTO: pagamento criado no externo
     CRIANDO_PAGAMENTO --> INICIADA: cancelado pelo usuário
     INICIADA --> CANCELANDO: timeout
+    CRIANDO_PAGAMENTO --> CANCELANDO: abandonada (timeout longo)
 
     EFETUANDO_PAGAMENTO --> PAGAMENTO_EFETUADO: webhook ou reconciliação, pagamento registrado (SAGA dispara)
     EFETUANDO_PAGAMENTO --> INICIADA: cancelado pelo usuário
-    EFETUANDO_PAGAMENTO --> INICIADA: timeout do pagamento, pagamento cancelado
+    EFETUANDO_PAGAMENTO --> CANCELANDO: abandonada (timeout longo)
 
     PAGAMENTO_EFETUADO --> VIAGEM_RESERVADA: SAGA completa (pagamento + hotel + voo)
     PAGAMENTO_EFETUADO --> INICIADA: SAGA falhou, compensação cancela o que foi fechado
@@ -98,6 +99,9 @@ pagamento-interno-sagas-1       | [pagamento] ESTORNANDO pagamento — rastreio=
 Só precisa do Docker no ar — Postgres e RabbitMQ sobem sozinhos via Testcontainers (nada do `docker compose`). Estratégia e regras em [docs/testing-strategy.md](docs/testing-strategy.md).
 
 ```bash
+# tudo (microsserviço + integrados), um módulo por vez
+./run-all-tests.sh
+
 # testes de microsserviço (suíte padrão)
 ./mvnw test
 
@@ -130,10 +134,10 @@ Pra quem está chegando: cada módulo com as etapas do fluxo em que ele aparece 
   * [ ] cancelar pagamento (web)
   * [ ] confirmar viagem, fim da SAGA (fila — só desenho)
   * [ ] reverter, falha na SAGA (fila — só desenho)
-  * [ ] expirar sessão (timeout)
-  * [ ] expirar pagamento não confirmado (timeout)
+  * [X] expirar sessão (timeout)
 * **reservas-interno** — hotel e voo
   * [X] pré-reserva / troca (web)
+  * [X] cancelar pré-reserva, sessão expirada (web)
   * [ ] confirmar (sagas)
   * [ ] cancelar, compensação (sagas)
 * **reservas-externo** — simula fornecedor _instável_ de hotel/voo
@@ -143,6 +147,7 @@ Pra quem está chegando: cada módulo com as etapas do fluxo em que ele aparece 
 * **pagamento-interno**
   * [X] criar pagamento (web)
   * [ ] cancelar pagamento (web)
+  * [ ] expirar pagamento não confirmado (timeout)
   * [ ] webhook (web — dispara a SAGA, mas sem dados de negócio)
   * [ ] confirmar pagamento (sagas — stub)
   * [ ] estornar (sagas — stub)

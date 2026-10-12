@@ -13,13 +13,19 @@ Mecanismo em [SessaoCompraController](../sessaocompra/src/main/java/com/derso/ar
 
 ## Dois timeouts
 
-- **timeout da sessão** (`TimeoutTask`): só pega sessão em `INICIADA` (pendente de criar pagamento) → cancela e **desfaz as pré-reservas efetuadas**.
+- **timeout da sessão** (`TimeoutTask`): sessão abandonada → cancela e **desfaz as pré-reservas efetuadas**.
+  - `INICIADA` (pendente de criar pagamento): prazo pra escolher e avançar
+  - `CRIANDO_PAGAMENTO`/`EFETUANDO_PAGAMENTO`: tolerância bem maior, só pra limpar sessão largada — o pagamento em si é do timeout do pagamento
   - serviços dão erro e nem o cancelamento consegue seguir → `FALHA_CANCELAMENTO`, terminal — registra o caso em vez de perdê-lo
-- **timeout do pagamento** (`TimeoutPagamentoTask`): tempo pro cliente pagar, sessão em `EFETUANDO_PAGAMENTO` — janela própria, alinhada à validade do meio de pagamento (PIX/redirect de gateway)
-  - estourou → mesma operação do [cancelamento](#cancelamento-e-prazo--gateway-como-juiz): pede cancelamento ao gateway; já pago segue o fluxo, senão volta a sessão pra `INICIADA`, pro cliente iniciar outro pagamento
-- relógio: enquanto corre o timeout do pagamento, o tempo da sessão não conta
+- **timeout do pagamento** (`TimeoutPagamentoTask`, em `pagamento-interno`): tempo pro cliente pagar — janela própria, alinhada à validade do meio de pagamento (PIX/redirect de gateway)
+  - 15 min: com os 15 de `INICIADA`, a sessão completa (escolher + pagar) dura meia hora
+  - estourou → mesma operação do [cancelamento](#cancelamento-e-prazo--gateway-como-juiz): pede cancelamento ao gateway; já pago segue o fluxo
+  - não mexe na sessão: o próximo avanço abre tentativa nova
+- relógio: a cada URL nova, link e timeout do pagamento zeram juntos, cada um com seu prazo
+- pré-reserva no externo dura mais que escolher + pagar (prazo de `INICIADA` + timeout do pagamento) — senão a confirmação falha numa venda feita no prazo
+  - a limpeza não depende disso: pode esperar o quanto quisermos
 
-Os dois competem com a mudança de estado pelo mesmo tipo de update condicional guardado por `status` (`WHERE status = '...'`) de `iniciarPagamento`/`marcarLoteComoCancelando` — quem mudar o status primeiro no banco "vence"; o outro não encontra mais linha pra afetar.
+Cada timeout compete com a mudança de estado pelo mesmo tipo de update condicional guardado por `status` (`WHERE status = '...'`) — em `sessaocompra`, `iniciarPagamento`/`marcarLoteComoCancelando`: quem mudar o status primeiro no banco "vence"; o outro não encontra mais linha pra afetar.
 
 ## Criação do pagamento
 
@@ -33,7 +39,7 @@ front → `sessaocompra` (`iniciando-pagamento`) → `pagamento-interno` (`PUT /
 - nenhum salto reverte o próprio estado ao falhar — quem chamou só retenta
 - nenhum salto retenta sozinho (nem na requisição, nem por job): quem dispara retentativa é o front
   - gerar outra transação quando o gateway devolve uma expirada não é retentativa, é reconciliação ([abaixo](#pagamento-da-sessão-tentativa-trocável))
-  - sessão volta pra `INICIADA` só por timeout do pagamento ou cancelamento explícito ([abaixo](#cancelamento-e-prazo--gateway-como-juiz)) — inclusive o pedido pela [compensação da SAGA](#saga-estendida--sessaocompra-como-bookend-do-anel)
+  - sessão volta pra `INICIADA` só por cancelamento explícito ([abaixo](#cancelamento-e-prazo--gateway-como-juiz)) — do usuário ou pedido pela [compensação da SAGA](#saga-estendida--sessaocompra-como-bookend-do-anel)
 - `pagamento-interno` é o guardião da URL do nosso lado: `sessaocompra` não guarda, repete o `PUT` a cada `iniciando-pagamento`
   - vale com a sessão em `CRIANDO_PAGAMENTO` ou já em `EFETUANDO_PAGAMENTO` (o front pode ter perdido a resposta)
 - URL obtida só é substituída depois de cancelada ou vencida no gateway
@@ -82,9 +88,13 @@ Criar envolve o gateway e o nosso banco, sem transação comum. Chamar o gateway
 - a tentativa é a chave de idempotência da linha (e o `id_externo` que ela rende), trocada no lugar:
   - cada tentativa nasce com uma chave nova, gravada antes da chamada
   - falha ambígua (timeout, 5xx): próxima chamada repete com a mesma chave — se a transação foi criada, o gateway devolve a mesma, sem criar outra
-  - gateway devolve transação expirada (chave repetida tarde, depois de uma falha ambígua): troca a chave e cria outra na mesma chamada — o `PUT` só chega com a sessão viva, então o prazo do gateway não importa ao interno
+    - chamada ainda em andamento: a linha guarda o início da tentativa; dentro da janela (o timeout HTTP da chamada ao gateway) responde "criando, aguarde", sem chamar o gateway — só depois dela a chamada é dada como morta e a próxima repete a chave
+  - gateway devolve transação expirada (chave repetida tarde, depois de uma falha ambígua): troca a chave e cria outra na mesma chamada — expirada no gateway não encerra o pagamento da sessão
   - troca de chave é update condicional (`WHERE chave = :antiga`), contra chamadas concorrentes
-  - obtida a URL: toda chamada seguinte devolve a mesma, sem chamar o gateway
+  - obtida a URL: toda chamada seguinte devolve a mesma, sem chamar o gateway — até ela ficar perto de vencer
+  - perto de vencer: pelo vencimento devolvido pelo gateway, guardado aqui (relógios presumidos sincronizados), faltando menos que uma margem (alguns minutos)
+    - cancela no gateway e abre tentativa nova
+    - o cancelamento acha pago: responde "já pago" — não dispara a SAGA nem mexe na sessão; quem fecha o estado é o webhook
 - a regra é "já obtivemos URL", não "já entregamos": se ela chegou ao usuário não sabemos, e não importa — devolvemos a mesma
 - o webhook correlaciona por `id_externo` (passo 5 da cadeia abaixo)
 
@@ -96,7 +106,7 @@ Cancelar × pagar e prazo × pagar são corridas; quem decide é o gateway, font
   - sem URL: nada a consultar
   - com URL: pede cancelamento ao gateway — já pago faz o pagamento vencer e seguir o fluxo
   - cancelado, o próximo `PUT` abre tentativa nova — chave nova, ids de reserva atuais
-- timeout do pagamento é a mesma operação, com outro gatilho; nosso prazo é maior que o do gateway — quando ele dispara, a URL já venceu e a consulta é definitiva
+- timeout do pagamento é a mesma operação no gateway, com outro gatilho, sem mexer na sessão; nosso prazo é maior que o do gateway — quando ele dispara, a URL já venceu e a consulta é definitiva
 - pagamento aceito que chega pelo webhook é reconciliado a favor da venda, mesmo fora da tentativa vigente
 
 ## SAGA estendida — sessaocompra como bookend do anel
@@ -142,7 +152,7 @@ Ou seja: nenhum serviço recebe uma "mensagem web" só pra ir buscar algo no ban
 
 Dois axiomas assumidos pra esse simulador (decisão de design deliberada — não é ponto a reavaliar):
 
-1. **Cancelamento/expiração automática do lado externo é confiável.** TTL de 15min em `criar`/`confirmar` (`ReservasService`/`ReservasRepository`, `reservas-externo`); os dois são `@Transactional`, então falha explícita = zero efeito colateral. Consequência: o caminho de compensação (cancelar/liberar) não precisa de entrega garantida — melhor esforço basta, mesmo padrão de `ReservasService.liberarMelhorEsforco` (`reservas-interno`).
+1. **Cancelamento/expiração automática do lado externo é confiável.** TTL em `criar`/`confirmar` (`ReservasService`/`ReservasRepository`, `reservas-externo`); os dois são `@Transactional`, então falha explícita = zero efeito colateral. Consequência: o caminho de compensação (cancelar/liberar) não precisa de entrega garantida — melhor esforço basta, mesmo padrão de `ReservasService.liberarMelhorEsforco` (`reservas-interno`).
 2. **`confirmar`/`remover` são e continuam não-idempotentes.** Guarda estrita `WHERE confirmado = false` em `ReservasRepository` (`reservas-externo`) — uma segunda chamada depois de sucesso real dá o mesmo erro (`EntityNotFoundException`) de uma falha real, sem key nem endpoint de consulta pra desambiguar. Toda a responsabilidade de nunca chamar `confirmar` duas vezes cai em `reservas-interno` — sem ajuda do lado de lá.
 3. **`reservas-externo` precisa de um endpoint de consulta (`consultar`).** Sem ele, um timeout em `confirmar` é ambiguidade irredutível — dado o axioma 2, sucesso e falha real são indistinguíveis sem perguntar de volta à fonte de verdade. É o que torna o resto deste desenho possível.
 

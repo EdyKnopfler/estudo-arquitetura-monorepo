@@ -7,6 +7,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -115,6 +116,39 @@ class ReservasInternoWebTest {
 
         assertEquals(1, contar(nova));
         assertEquals(1, contar(antiga));
+    }
+
+    @Test
+    void cancelarCancelaNoExternoEApagaALinha() throws Exception {
+        UUID cliente = UUID.randomUUID();
+        UUID idExterno = UUID.randomUUID();
+        when(externo.criar(cliente)).thenReturn(idExterno);
+        UUID reserva = criar(cliente);
+
+        requisicao(delete("/reservas/" + reserva), CLIENT_SECRET, "").andExpect(status().isNoContent());
+
+        verify(externo).cancelar(idExterno);
+        assertEquals(0, contar(reserva));
+    }
+
+    @Test
+    void cancelarComFalhaNoExternoDevolve5xxEMantemALinha() throws Exception {
+        UUID cliente = UUID.randomUUID();
+        UUID idExterno = UUID.randomUUID();
+        when(externo.criar(cliente)).thenReturn(idExterno);
+        UUID reserva = criar(cliente);
+        doThrow(new RuntimeException("reservas-externo fora")).when(externo).cancelar(idExterno);
+
+        requisicao(delete("/reservas/" + reserva), CLIENT_SECRET, "").andExpect(status().is5xxServerError());
+
+        assertEquals(1, contar(reserva));
+    }
+
+    @Test
+    void cancelarReservaJaApagadaDevolve204SemChamarExterno() throws Exception {
+        requisicao(delete("/reservas/" + UUID.randomUUID()), CLIENT_SECRET, "").andExpect(status().isNoContent());
+
+        verify(externo, never()).cancelar(any());
     }
 
     @Test

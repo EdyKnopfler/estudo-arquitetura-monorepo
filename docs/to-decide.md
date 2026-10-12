@@ -4,10 +4,6 @@ Decisões em aberto. O que já está decidido e falta implementar fica em [todo.
 
 ## Features por domínio
 
-### Timeout
-
-* [ ] destino da sessão presa em `CRIANDO_PAGAMENTO` (front desistiu de retentar, ou processo caiu no meio): nenhum timeout pega
-
 ### Sessão de compra — ponta da SAGA
 
 * [ ] modelagem de status da reversão (`DESFACA` em `sessaocompra`):
@@ -18,12 +14,11 @@ Decisões em aberto. O que já está decidido e falta implementar fica em [todo.
 
 ### Pagamentos
 
-* [ ] âncora da renovação do link perto de vencer: idade pelo nosso relógio ou vencimento devolvido pelo criar do externo
 * [ ] se consultar e cancelar do externo têm falha proposital (chaos)
 * [ ] webhook:
   * [ ] como correlacionar webhook de tentativa antiga — a linha só guarda o `id_externo` vigente
   * [ ] duas tentativas pagas na mesma sessão
-  * [ ] o que o interno faz com o webhook de recusa (no externo, a transação continua pendente)
+  * [ ] o que o interno faz com o webhook de recusa (no externo, a transação continua pendente) — ex.: voltar a sessão pra `INICIADA` automaticamente
   * [ ] mecanismo pra sessão ir pra `PAGAMENTO_EFETUADO` (hoje `PUT /sessoes/{id}/pagamento-efetuado`, sem auth de serviço)
 
 ### Voo
@@ -37,6 +32,11 @@ Decisões em aberto. O que já está decidido e falta implementar fica em [todo.
 - [ ] contrato da mensagem ([module-boundaries.md](module-boundaries.md#contrato-tipado-para-a-mensagem-da-saga)): `Map<String, Object>` genérico (`Messaging`) ou DTO próprio da fila (ids de correlação da sessão + ids de reserva/pagamento)
   - a favor do DTO: não reaproveitar entidade JPA nem DTO de REST — contratos com motivos de mudança diferentes
   - ganha peso com os ids de negócio na mensagem ([payload](purchase-flow-design.md#payload-da-mensagem-da-saga))
+
+### Estados intermediários
+
+- [ ] estado intermediário que guarda chamada externa (ex.: status de intenção em `Reserva`): como não deixá-lo preso
+  - timeout próprio pra cada um, ou limpar a partir do timeout da sessão
 
 ### Testes
 

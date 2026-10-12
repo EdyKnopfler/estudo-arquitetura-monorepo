@@ -64,7 +64,7 @@ Java 25 (virtual threads), Spring Boot 4.0.1, Maven multi-módulo (8 módulos + 
 
 ## Testes
 
-Estratégia e regras obrigatórias em [docs/testing-strategy.md](docs/testing-strategy.md): teste de microsserviço usa sempre Testcontainers (`./mvnw test`); teste integrado entre serviços é `@Tag("integrado")` (`./mvnw package -DskipTests && ./mvnw test -Pintegrado`). Nenhum teste depende do compose de dev — só precisa do Docker no ar. Rodar módulo a módulo (`-pl`): máquina de 8 GB.
+Estratégia e regras obrigatórias em [docs/testing-strategy.md](docs/testing-strategy.md): teste de microsserviço usa sempre Testcontainers (`./mvnw test`); teste integrado entre serviços é `@Tag("integrado")` (`./mvnw package -DskipTests && ./mvnw test -Pintegrado`). Nenhum teste depende do compose de dev — só precisa do Docker no ar. Rodar módulo a módulo (`-pl`): máquina de 8 GB — suíte inteira: `./run-all-tests.sh`.
 
 ## Pendências
 
