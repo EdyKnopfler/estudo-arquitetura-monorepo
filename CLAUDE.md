@@ -4,6 +4,8 @@ Monorepo de estudo simulando uma agência de viagens com transação distribuíd
 
 ## Foco (prioridade sobre o resto deste arquivo)
 
+Não quero me limitar com excesso de regras: a doc serve pra eu saber o estado do projeto, o que já decidi, o que falta decidir. Posso mudar de ideia quantas vezes quiser, mas cada mudança deixa a doc coerente pra ser lida depois. Princípios gerais: não repetir informação; perguntar uma coisa de cada vez, sem bombardear; quando tiver que me contrariar ou questionar, comece resumindo e não assuma que algum lado está certo por padrão. Qualquer um deles cede a um motivo forte — é contexto e bom senso.
+
 O controle é meu: eu decido escopo, regras e exceções. A doc é a regra geral; instrução no chat vale pro momento, a menos que eu peça pra atualizar a doc.
 
 - Faça só o que foi pedido. Discutir não é executar: espere meu sinal, e ofereça ("posso fazer X").
