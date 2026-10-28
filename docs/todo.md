@@ -62,6 +62,7 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
     * [ ] outbox + transição de status do pagamento pelo webhook — ver [Dual-write](#dual-write-pagamentoreservas-outbox-das-reservas-descartado--ver-desenho)
     * [ ] sucesso: sessão vai pra `PAGAMENTO_EFETUADO` — mecanismo: ver [to-decide.md](to-decide.md) (hoje `PUT /sessoes/{id}/pagamento-efetuado`, sem auth de serviço — ver [Testes](#testes))
     * [ ] sucesso: publica `EXECUTE` na fila `pagamento` com os ids internos ([desenho do payload](purchase-flow-design.md#payload-da-mensagem-da-saga))
+    * [ ] recusa: sessão volta pra `INICIADA`, sem SAGA, e reseta o timer de expiração ([desenho](purchase-flow-design.md#saga-estendida--sessaocompra-como-bookend-do-anel)) — mecanismo: ver [to-decide.md](to-decide.md)
   * [ ] **sagas:** eventos de confirmação e cancelamento
     * [X] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
     * [ ] compensação: estorna e repassa `DESFACA` até `sessaocompra` (`filaanterior: sessaocompra`, ver [saga-choreography.md](saga-choreography.md#cadeia))

@@ -24,7 +24,7 @@ stateDiagram-v2
     CRIANDO_PAGAMENTO --> CANCELANDO: abandonada (timeout longo)
 
     EFETUANDO_PAGAMENTO --> PAGAMENTO_EFETUADO: webhook ou reconciliação, pagamento registrado (SAGA dispara)
-    EFETUANDO_PAGAMENTO --> INICIADA: cancelado pelo usuário
+    EFETUANDO_PAGAMENTO --> INICIADA: cancelado pelo usuário ou pagamento recusado
     EFETUANDO_PAGAMENTO --> CANCELANDO: abandonada (timeout longo)
 
     PAGAMENTO_EFETUADO --> VIAGEM_RESERVADA: SAGA completa (pagamento + hotel + voo)

@@ -18,8 +18,7 @@ Decisões em aberto. O que já está decidido e falta implementar fica em [todo.
 * [ ] webhook:
   * [ ] como correlacionar webhook de tentativa antiga — a linha só guarda o `id_externo` vigente
   * [ ] duas tentativas pagas na mesma sessão
-  * [ ] o que o interno faz com o webhook de recusa (no externo, a transação continua pendente) — ex.: voltar a sessão pra `INICIADA` automaticamente
-  * [ ] mecanismo pra sessão ir pra `PAGAMENTO_EFETUADO` (hoje `PUT /sessoes/{id}/pagamento-efetuado`, sem auth de serviço)
+  * [ ] mecanismo pra sessão ir pra `PAGAMENTO_EFETUADO` (hoje `PUT /sessoes/{id}/pagamento-efetuado`, sem auth de serviço) — e, na recusa, de volta pra `INICIADA`
 
 ### Voo
 
