@@ -4,17 +4,18 @@ Monorepo de estudo simulando uma agência de viagens com transação distribuíd
 
 ## Foco (prioridade sobre o resto deste arquivo)
 
-A palavra final sobre escopo é minha.
-- Faça só o que foi pedido
-  - pendência fora do escopo: uma linha no fim, sem desenvolver
-  - não proponha decisão que eu não pedi
-- Pedido aberto: delimite o escopo antes de agir
-  - se couber em várias leituras, apresente as plausíveis e espere
-  - só mantenha aberto se eu disser isso na sessão
-- Contradição (doc × doc, doc × código): reporte só a que toca a tarefa atual
-  - revisão geral fica para sessão dedicada
-- `docs/todo.md` (decidido, a implementar) e `docs/to-decide.md` (a decidir): só leia quando eu mandar
-- Respostas curtas
+O controle é meu: eu decido escopo, regras e exceções. A doc é a regra geral; instrução no chat vale pro momento, a menos que eu peça pra atualizar a doc.
+
+- Faça só o que foi pedido. Discutir não é executar: espere meu sinal, e ofereça ("posso fazer X").
+- Ponto de conflito: pare e sinalize em uma linha, sem desenvolver — eu decido na hora:
+  - "isso contraria a doc em X"
+  - "a doc se contradiz em X" (pode ser exceção minha; só o que toca a tarefa)
+  - "pedido aberto; leituras possíveis: …"
+  - "impedimento: X"
+  - "pendência fora do escopo: X" (no fim)
+  - "preciso esclarecer N itens" — resuma, depois um por vez; desdobramento vai pra fila; no fim de cada mensagem, até 2 linhas com o que resta
+- `docs/todo.md` e `docs/to-decide.md`: só leia quando eu mandar.
+- Respostas curtas.
 
 ## Stack
 
@@ -34,33 +35,32 @@ Java 25 (virtual threads), Spring Boot 4.0.1, Maven multi-módulo (8 módulos + 
 - **Endpoints orientados a estado.** Quem chama manda a intenção ("avançar", "voltar ao pedido"), quem recebe decide a ação pelo estado atual dos dois lados e responde a etapa. Implementa o caminho feliz; caso não tratado falha alto e entra depois, um por vez. Diretriz: [docs/state-driven-endpoints.md](docs/state-driven-endpoints.md).
 - **Chaos engineering nos simuladores `-externo`**: falha e latência aleatórias propositais (`CHANCE_FALHA`), para exercitar os caminhos de compensação da SAGA.
 
-## Convenções de escrita (código e docs)
+## Escrita (código e docs)
 
-- Comentário no código: só o que não é óbvio lendo o código (armadilha, invariante, motivo de workaround) — curto, de preferência uma linha
-  - se o porquê já está em `docs/`, aponta pra lá em vez de reexplicar
-- Documentação em `docs/`:
-  - doc = decisão tomada/estado desejado; distância pro código tem que ter item no `todo.md` (sem item: perguntar)
-  - bug achado numa sessão só vira doc se o dono decidir
-  - desenho ainda não implementado: detalhe completo (é a única fonte de verdade nesse momento)
-  - depois de implementado: código vira fonte de verdade do *como*; a doc encolhe pro *porquê* (decisão de negócio/projeto, armadilhas encontradas)
-  - cada fato mora num lugar só — duplicar entre código e doc(s) tende a ficar desatualizado
-    - outros docs linkam pro dono do fato, não resumem
-  - estado ("ainda não existe", "hoje é stub", "feito") só em `docs/todo.md`/`docs/to-decide.md` (detalhado) e no `README.md` (resumo)
-    - `README.md`: por módulo, uma entrada por etapa do fluxo em que ele aparece (as caixas dos diagramas) — pra quem está chegando; sem detalhe de implementação
-    - `docs/todo.md`: tarefas em nível de fluxo/feature — detalhe de implementação fica em `TODO` no código; item riscado não se repete no doc explicativo
-    - `docs/to-decide.md`: decisões em aberto, no mesmo nível
-    - docs de tópico descrevem desenho e porquê; não linkam `todo.md` nem `to-decide.md`
-    - "próximos passos" também vão pro `todo.md`, não pra dentro do doc de desenho
-  - nada que o código responde sozinho: contagem de testes, tamanho de arquivo, listas que espelham um mapa do código
-    - nome de classe/método/config: preferir link pro arquivo a repetir o nome solto
-- Atualização de docs (fim de tarefa com código, ou decisão de desenho tomada em conversa) — sempre nesta ordem:
-  1. reler: buscar tudo que o assunto toca em `docs/` (inclui `todo.md` e `to-decide.md`), `README.md`, `CLAUDE.md` e comentários no código que citam docs
-  2. propor o plano antes de editar: por arquivo, o que muda/sai/entra
-     - separar decidido × em aberto: só vira decisão o que o dono confirmou explicitamente
-     - em aberto vira item no `to-decide.md`, nunca texto de desenho
-  3. aplicar; o que falta fazer vai pro `todo.md` (marcar checkbox faz parte de terminar a tarefa); decisão fechada sai do `to-decide.md`
-  4. conferir de novo, só o que o diff tocou: docs entre si e contra o código (links, nomes, estado, afirmações que o diff tornou falsas)
-- Escrita em geral (docs, TODOs, mensagens): bullets aninhados e frases curtas em vez de parágrafo denso
+Princípio: cada fato mora num lugar só, e quem é dono depende do tipo de fato. Os outros lugares linkam pro dono em vez de copiar — cópia desatualiza.
+
+| Tipo de fato | Dono |
+|---|---|
+| *Como* funciona (já implementado) | o código |
+| *Porquê* e o não óbvio: decisão, armadilha | doc de tópico em `docs/` |
+| Desenho ainda não implementado | doc de tópico, em detalhe completo (única fonte até virar código) |
+| O que falta, em nível de fluxo/feature | `docs/todo.md` |
+| O que falta, em nível de implementação | `TODO` no código |
+| Decisão em aberto | `docs/to-decide.md` |
+| Em que pé está cada módulo, pra quem chega | `README.md` — uma entrada por etapa do fluxo, sem detalhe |
+
+- Ao implementar, a doc encolhe pro porquê e pro não óbvio — pode resumir código quando isso explica algo.
+- Estado e "próximos passos" só nos três últimos donos.
+- Comentário no código só pro que a leitura não mostra, em uma linha; se o porquê está em `docs/`, aponte pra lá.
+- Só vira decisão o que eu confirmei; o resto vai pro `to-decide.md`.
+
+Atualizar docs (fim de tarefa com código, ou decisão tomada em conversa) — aqui ler `todo.md`/`to-decide.md` está autorizado:
+1. Ache tudo que o assunto toca: `docs/`, `README.md`, `CLAUDE.md`, comentários que citam docs.
+2. Proponha o plano por arquivo (muda/sai/entra), separando decidido × em aberto; espere meu sinal.
+3. Aplique: marque no `todo.md` o que a tarefa concluiu, tire do `to-decide.md` o que foi decidido.
+4. Confira só o que o diff tocou.
+
+Forma: frases curtas e bullets aninhados em vez de parágrafo denso.
 
 ## Testes
 
