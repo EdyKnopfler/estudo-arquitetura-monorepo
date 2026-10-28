@@ -27,7 +27,6 @@ Não despeje análise: eu penso um item por vez e dirijo o assunto.
 - Depois, um item por mensagem: pergunte e espere. O item corrente só sai quando eu resolver.
 - Desdobramento que surgir: uma linha, vai pro fim da fila — não discuta junto.
 - Impedimento: sinalize; repriorizar é decisão minha.
-- Perguntas diretas sobre o mesmo assunto podem ir juntas.
 - Fim de cada mensagem: até 2 linhas com os itens restantes.
 
 ## Stack
@@ -63,7 +62,7 @@ Princípio: cada fato mora num lugar só, e quem é dono depende do tipo de fato
 | Em que pé está cada módulo, pra quem chega | `README.md` — uma entrada por etapa do fluxo, sem detalhe |
 
 - Ao implementar, a doc encolhe pro porquê e pro não óbvio — pode resumir código quando isso explica algo.
-- Estado e "próximos passos" só nos três últimos donos.
+- Estado e "próximos passos" só em `docs/todo.md`, `TODO` no código e `README.md`.
 - Comentário no código só pro que a leitura não mostra, em uma linha; se o porquê está em `docs/`, aponte pra lá.
 - Só vira decisão o que eu confirmei; o resto vai pro `to-decide.md`.
 
