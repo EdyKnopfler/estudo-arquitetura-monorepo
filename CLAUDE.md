@@ -13,9 +13,20 @@ O controle é meu: eu decido escopo, regras e exceções. A doc é a regra geral
   - "pedido aberto; leituras possíveis: …"
   - "impedimento: X"
   - "pendência fora do escopo: X" (no fim)
-  - "preciso esclarecer N itens" — resuma, depois um por vez; desdobramento vai pra fila; no fim de cada mensagem, até 2 linhas com o que resta
+  - "preciso esclarecer N itens" (ver Ritmo da conversa)
 - `docs/todo.md` e `docs/to-decide.md`: só leia quando eu mandar.
 - Respostas curtas.
+
+### Ritmo da conversa
+
+Não despeje análise: eu penso um item por vez e dirijo o assunto.
+
+- Várias coisas pra tratar: primeiro só a lista resumida, sem desenvolver.
+- Depois, um item por mensagem: pergunte e espere. O item corrente só sai quando eu resolver.
+- Desdobramento que surgir: uma linha, vai pro fim da fila — não discuta junto.
+- Impedimento: sinalize; repriorizar é decisão minha.
+- Perguntas diretas sobre o mesmo assunto podem ir juntas.
+- Fim de cada mensagem: até 2 linhas com os itens restantes.
 
 ## Stack
 
