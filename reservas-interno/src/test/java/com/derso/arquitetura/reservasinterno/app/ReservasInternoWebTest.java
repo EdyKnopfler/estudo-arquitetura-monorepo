@@ -31,6 +31,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import com.derso.arquitetura.webbase.teste.CredenciaisDev;
 import com.derso.arquitetura.webbase.teste.PostgresTestcontainersConfig;
 import com.derso.arquitetura.reservasinterno.ReservasExternoService;
 import com.derso.arquitetura.reservasinterno.dto.ReservaDTO;
@@ -44,8 +45,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 class ReservasInternoWebTest {
 
     // defaults de application-hotel.yaml (internal-backend.clients)
-    private static final String CLIENT_ID = "reservasInternoHotelId";
-    private static final String CLIENT_SECRET = "reservasInternoHotelSecret";
+    private static final String CLIENT_ID = CredenciaisDev.de("RESERVAS_INTERNO_WEB_HOTEL_ID");
+    private static final String CLIENT_SECRET = CredenciaisDev.de("RESERVAS_INTERNO_WEB_HOTEL_SECRET");
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final List<UUID> reservasCriadas = new ArrayList<>();

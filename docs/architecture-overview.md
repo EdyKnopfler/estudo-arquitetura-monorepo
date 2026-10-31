@@ -6,7 +6,7 @@ Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (8
 
 ## Infra compartilhada
 
-- **Postgres**: um único container, mas **um database por bounded context** (não é compartilhamento de schema): `clientes`, `sessaocompra`, `externo_hotel`, `externo_voo`, `interno_hotel`, `interno_voo`, `interno_pagamento`, `externo_pagamento` — ver [databases.sql](../databases.sql).
+- **Postgres**: um único container, mas **um database por bounded context** (não é compartilhamento de schema): `clientes`, `sessaocompra`, `externo_hotel`, `externo_voo`, `interno_hotel`, `interno_voo`, `interno_pagamento`, `externo_pagamento` — ver [databases.sql.example](../databases.sql.example).
 - **RabbitMQ**: broker único para a coreografia SAGA. Detalhe da mecânica em [saga-choreography.md](saga-choreography.md).
 
 ## Módulos e portas (via `.env` / `docker-compose.yml`)
@@ -80,4 +80,4 @@ flowchart LR
 
 ## Convenção de configuração
 
-Cada módulo tem `application.yaml` (comum) + `application-<profile>.yaml` (domínio `hotel`/`voo` ou papel `sagas`/`timeout`, quando aplicável) com porta, URL de datasource e credenciais client-id/secret específicas. Tudo parametrizado por variável de ambiente com default local (`${DB_HOST:localhost}`), o que permite rodar tanto via Docker Compose (`.env`) quanto localmente sem Docker.
+Cada módulo tem `application.yaml` (comum) + `application-<profile>.yaml` (domínio `hotel`/`voo` ou papel `sagas`/`timeout`, quando aplicável) com porta, URL de datasource e credenciais client-id/secret específicas. Tudo parametrizado por variável de ambiente; credenciais sem default — vêm do `.env` ([security-and-auth.md](security-and-auth.md#credenciais-de-dev)).

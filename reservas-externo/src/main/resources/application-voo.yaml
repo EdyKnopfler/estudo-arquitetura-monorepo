@@ -10,4 +10,4 @@ spring:
 internal-backend:
   clients:
     - client-id: ${RESERVAS_EXTERNO_VOO_ID:reservasExternoVooId}
-      client-secret: ${RESERVAS_EXTERNO_VOO_SECRET:reservasExternoVooSecret}
+      client-secret: ${RESERVAS_EXTERNO_VOO_SECRET}

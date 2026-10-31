@@ -12,7 +12,7 @@ spring:
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/externo_pagamento
     username: ${DB_USER:app}
-    password: ${DB_PASSWORD:app}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
     hikari:
@@ -47,7 +47,7 @@ simulacao:
 internal-backend:
   clients:
     - client-id: ${PAGAMENTO_EXTERNO_ID:pagamentoExternoId}
-      client-secret: ${PAGAMENTO_EXTERNO_SECRET:pagamentoExternoSecret}
+      client-secret: ${PAGAMENTO_EXTERNO_SECRET}
   # WebhookService.avisar ecoa de volta o MESMO client-id/secret de quem chamou /criar
   # (id_cliente gravado na transação = principal do /criar, "mesmo segredo" no WebhookService) —
   # então a chave de lookup aqui tem que ser a identidade REAL do chamador, não um nome fixo à
@@ -57,4 +57,4 @@ internal-backend:
   webhooks:
     - url: http://${PAGAMENTO_INTERNO_HOST:localhost}:${PAGAMENTO_INTERNO_PORT:8087}/webhook
       client-id: ${PAGAMENTO_EXTERNO_ID:pagamentoExternoId}
-      client-secret: ${PAGAMENTO_EXTERNO_SECRET:pagamentoExternoSecret}
+      client-secret: ${PAGAMENTO_EXTERNO_SECRET}

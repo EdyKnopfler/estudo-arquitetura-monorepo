@@ -11,13 +11,13 @@ spring:
 internal-backend:
   clients:
     - client-id: ${RESERVAS_INTERNO_WEB_HOTEL_ID:reservasInternoHotelId}
-      client-secret: ${RESERVAS_INTERNO_WEB_HOTEL_SECRET:reservasInternoHotelSecret}
+      client-secret: ${RESERVAS_INTERNO_WEB_HOTEL_SECRET}
 
 # para SOLICITAR ao serviço externo
 external-backend:
   url: http://${RESERVAS_EXTERNO_HOTEL_HOST:localhost}:${RESERVAS_EXTERNO_HOTEL_PORT:8082}
   client-id: ${RESERVAS_EXTERNO_HOTEL_ID:reservasExternoHotelId}
-  client-secret: ${RESERVAS_EXTERNO_HOTEL_SECRET:reservasExternoHotelSecret}
+  client-secret: ${RESERVAS_EXTERNO_HOTEL_SECRET}
 
 sagas:
   estafila: hotel

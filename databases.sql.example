@@ -1,4 +1,5 @@
-CREATE USER app WITH PASSWORD 'app';
+-- Copie para databases.sql e troque a senha pelo DB_PASSWORD do .env — databases.sql não vai pro git.
+CREATE USER app WITH PASSWORD 'informe a senha';
 CREATE DATABASE clientes OWNER app;
 CREATE DATABASE sessaocompra OWNER app;
 CREATE DATABASE externo_hotel OWNER app;

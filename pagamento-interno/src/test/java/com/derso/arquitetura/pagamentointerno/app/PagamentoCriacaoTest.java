@@ -54,6 +54,7 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 
+import com.derso.arquitetura.webbase.teste.CredenciaisDev;
 import com.derso.arquitetura.webbase.teste.PostgresTestcontainersConfig;
 import com.derso.arquitetura.pagamentointerno.PagamentoExternoService;
 import com.derso.arquitetura.pagamentointerno.dto.CriarPagamentoRequest;
@@ -72,8 +73,8 @@ import tools.jackson.databind.json.JsonMapper;
 class PagamentoCriacaoTest {
 
     // defaults de application.yaml (internal-backend.clients)
-    private static final String CLIENT_ID = "sessaoCompraId";
-    private static final String CLIENT_SECRET = "sessaoCompraSecret";
+    private static final String CLIENT_ID = CredenciaisDev.de("SESSAO_COMPRA_ID");
+    private static final String CLIENT_SECRET = CredenciaisDev.de("SESSAO_COMPRA_SECRET");
 
     private final JsonMapper objectMapper = new JsonMapper();
     private final List<UUID> sessoesUsadas = new ArrayList<>();

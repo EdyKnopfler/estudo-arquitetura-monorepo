@@ -28,6 +28,7 @@ import org.testcontainers.rabbitmq.RabbitMQContainer;
 import com.derso.arquitetura.pagamentointerno.dto.CriarPagamentoRequest;
 import com.derso.arquitetura.pagamentointerno.dto.PagamentoDTO;
 
+import com.derso.arquitetura.webbase.teste.CredenciaisDev;
 import com.derso.arquitetura.webbase.teste.ServicoEmContainer;
 
 // Black-box: pagamento-interno e pagamento-externo como containers reais (ServicoEmContainer),
@@ -76,6 +77,10 @@ class PagamentoCriacaoIntegradoTest {
             .withEnv("PAGAMENTO_INTERNO_PORT", "8087")
             .withEnv("DB_HOST", "db-externo")
             .withEnv("DB_PORT", "5432")
+            .withEnv("DB_USER", postgresExterno.getUsername())
+            .withEnv("DB_PASSWORD", postgresExterno.getPassword())
+            .withEnv("PAGAMENTO_EXTERNO_ID", CredenciaisDev.de("PAGAMENTO_EXTERNO_ID"))
+            .withEnv("PAGAMENTO_EXTERNO_SECRET", CredenciaisDev.de("PAGAMENTO_EXTERNO_SECRET"))
             // profile `test` + desfecho fixo: sem isso /criar cai no chaos aleatório (25% de falha)
             .withEnv("SPRING_PROFILES_ACTIVE", "test")
             .withEnv("SIMULACAO_RESULTADO", "SUCESSO")
@@ -90,14 +95,18 @@ class PagamentoCriacaoIntegradoTest {
             .withEnv("SPRING_PROFILES_ACTIVE", "web")
             .withEnv("DB_HOST", "db")
             .withEnv("DB_PORT", "5432")
-            .withEnv("DB_USER", "app")
-            .withEnv("DB_PASSWORD", "app")
+            .withEnv("DB_USER", postgres.getUsername())
+            .withEnv("DB_PASSWORD", postgres.getPassword())
             .withEnv("BROKER_HOST", "broker")
             .withEnv("BROKER_PORT", "5672")
             .withEnv("BROKER_USER", rabbit.getAdminUsername())
             .withEnv("BROKER_PASSWORD", rabbit.getAdminPassword())
             .withEnv("PAGAMENTO_EXTERNO_HOST", "pagamento-externo")
             .withEnv("PAGAMENTO_EXTERNO_PORT", "8086")
+            .withEnv("PAGAMENTO_EXTERNO_ID", CredenciaisDev.de("PAGAMENTO_EXTERNO_ID"))
+            .withEnv("PAGAMENTO_EXTERNO_SECRET", CredenciaisDev.de("PAGAMENTO_EXTERNO_SECRET"))
+            .withEnv("SESSAO_COMPRA_ID", CredenciaisDev.de("SESSAO_COMPRA_ID"))
+            .withEnv("SESSAO_COMPRA_SECRET", CredenciaisDev.de("SESSAO_COMPRA_SECRET"))
             .waitingFor(Wait.forLogMessage(".*Started PagamentoInternoApplication.*\\n", 1)
                 .withStartupTimeout(Duration.ofMinutes(3)));
         pagamentoInterno.start();
@@ -129,9 +138,8 @@ class PagamentoCriacaoIntegradoTest {
     void putPagamentosCriaPagamentoDeVerdadeViaPagamentoExternoReal() {
         RestClient restClient = RestClient.builder()
             .baseUrl("http://" + pagamentoInterno.getHost() + ":" + pagamentoInterno.getMappedPort(8087))
-            // credenciais default de .env.example (internal-backend.clients de pagamento-interno)
-            .defaultHeader("X-Client-Id", "sessaoCompraId")
-            .defaultHeader("X-Client-Secret", "sessaoCompraSecret")
+            .defaultHeader("X-Client-Id", CredenciaisDev.de("SESSAO_COMPRA_ID"))
+            .defaultHeader("X-Client-Secret", CredenciaisDev.de("SESSAO_COMPRA_SECRET"))
             .build();
 
         CriarPagamentoRequest pedido = new CriarPagamentoRequest(

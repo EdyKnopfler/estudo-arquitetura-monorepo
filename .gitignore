@@ -1,6 +1,7 @@
 ### Env ###
 .env*
 !.env*.example
+databases.sql
 
 **/target/
 !**/src/main/**/target/

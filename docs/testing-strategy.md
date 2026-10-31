@@ -49,6 +49,8 @@ Serviços reais conversando entre si.
 ## Regras (valem pros dois tipos)
 
 - Docker precisa estar no ar; o teste sobe tudo o mais sozinho — ninguém (nem agente) sobe ambiente à mão pra teste
+- `.env` carregado no ambiente: client-id/secret vêm de lá ([credenciais de dev](security-and-auth.md#credenciais-de-dev)); `run-all-tests.sh` e `java.test.config` já carregam
+  - usuário/senha de Postgres e RabbitMQ não: vêm do container do próprio teste (no integrado, repassados ao serviço via `withEnv`)
 - sem `contextLoads` — qualquer `@SpringBootTest` do módulo já prova que o contexto sobe
 - dado único por teste (UUID, e-mail, CPF aleatórios) e o teste apaga o que criou em `@AfterEach`
   - container é compartilhado entre testes e, com reuse, entre execuções — um teste não pode depender do estado deixado por outro

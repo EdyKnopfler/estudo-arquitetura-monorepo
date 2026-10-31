@@ -76,7 +76,7 @@ Forma: frases curtas e bullets aninhados em vez de parágrafo denso.
 
 ## Testes
 
-Estratégia e regras obrigatórias em [docs/testing-strategy.md](docs/testing-strategy.md): teste de microsserviço usa sempre Testcontainers (`./mvnw test`); teste integrado entre serviços é `@Tag("integrado")` (`./mvnw package -DskipTests && ./mvnw test -Pintegrado`). Nenhum teste depende do compose de dev — só precisa do Docker no ar. Rodar módulo a módulo (`-pl`): máquina de 8 GB — suíte inteira: `./run-all-tests.sh`.
+Estratégia e regras obrigatórias em [docs/testing-strategy.md](docs/testing-strategy.md): teste de microsserviço usa sempre Testcontainers (`./mvnw test`); teste integrado entre serviços é `@Tag("integrado")` (`./mvnw package -DskipTests && ./mvnw test -Pintegrado`). Nenhum teste depende do compose de dev — precisa do Docker no ar e do `.env` carregado. Rodar módulo a módulo (`-pl`): máquina de 8 GB — suíte inteira: `./run-all-tests.sh`.
 
 ## Pendências
 

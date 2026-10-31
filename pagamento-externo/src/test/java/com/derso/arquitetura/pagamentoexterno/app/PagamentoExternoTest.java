@@ -40,6 +40,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 import com.derso.arquitetura.pagamentoexterno.entity.Pagamento;
 import com.derso.arquitetura.pagamentoexterno.webhook.WebhookService;
+import com.derso.arquitetura.webbase.teste.CredenciaisDev;
 import com.derso.arquitetura.webbase.teste.PostgresTestcontainersConfig;
 
 import tools.jackson.databind.json.JsonMapper;
@@ -52,8 +53,8 @@ import tools.jackson.databind.json.JsonMapper;
 class PagamentoExternoTest {
 
     // defaults de application.yaml (internal-backend.clients)
-    private static final String CLIENT_ID = "pagamentoExternoId";
-    private static final String CLIENT_SECRET = "pagamentoExternoSecret";
+    private static final String CLIENT_ID = CredenciaisDev.de("PAGAMENTO_EXTERNO_ID");
+    private static final String CLIENT_SECRET = CredenciaisDev.de("PAGAMENTO_EXTERNO_SECRET");
 
     private final JsonMapper objectMapper = new JsonMapper();
     private final List<UUID> chavesUsadas = new ArrayList<>();

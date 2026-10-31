@@ -17,6 +17,7 @@ import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import com.derso.arquitetura.webbase.teste.CredenciaisDev;
 import com.derso.arquitetura.webbase.teste.ServicoEmContainer;
 
 // Contrato HTTP real com reservas-externo em container (ServicoEmContainer). Chaos desligado
@@ -52,14 +53,17 @@ class ReservasExternoServiceIntegrationTest {
             .withEnv("RESERVAS_EXTERNO_HOTEL_PORT", String.valueOf(PORTA))
             .withEnv("DB_HOST", "db")
             .withEnv("DB_PORT", "5432")
+            .withEnv("DB_USER", postgres.getUsername())
+            .withEnv("DB_PASSWORD", postgres.getPassword())
+            .withEnv("RESERVAS_EXTERNO_HOTEL_ID", CredenciaisDev.de("RESERVAS_EXTERNO_HOTEL_ID"))
+            .withEnv("RESERVAS_EXTERNO_HOTEL_SECRET", CredenciaisDev.de("RESERVAS_EXTERNO_HOTEL_SECRET"))
             .waitingFor(Wait.forLogMessage(".*Started ReservasExternoApplication.*\\n", 1)
                 .withStartupTimeout(Duration.ofMinutes(3)));
         reservasExterno.start();
 
-        // credenciais default de internal-backend.clients de reservas-externo (application-hotel.yaml)
         servico = new ReservasExternoService(
             "http://" + reservasExterno.getHost() + ":" + reservasExterno.getMappedPort(PORTA),
-            "reservasExternoHotelId", "reservasExternoHotelSecret");
+            CredenciaisDev.de("RESERVAS_EXTERNO_HOTEL_ID"), CredenciaisDev.de("RESERVAS_EXTERNO_HOTEL_SECRET"));
     }
 
     @AfterAll

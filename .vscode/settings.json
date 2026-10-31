@@ -2,6 +2,7 @@
     "java.configuration.updateBuildConfiguration": "automatic",
     "java.compile.nullAnalysis.mode": "automatic",
     "java.test.config": {
+        "envFile": "${workspaceFolder}/.env",
         "env": {
             "TESTCONTAINERS_REUSE_ENABLE": "true"
         }

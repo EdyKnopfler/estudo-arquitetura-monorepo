@@ -3,6 +3,10 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# credenciais de dev: o .env é a fonte, para o compose e para os testes
+[ -f .env ] || { echo ".env não encontrado — copie de .env.example e preencha" >&2; exit 1; }
+set -a; source .env; set +a
+
 modulos=$(sed -n 's:.*<module>\(.*\)</module>.*:\1:p' pom.xml)
 
 # "down" dos containers de teste: tudo que o Testcontainers criou leva esse label

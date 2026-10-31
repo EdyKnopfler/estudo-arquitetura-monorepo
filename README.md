@@ -61,7 +61,8 @@ Desenho completo em [docs/purchase-flow-design.md](docs/purchase-flow-design.md)
 
 ## Rodar localmente
 
-* Copie `.env.example` → `.env` e `.env.clientes.example` → `.env.clientes`
+* Copie `.env.example` → `.env` e `.env.clientes.example` → `.env.clientes`, e preencha os segredos vazios — esses arquivos ficam fora do git, cada clone cria os seus
+* Copie `databases.sql.example` → `databases.sql` (cria os databases no primeiro `up`) e troque `'informe a senha'` pelo `DB_PASSWORD` do `.env`
 * Gere seu próprio par de chaves JWT e preencha `JWT_PUBLIC_KEY`/`JWT_PRIVATE_KEY` — ver [docs/security-and-auth.md](docs/security-and-auth.md#gerar-o-par-de-chaves-local)
 * `docker compose up`
 
@@ -96,11 +97,14 @@ pagamento-interno-sagas-1       | [pagamento] ESTORNANDO pagamento — rastreio=
 
 ## Testes
 
-Só precisa do Docker no ar — Postgres e RabbitMQ sobem sozinhos via Testcontainers (nada do `docker compose`). Estratégia e regras em [docs/testing-strategy.md](docs/testing-strategy.md).
+Precisa do Docker no ar e do `.env` (ver [Rodar localmente](#rodar-localmente)) — Postgres e RabbitMQ sobem sozinhos via Testcontainers (nada do `docker compose`). Estratégia e regras em [docs/testing-strategy.md](docs/testing-strategy.md).
 
 ```bash
-# tudo (microsserviço + integrados), um módulo por vez
+# tudo (microsserviço + integrados), um módulo por vez — já carrega o .env
 ./run-all-tests.sh
+
+# comandos avulsos abaixo: carregue o .env antes, uma vez por terminal
+set -a; source .env; set +a
 
 # testes de microsserviço (suíte padrão)
 ./mvnw test

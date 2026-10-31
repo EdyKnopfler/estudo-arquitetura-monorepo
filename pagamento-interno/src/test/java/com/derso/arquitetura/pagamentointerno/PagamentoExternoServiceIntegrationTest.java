@@ -26,6 +26,7 @@ import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import com.derso.arquitetura.pagamentointerno.dto.CriarTransacaoResponse;
+import com.derso.arquitetura.webbase.teste.CredenciaisDev;
 import com.derso.arquitetura.webbase.teste.ServicoEmContainer;
 
 // Contrato HTTP real com pagamento-externo em container (ServicoEmContainer). Desfecho do simulador é
@@ -137,6 +138,10 @@ class PagamentoExternoServiceIntegrationTest {
             .withExposedPorts(PORTA)
             .withEnv("DB_HOST", "db")
             .withEnv("DB_PORT", "5432")
+            .withEnv("DB_USER", postgres.getUsername())
+            .withEnv("DB_PASSWORD", postgres.getPassword())
+            .withEnv("PAGAMENTO_EXTERNO_ID", CredenciaisDev.de("PAGAMENTO_EXTERNO_ID"))
+            .withEnv("PAGAMENTO_EXTERNO_SECRET", CredenciaisDev.de("PAGAMENTO_EXTERNO_SECRET"))
             .withEnv("SPRING_PROFILES_ACTIVE", "test")
             .withEnv("SIMULACAO_RESULTADO", resultado)
             .withEnv("SIMULACAO_RESULTADOPAGAR", "ACEITO")
@@ -151,8 +156,8 @@ class PagamentoExternoServiceIntegrationTest {
     }
 
     private static PagamentoExternoService servico(GenericContainer<?> externo) {
-        // credenciais default de internal-backend.clients de pagamento-externo
-        return new PagamentoExternoService(urlBase(externo), "pagamentoExternoId", "pagamentoExternoSecret");
+        return new PagamentoExternoService(urlBase(externo),
+            CredenciaisDev.de("PAGAMENTO_EXTERNO_ID"), CredenciaisDev.de("PAGAMENTO_EXTERNO_SECRET"));
     }
 
     private static String urlBase(GenericContainer<?> externo) {

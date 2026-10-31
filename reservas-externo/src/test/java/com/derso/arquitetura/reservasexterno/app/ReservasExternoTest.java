@@ -31,6 +31,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import com.derso.arquitetura.webbase.teste.CredenciaisDev;
 import com.derso.arquitetura.webbase.teste.PostgresTestcontainersConfig;
 import com.derso.arquitetura.reservasexterno.app.dto.CriacaoReservaResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -43,8 +44,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 class ReservasExternoTest {
 
     // defaults de application-hotel.yaml (internal-backend.clients)
-    private static final String CLIENT_ID = "reservasExternoHotelId";
-    private static final String CLIENT_SECRET = "reservasExternoHotelSecret";
+    private static final String CLIENT_ID = CredenciaisDev.de("RESERVAS_EXTERNO_HOTEL_ID");
+    private static final String CLIENT_SECRET = CredenciaisDev.de("RESERVAS_EXTERNO_HOTEL_SECRET");
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final List<UUID> reservasCriadas = new ArrayList<>();

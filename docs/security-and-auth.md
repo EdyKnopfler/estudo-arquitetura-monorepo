@@ -37,6 +37,15 @@ Um teste estrutural (`SessaoCompraControllerOwnershipGuardTest`, via reflection)
 - vale também pro webhook do `pagamento-externo` chamando de volta o `pagamento-interno`
 - exceção: pagar no `pagamento-externo` não autentica — a URL de pagamento é a credencial ([purchase-flow-design.md](purchase-flow-design.md#premissas-do-gateway-simulado-pagamento-externo))
 
+## Credenciais de dev
+
+O `.env` (e `.env.clientes`) é a fonte única das credenciais de dev — senhas de banco/broker, client-secrets, chaves JWT.
+
+- fora do git: cada clone cria o seu a partir do `.example`, que só lista as variáveis, com os segredos vazios
+- sem default no código: yaml referencia só `${VAR}`, e teste lê do ambiente ([CredenciaisDev](../web-base/src/test/java/com/derso/arquitetura/webbase/teste/CredenciaisDev.java)) — falta de `.env` falha alto em vez de cair num valor fixo
+  - motivo: default versionado é credencial no git, que os scanners apontam (já aconteceu com a chave JWT privada)
+- mesmo esquema pro `databases.sql` (cria o usuário do banco com senha): versionado só o `databases.sql.example`
+
 ## Tratamento de erro
 
 `@RestControllerAdvice` globais do `web-base`, usados por todos os serviços web (HTTP) — mapeamento exceção → status em [TrataErros.java](../web-base/src/main/java/com/derso/arquitetura/webbase/config/TrataErros.java) e [TrataErrosDeBanco.java](../web-base/src/main/java/com/derso/arquitetura/webbase/config/TrataErrosDeBanco.java). Por que o 500 devolve mensagem genérica: [web-base-hardening.md](web-base-hardening.md#tratamento-de-erro-trataerros).
