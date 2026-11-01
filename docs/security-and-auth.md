@@ -35,6 +35,9 @@ Um teste estrutural (`SessaoCompraControllerOwnershipGuardTest`, via reflection)
 
 - cada par de serviços (chamador/chamado) tem client-id/secret próprios, configurados nos dois lados
 - vale também pro webhook do `pagamento-externo` chamando de volta o `pagamento-interno`
+- serviço com as duas identidades: `security.auth-type` é a padrão; rota com a outra o módulo declara em código (`customFilters`), e cada rota conhece uma identidade só
+  - filtros criados dentro do `web-base`, não como `@Bean`: o Boot aplica todo bean `Filter` a todas as rotas, por fora do Spring Security
+  - hoje: `sessaocompra` aceita client-id/secret em `/servico/**`, pro webhook de `pagamento-interno` ([purchase-flow-design.md](purchase-flow-design.md#webhook-do-pagamento))
 - exceção: pagar no `pagamento-externo` não autentica — a URL de pagamento é a credencial ([purchase-flow-design.md](purchase-flow-design.md#premissas-do-gateway-simulado-pagamento-externo))
 
 ## Credenciais de dev

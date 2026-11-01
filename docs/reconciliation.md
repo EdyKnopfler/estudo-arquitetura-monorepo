@@ -15,6 +15,9 @@ Critério que orienta as decisões de fluxo entre os serviços internos e os `-e
 
 - simuladores `-externo`: simples, até desleixados — ver [premissas do gateway simulado](purchase-flow-design.md#premissas-do-gateway-simulado-pagamento-externo)
 - resiliência e reconciliação: do nosso lado
+- prazos: quem impõe são os `-externo` (no mundo real, fora do nosso controle); o nosso lado respeita
+  - não estende prazo interno além do que o externo aceita confirmar — teto em [purchase-flow-design.md](purchase-flow-design.md#dois-timeouts)
+  - sem depender do vencimento real de cada item: o teto é o prazo documentado; passou dele, a compensação garante a devolução
 
 ## Exemplos
 

@@ -58,11 +58,4 @@ public class SessaoCompraController {
         return service.iniciarPagamento(id);
     }
 
-    // Sem @PreAuthorize de propósito: este endpoint é candidato a virar consumidor de fila SAGA
-    // (ver docs/purchase-flow-design.md), não uma chamada de cliente via JWT — fora do escopo desta rodada.
-    @PutMapping("/{id}/pagamento-efetuado")
-    public void pagamentoEfetuado(@PathVariable("id") UUID id) {
-        service.pagamentoEfetuado(id);
-    }
-
 }

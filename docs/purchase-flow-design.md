@@ -15,7 +15,9 @@ Mecanismo em [SessaoCompraController](../sessaocompra/src/main/java/com/derso/ar
 
 - **timeout da sessão** (`TimeoutTask`): sessão abandonada → cancela e **desfaz as pré-reservas efetuadas**.
   - `INICIADA` (pendente de criar pagamento): prazo pra escolher e avançar
-  - `CRIANDO_PAGAMENTO`/`EFETUANDO_PAGAMENTO`: tolerância bem maior, só pra limpar sessão largada — o pagamento em si é do timeout do pagamento
+    - voltar pra `INICIADA` (voltar ao pedido, reversão da SAGA) reinicia o prazo, limitado ao teto: o menor entre agora + prazo de `INICIADA` e início + teto
+  - `CRIANDO_PAGAMENTO`/`EFETUANDO_PAGAMENTO`/`PAGAMENTO_RECUSADO`: tolerância bem maior, só pra limpar sessão largada — o pagamento em si é do timeout do pagamento
+  - `PAGAMENTO_EFETUADO` fica fora: a SAGA está rodando — por isso o webhook marca a sessão antes de disparar a SAGA ([Webhook do pagamento](#webhook-do-pagamento))
   - serviços dão erro e nem o cancelamento consegue seguir → `FALHA_CANCELAMENTO`, terminal — registra o caso em vez de perdê-lo
 - **timeout do pagamento** (`TimeoutPagamentoTask`, em `pagamento-interno`): tempo pro cliente pagar — janela própria, alinhada à validade do meio de pagamento (PIX/redirect de gateway)
   - 15 min: com os 15 de `INICIADA`, a sessão completa (escolher + pagar) dura meia hora
@@ -24,6 +26,13 @@ Mecanismo em [SessaoCompraController](../sessaocompra/src/main/java/com/derso/ar
 - relógio: a cada URL nova, link e timeout do pagamento zeram juntos, cada um com seu prazo
 - pré-reserva no externo dura mais que escolher + pagar (prazo de `INICIADA` + timeout do pagamento) — senão a confirmação falha numa venda feita no prazo
   - a limpeza não depende disso: pode esperar o quanto quisermos
+- teto: o prazo documentado da pré-reserva no `-externo`, contado desde o início da sessão ([premissa](reconciliation.md#divisão-de-papéis))
+  - conservador: cada pré-reserva nasce depois do início (e uma troca gera outra), sem acompanhar uma a uma
+  - renovações e retentativas cabem dentro dele; nada estende além
+  - o avanço sempre devolve o prazo ao usuário, calculado por `sessaocompra` (dona do início) — o aviso de risco é do front
+    - caminho normal: início + prazo de `INICIADA` + timeout do pagamento (meia hora); a folga até o teto é pras extensões
+    - extensão que passa disso: o prazo informado vira o dela, sempre limitado ao teto
+  - abaixo da margem de renovação, o pagamento é criado mesmo assim: o usuário decide; pago e não confirmado, a compensação estorna
 
 Cada timeout compete com a mudança de estado pelo mesmo tipo de update condicional guardado por `status` (`WHERE status = '...'`) — em `sessaocompra`, `iniciarPagamento`/`marcarLoteComoCancelando`: quem mudar o status primeiro no banco "vence"; o outro não encontra mais linha pra afetar.
 
@@ -41,7 +50,7 @@ front → `sessaocompra` (`iniciando-pagamento`) → `pagamento-interno` (`PUT /
   - gerar outra transação quando o gateway devolve uma expirada não é retentativa, é reconciliação ([abaixo](#pagamento-da-sessão-tentativa-trocável))
   - sessão volta pra `INICIADA` só por cancelamento explícito ([abaixo](#cancelamento-e-prazo--gateway-como-juiz)) — do usuário ou pedido pela [compensação da SAGA](#saga-estendida--sessaocompra-como-bookend-do-anel)
 - `pagamento-interno` é o guardião da URL do nosso lado: `sessaocompra` não guarda, repete o `PUT` a cada `iniciando-pagamento`
-  - vale com a sessão em `CRIANDO_PAGAMENTO` ou já em `EFETUANDO_PAGAMENTO` (o front pode ter perdido a resposta)
+  - vale com a sessão em `CRIANDO_PAGAMENTO`, `EFETUANDO_PAGAMENTO` (o front pode ter perdido a resposta) ou `PAGAMENTO_RECUSADO` (volta pra `EFETUANDO_PAGAMENTO`)
 - URL obtida só é substituída depois de cancelada ou vencida no gateway
 
 ### Premissas do gateway simulado (`pagamento-externo`)
@@ -55,7 +64,7 @@ Imita gateways reais no que importa pro backend — o front é abstraído, não 
       - antes ou depois de gravar; depois é a falha ambígua (transação criada, resposta perdida), que o chamador resolve repetindo a chave
   - pagar: simula o usuário na tela do gateway — chamado por quem tem a URL, sorteia o desfecho (aceito ou recusado) e chama o webhook de forma síncrona
     - síncrono: a simulação mais simples, por enquanto
-    - marca pago e avisa sem outbox (um gateway real precisaria): webhook que falha só vai pro log, a transação continua paga e quem pagou recebe sucesso — o nosso lado descobre pelo consultar; o dual-write bem tratado é o da confirmação no interno
+    - marca pago e avisa sem outbox (um gateway real precisaria): webhook que falha só vai pro log, a transação continua paga e quem pagou recebe sucesso — o nosso lado descobre pelo consultar; o dual-write bem tratado é o do [webhook no interno](#dual-write-no-webhook)
     - pagar de novo uma transação já paga responde pago, sem reenviar o webhook
     - falha de propósito (chaos) em dois momentos:
       - recusa: nada gravado, webhook de recusa
@@ -79,7 +88,7 @@ Criar envolve o gateway e o nosso banco, sem transação comum. Chamar o gateway
 - a linha em `pagamentos` é gravada antes da chamada, com status de intenção (`CRIANDO`)
 - a resposta do gateway completa a linha (`id_externo`, URL, vencimento, `AGUARDANDO_PAGAMENTO`); sem URL, a linha continua em `CRIANDO`
 - pior caso vira "registro de algo que talvez não exista lá" (recuperável), em vez de "algo lá sem registro aqui"
-- risco baixo aqui: transação perdida só custa criar outra — a antiga expira no gateway (premissas acima). Bem menos crítico que o dual-write do webhook
+- risco baixo aqui: transação perdida só custa criar outra — a antiga expira no gateway (premissas acima). Bem menos crítico que o [dual-write do webhook](#dual-write-no-webhook)
 
 ### Pagamento da sessão, tentativa trocável
 
@@ -102,12 +111,28 @@ Criar envolve o gateway e o nosso banco, sem transação comum. Chamar o gateway
 
 Cancelar × pagar e prazo × pagar são corridas; quem decide é o gateway, fonte da verdade de "foi pago" — critério em [reconciliation.md](reconciliation.md).
 
-- o front pode cancelar o pagamento a qualquer momento antes de pago, com ou sem URL — sessão volta pra `INICIADA`
+- o front pode cancelar o pagamento a qualquer momento antes de pago, com ou sem URL, inclusive em `PAGAMENTO_RECUSADO` — sessão volta pra `INICIADA`
   - sem URL: nada a consultar
   - com URL: pede cancelamento ao gateway — já pago faz o pagamento vencer e seguir o fluxo
   - cancelado, o próximo `PUT` abre tentativa nova — chave nova, ids de reserva atuais
 - timeout do pagamento é a mesma operação no gateway, com outro gatilho, sem mexer na sessão; nosso prazo é maior que o do gateway — quando ele dispara, a URL já venceu e a consulta é definitiva
 - pagamento aceito que chega pelo webhook é reconciliado a favor da venda, mesmo fora da tentativa vigente
+
+## Webhook do pagamento
+
+Chega do `pagamento-externo` com `{idTransacao, status}` (`PAGO` | `RECUSADO`) e correlaciona por `id_externo` ([payload](#payload-da-mensagem-da-saga)). Primeiro objetivo: atualizar a sessão — `PAGAMENTO_EFETUADO` tira a sessão da limpeza antes da SAGA começar ([Dois timeouts](#dois-timeouts)).
+
+- `pagamento-interno` chama `sessaocompra` por HTTP, com client-id/secret ([security-and-auth.md](security-and-auth.md#client-idsecret--serviço-a-serviço))
+- sessão já fora de `EFETUANDO_PAGAMENTO`/`PAGAMENTO_RECUSADO` (ex.: recolhida pela limpeza, webhook atrasado demais): falha alto e entra depois ([diretriz](state-driven-endpoints.md)); desfecho esperado nos [exemplos da reconciliação](reconciliation.md#exemplos)
+
+### Dual-write no webhook
+
+Pago envolve três destinos sem transação comum: a linha em `pagamentos`, a sessão e a fila da SAGA. O gateway não reenvia webhook que falhou ([premissas](#premissas-do-gateway-simulado-pagamento-externo)) — o recebimento tem que ficar gravado aqui antes de qualquer chamada de rede.
+
+- grava primeiro na linha: `PAGO` + as duas intenções (atualizar sessão, publicar na fila), uma coluna cada
+- depois executa as duas, sessão primeiro — independentes: uma não espera a outra dar certo
+- job de pendências: lê cada intenção e executa se ainda pendente, uma de cada vez — separadas, a falha de uma não refaz a outra
+- recusa: sem intenção — perder o aviso só deixa a sessão em `EFETUANDO_PAGAMENTO`, sem efeito no fluxo
 
 ## SAGA estendida — sessaocompra como bookend do anel
 
@@ -115,10 +140,13 @@ A cadeia base é `pagamento → hotel → voo` (mecânica em [saga-choreography.
 
 Diagrama: [README](../README.md#saga-disparada-a-partir-do-webhook-de-pagamento).
 
-- **Sucesso**: webhook de pagamento marca a sessão como `PAGAMENTO_EFETUADO` e dispara o anel → confirma em `pagamento` → `hotel` → `voo` → `sessaocompra` marca `VIAGEM_RESERVADA`. Fim de cadeia.
-- **Falha em qualquer etapa (inclusive em `sessaocompra: confirma`)**: propaga DESFACA pra trás até `sessaocompra: reverte` — cancelamento explícito do que já foi fechado na sessão: volta pra `INICIADA` e reseta o timer de expiração (dá mais tempo pro usuário escolher outra opção de voo/hotel/pagamento).
+- **Sucesso**: webhook de pagamento marca a sessão como `PAGAMENTO_EFETUADO` e dispara o anel ([Webhook do pagamento](#webhook-do-pagamento)) → confirma em `pagamento` → `hotel` → `voo` → `sessaocompra` marca `VIAGEM_RESERVADA`. Fim de cadeia.
+- **Falha em qualquer etapa (inclusive em `sessaocompra: confirma`)**: propaga DESFACA pra trás até `sessaocompra: reverte` — cancelamento explícito do que já foi fechado na sessão: volta pra `INICIADA` e reinicia o prazo de `INICIADA`, limitado ao teto ([Dois timeouts](#dois-timeouts)) — dá mais tempo pro usuário escolher outra opção de voo/hotel/pagamento.
   - modelagem de status da reversão (falha de negócio × erro de execução, quando terminar em `ERRO`): em aberto
-- **Recusa**: não entra no anel — nada foi confirmado, as reservas seguem em pré-reserva. O webhook leva a sessão de `EFETUANDO_PAGAMENTO` direto pra `INICIADA` e reseta o timer de expiração; a transação segue pendente no gateway, e o próximo avanço repete o `PUT` (mesma URL, ou renovada — ver [Criação do pagamento](#criação-do-pagamento)).
+- **Recusa**: não entra no anel — nada foi confirmado, as reservas seguem em pré-reserva. O webhook leva a sessão pra `PAGAMENTO_RECUSADO`, irmão de `EFETUANDO_PAGAMENTO`:
+  - não muda o fluxo — serve pra interface avisar o usuário, que tenta de novo (outro cartão, outra conta), inclusive na mesma URL, que segue valendo ([premissas](#premissas-do-gateway-simulado-pagamento-externo))
+  - avançar de novo volta pra `EFETUANDO_PAGAMENTO` (mesma URL, ou renovada — ver [Criação do pagamento](#criação-do-pagamento)); pagar direto no gateway leva a `PAGAMENTO_EFETUADO` do mesmo jeito
+  - não estende prazo: o tempo extra vem da renovação perto do vencimento, até o teto ([Dois timeouts](#dois-timeouts))
 - **Discard vs. reverter**: quem detecta a falha de confirmação (ex. `voo`, item não disponível mais no fornecedor) trata isso como erro local *antes* de publicar DESFACA — zera a própria pré-reserva. Quem só recebe DESFACA nunca é quem falhou (por construção da coreografia), então sempre faz a mesma ação: reverter pra pré-. Não precisa de flag na mensagem pra essa distinção — mas precisa saber qual linha local afetar (ver "Payload da mensagem da SAGA" abaixo).
 - Consequência: `sessaocompra` vira a ponta final da reversão da SAGA (e do sucesso) — ganha um papel `sagas` mínimo pros dois nós e passa a depender de `sagas-common`.
 - **Mecanismo de fiação — reaproveita `proximafila`/`filaanterior`, não precisa de "dois nós" de verdade.** Os dois pontos de contato de `sessaocompra` no anel colapsam numa única fila (`sessaocompra`): `proximafila: sessaocompra` em `voo` e `filaanterior: sessaocompra` em `pagamento` bastam — `Messaging.iniciarConsumo` publica na próxima fila no encaminhamento pra frente e na anterior no encaminhamento pra trás (ver [saga-choreography.md](saga-choreography.md)). Um único handler em `sessaocompra`, igual aos outros, recebe as duas direções na mesma fila e decide pelo campo `tipo` (`EXECUTE` → confirma; `DESFACA` → reverte) — mesmo padrão de `ReservasSagas`/`PagamentoSagas`.

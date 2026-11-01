@@ -10,7 +10,7 @@ Decisões em aberto. O que já está decidido e falta implementar fica em [todo.
   * diferenciar falha de negócio × erro de execução (inclui serviço externo) — status próprio (`REVERTENDO`?) ou informação no payload
   * terminar em `ERRO` depende dessa distinção (erro de execução, não falha de negócio)
   * diagramas do README só depois de fechar essa modelagem
-* [ ] a considerar na reversão: remover as reservas que falharam, resetar o tempo e notificar o usuário, que decide se volta pra tentar outras opções
+* [ ] a considerar na reversão: remover as reservas que falharam e notificar o usuário, que decide se volta pra tentar outras opções
 
 ### Pagamentos
 
@@ -18,7 +18,6 @@ Decisões em aberto. O que já está decidido e falta implementar fica em [todo.
 * [ ] webhook:
   * [ ] como correlacionar webhook de tentativa antiga — a linha só guarda o `id_externo` vigente
   * [ ] duas tentativas pagas na mesma sessão
-  * [ ] mecanismo pra sessão ir pra `PAGAMENTO_EFETUADO` (hoje `PUT /sessoes/{id}/pagamento-efetuado`, sem auth de serviço) — e, na recusa, de volta pra `INICIADA`
 
 ### Voo
 
@@ -43,6 +42,7 @@ Decisões em aberto. O que já está decidido e falta implementar fica em [todo.
 
 ### Pontos a revisitar (não são bugs)
 
+- Prioridade bem baixa: relógio da sessão começa na criação, não na primeira pré-reserva — conservador, os prazos dados se supõem suficientes. Começar na primeira pré-reserva ganharia o tempo até a primeira escolha, mas sessão sem escolha ficaria sem relógio pro timeout de `INICIADA`.
 - `basicQos(1)` limita cada instância de SAGA a processar uma mensagem por vez — teto de throughput conhecido, revisitar se/quando houver medição de carga real.
 - `JWT_PUBLIC_KEY`/`JWT_PRIVATE_KEY` no `.env`/`.env.clientes` não seguem o padrão `<SERVIÇO>_ID`/`_SECRET` do resto do arquivo (são infra compartilhada tipo `DB_HOST`, não credencial de um par específico) — considerar renomear pra algo tipo `CLIENTE_JWT_PUBLIC_KEY` se ficar confuso.
 - Sem captura/agregação centralizada de log — cada instância só loga local (SLF4J). Fora de escopo por agora; talvez um dia uma infra pra isso (sidecar → Elasticsearch, CloudWatch ou o que estiver à mão).

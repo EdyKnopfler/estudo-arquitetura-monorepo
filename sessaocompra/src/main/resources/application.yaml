@@ -45,6 +45,12 @@ jwt:
 security:
   auth-type: jwt
 
+# para ACEITAR requisições em /servico/** (customFilters em SecurityConfiguration)
+internal-backend:
+  clients:
+    - client-id: ${PAGAMENTO_INTERNO_ID:pagamentoInternoId}
+      client-secret: ${PAGAMENTO_INTERNO_SECRET}
+
 reservas-interno-hotel:
   url: http://${RESERVAS_INTERNO_WEB_HOTEL_HOST:localhost}:${RESERVAS_INTERNO_WEB_HOTEL_PORT:8084}
   client-id: ${RESERVAS_INTERNO_WEB_HOTEL_ID:reservasInternoHotelId}

@@ -1,11 +1,12 @@
 package com.derso.arquitetura.webbase.security;
 
 import java.util.List;
+import java.util.function.Function;
 
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication.Type;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -27,7 +28,8 @@ import jakarta.servlet.Filter;
 
 // Único lugar do projeto que vê os tipos verbosos do Spring Security — cada `-web` só escolhe
 // `security.auth-type` (jwt | client-secret) e, se precisar, declara suas rotas públicas via
-// @Bean List<RotaPublica> "rotasPublicas" no próprio SecurityConfiguration — não em
+// @Bean List<RotaPublica> "rotasPublicas" e as rotas com outra identidade via
+// @Bean List<FiltroCustom> "customFilters" no próprio SecurityConfiguration — não em
 // application.yaml, rota pública é decisão de código do endpoint, não configuração de
 // ambiente. RotaPublica é um record de dois campos (method+pattern sempre andam juntos), não
 // uma string pra parsear — HttpMethod é tipo comum do Spring Web, não dos internals verbosos
@@ -46,26 +48,29 @@ public class WebSecurityAutoConfiguration {
         return List.of();
     }
 
-    // "authFilter" é nome de bean explícito, não só o nome do método — Filter é um tipo comum
-    // demais (o Boot já registra vários: requestContextFilter, characterEncodingFilter etc.),
-    // então securityFilterChain() abaixo precisa de @Qualifier pra achar exatamente este.
-    @Bean("authFilter")
-    @ConditionalOnProperty(prefix = "security", name = "auth-type", havingValue = "jwt")
-    public Filter jwtAuthFilter(JwtValidatorService validator) {
-        return new JwtAuthenticationFilter(validator);
-    }
-
-    @Bean("authFilter")
-    @ConditionalOnProperty(prefix = "security", name = "auth-type", havingValue = "client-secret")
-    public Filter clientSecretAuthFilter(InternalClientsConfig config) {
-        return new ClientSecretAuthFilter(config);
+    @Bean("customFilters")
+    @ConditionalOnMissingBean(name = "customFilters")
+    public List<FiltroCustom> customFiltersPadrao() {
+        return List.of();
     }
 
     @Bean
     public DefaultSecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            @Qualifier("authFilter") Filter authFilter,
-            @Qualifier("rotasPublicas") List<RotaPublica> rotasPublicas) throws Exception {
+            @Value("${security.auth-type}") AuthType authType,
+            JwtValidatorService jwtValidator,
+            InternalClientsConfig internalClients,
+            @Qualifier("rotasPublicas") List<RotaPublica> rotasPublicas,
+            @Qualifier("customFilters") List<FiltroCustom> customFilters) throws Exception {
+
+        // Filtros criados aqui, não como @Bean: o Boot aplicaria um bean Filter a todas as rotas,
+        // por fora desta chain — e a identidade por rota se perderia
+        Function<AuthType, Filter> criar = tipo -> switch (tipo) {
+            case JWT -> new JwtAuthenticationFilter(jwtValidator);
+            case CLIENT_SECRET -> new ClientSecretAuthFilter(internalClients);
+        };
+        Filter authFilter = new FiltroPorRota(criar.apply(authType), customFilters, criar);
+
         return http
             .csrf(AbstractHttpConfigurer::disable)
             .cors(AbstractHttpConfigurer::disable)
