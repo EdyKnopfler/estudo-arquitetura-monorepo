@@ -2,7 +2,9 @@
 
 ## Stack
 
-Java 25 (virtual threads habilitadas), Spring Boot 4.0.1, Maven multi-módulo (8 módulos + parent POM), Postgres 18.1 com Flyway, RabbitMQ 4.2.2 (cliente Java cru, não Spring AMQP), Docker Compose para orquestração local.
+Java 25 (virtual threads habilitadas), Spring Boot 4, Maven multi-módulo (8 módulos + parent POM), Postgres 18 com Flyway, RabbitMQ 4 (cliente Java cru, não Spring AMQP), Docker Compose para orquestração local.
+
+- versões exatas: libs no [pom.xml](../pom.xml), imagens de Postgres/RabbitMQ no [docker-compose.yml](../docker-compose.yml)
 
 ## Infra compartilhada
 

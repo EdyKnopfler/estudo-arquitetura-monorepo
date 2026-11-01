@@ -31,7 +31,7 @@ Não despeje análise: eu penso um item por vez e dirijo o assunto.
 
 ## Stack
 
-Java 25 (virtual threads), Spring Boot 4.0.1, Maven multi-módulo (8 módulos + parent POM), Postgres 18.1 (1 database por bounded context) + Flyway, RabbitMQ 4.2.2 (cliente Java cru), Docker Compose. Rodar local: `docker-compose up` (usa `.env` na raiz).
+Java 25 (virtual threads), Spring Boot, Maven multi-módulo (8 módulos + parent POM), Postgres (1 database por bounded context) + Flyway, RabbitMQ (cliente Java cru), Docker Compose. Rodar local: `docker-compose up` (usa `.env` na raiz).
 
 ## Módulos
 
