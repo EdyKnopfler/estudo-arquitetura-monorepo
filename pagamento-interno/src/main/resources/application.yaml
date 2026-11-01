@@ -37,6 +37,7 @@ spring:
     validate-on-migrate: true
 
 sagas:
+  estafila: pagamento # papel web publica nela pra iniciar a SAGA; papel sagas consome
   rabbithost: ${BROKER_HOST:localhost}
   rabbitport: ${BROKER_PORT:5672}
   rabbituser: ${BROKER_USER:cueio}

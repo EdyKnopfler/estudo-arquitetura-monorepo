@@ -8,6 +8,7 @@ Implementação própria sobre o cliente Java cru do RabbitMQ (`com.rabbitmq.cli
 - `Messaging` (`sagas-common`): declara exchanges/filas e implementa o protocolo de consumo/publicação.
 - `MessageHandler`: interface funcional que cada serviço implementa com a lógica de negócio real (`ResultadoHandler handle(Map<String, Object> mensagem)`).
 - Cada papel `sagas` (ex.: `reservas-interno/.../sagas/ReservasSagas.java`, `pagamento-interno/.../sagas/PagamentoSagas.java`) é um `SmartLifecycle` que lê `sagas.estafila` / `sagas.filaanterior` / `sagas.proximafila` do `application-<profile>.yaml` e chama `Messaging.configurarServico(...)` + `iniciarConsumo(...)`. Cada módulo tem sua própria classe-ponte `SagasWiring` (`@Profile("sagas")` + `@Import`) pra trazer `RabbitConfig`/`Messaging` de `sagas-common` sem acoplar o nome do profile à lib — ver [deploy-roles-by-profile.md](deploy-roles-by-profile.md).
+  - exceção: em `pagamento-interno`, `sagas.estafila` fica no `application.yaml` — o papel `web` (webhook) publica nessa mesma fila pra iniciar a SAGA
 
 ## Protocolo de mensagem
 

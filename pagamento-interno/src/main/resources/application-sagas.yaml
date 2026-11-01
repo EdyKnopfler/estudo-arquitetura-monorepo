@@ -5,5 +5,4 @@ spring:
     enabled: false # só o papel web migra; ver docs/deploy-roles-by-profile.md
 
 sagas:
-  estafila: pagamento
   proximafila: hotel

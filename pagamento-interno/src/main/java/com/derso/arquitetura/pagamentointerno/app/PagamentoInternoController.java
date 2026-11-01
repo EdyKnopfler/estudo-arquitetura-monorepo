@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,15 +24,18 @@ import jakarta.validation.Valid;
 @Profile("web")
 public class PagamentoInternoController {
 
-    private static final String FILA_PAGAMENTO = "pagamento";
-
     private final Messaging sagas;
     private final PagamentoService servico;
 
-    public PagamentoInternoController(Messaging sagas, PagamentoService servico) throws IOException {
+    // não-final: teste troca por fila própria — mesma fila consumida pelo papel sagas
+    private String filaPagamento;
+
+    public PagamentoInternoController(Messaging sagas, PagamentoService servico,
+            @Value("${sagas.estafila}") String filaPagamento) throws IOException {
         this.sagas = sagas;
         this.servico = servico;
-        sagas.configurarServico(FILA_PAGAMENTO, Optional.empty(), Optional.empty());
+        this.filaPagamento = filaPagamento;
+        sagas.configurarServico(filaPagamento, Optional.empty(), Optional.empty());
     }
 
     // Chamada por sessaocompra.iniciarPagamento; PUT porque repetir devolve o mesmo pagamento —
@@ -52,7 +56,7 @@ public class PagamentoInternoController {
     public void webhookServicoExterno() throws IOException {
         String rastreio = UUID.randomUUID().toString();
 
-        sagas.publicar(FILA_PAGAMENTO, Map.of(
+        sagas.publicar(filaPagamento, Map.of(
                 "tipo", Messaging.EXECUTE,
                 "rastreio", rastreio
         ));

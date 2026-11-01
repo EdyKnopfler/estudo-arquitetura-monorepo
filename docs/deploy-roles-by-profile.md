@@ -65,4 +65,4 @@ spring:
 
 **Flyway roda só no profile `web`**: `spring.flyway.enabled: false` explícito em `application-sagas.yaml`/`application-timeout.yaml` dos três domínios. Non-óbvio: Flyway precisa de 2 conexões simultâneas pra coordenação de lock durante a migration — com múltiplas instâncias de um profile não-web tentando migrar ao mesmo tempo (e pool pequeno, como em `sessaocompra-timeout`), elas travam entre si até estourar timeout.
 
-Pagamento não tem eixo de domínio (hotel/voo) — só o eixo de papel, então `SPRING_PROFILES_ACTIVE=web` / `SPRING_PROFILES_ACTIVE=sagas` direto, sem combinar com nada. A fiação da fila (`sagas.estafila`/`proximafila`, sem `filaanterior`) fica em `application-sagas.yaml` mesmo, não precisou de arquivo por domínio.
+Pagamento não tem eixo de domínio (hotel/voo) — só o eixo de papel, então `SPRING_PROFILES_ACTIVE=web` / `SPRING_PROFILES_ACTIVE=sagas` direto, sem combinar com nada. A fiação da fila (`proximafila`, sem `filaanterior`) fica em `application-sagas.yaml` mesmo, não precisou de arquivo por domínio — `estafila` é exceção, ver [saga-choreography.md](saga-choreography.md#peças).
