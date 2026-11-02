@@ -1,5 +1,6 @@
 package com.derso.arquitetura.sessaocompra;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -192,6 +193,17 @@ public class SessaoCompraService {
     @Transactional
     public void pagamentoRecusado(UUID id) {
         repositorio.pagamentoRecusado(id);
+    }
+
+    // Pontas da SAGA (papel sagas). false = sessão fora do estado esperado, caso ainda não tratado
+    public boolean viagemReservada(UUID id) {
+        return repositorio.viagemReservada(id) == 1;
+    }
+
+    public boolean voltarAoPedido(UUID id) {
+        SessaoCompra sessao = repositorio.findById(id)
+            .orElseThrow(() -> new EntityNotFoundException("Sessão de compra não encontrada: " + id));
+        return repositorio.voltarAoPedido(id, sessao.prazoAoVoltarPraIniciada(Instant.now())) == 1;
     }
 
 }

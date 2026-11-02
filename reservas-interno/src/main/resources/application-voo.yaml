@@ -19,6 +19,14 @@ external-backend:
   client-id: ${RESERVAS_EXTERNO_VOO_ID:reservasExternoVooId}
   client-secret: ${RESERVAS_EXTERNO_VOO_SECRET}
 
+# um nó por perna, mesmo processo e banco — cada reserva ganha sozinha o sucesso/falha/compensação do framework
 sagas:
-  estafila: voo
-  filaanterior: hotel
+  consumers:
+    - estafila: voo-ida
+      filaanterior: hotel
+      proximafila: voo-volta
+      campoid: idReservaVooIda
+    - estafila: voo-volta
+      filaanterior: voo-ida
+      proximafila: sessaocompra
+      campoid: idReservaVooVolta

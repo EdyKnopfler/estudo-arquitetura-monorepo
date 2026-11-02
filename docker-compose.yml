@@ -235,6 +235,24 @@ services:
         condition: service_healthy
     restart: on-failure
 
+  sessaocompra-sagas:
+    build:
+      context: .
+      dockerfile: sessaocompra/Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "${SESSAO_COMPRA_SAGAS_DEBUG_PORT}:${SESSAO_COMPRA_SAGAS_DEBUG_PORT}"
+    environment:
+      SPRING_PROFILES_ACTIVE: sagas
+      JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:${SESSAO_COMPRA_SAGAS_DEBUG_PORT}
+    depends_on:
+      db:
+        condition: service_started
+      broker:
+        condition: service_healthy
+    restart: on-failure
+
   # Timeout de limpeza de reservas não confirmadas
   sessaocompra-timeout:
     build:

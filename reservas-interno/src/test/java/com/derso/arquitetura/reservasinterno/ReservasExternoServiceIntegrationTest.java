@@ -101,6 +101,22 @@ class ReservasExternoServiceIntegrationTest {
     }
 
     @Test
+    void desconfirmarConfirmadaPermiteConfirmarDeNovo() {
+        UUID idExterno = servico.criar(UUID.randomUUID());
+        servico.confirmar(idExterno);
+
+        assertDoesNotThrow(() -> servico.desconfirmar(idExterno));
+        assertDoesNotThrow(() -> servico.confirmar(idExterno));
+    }
+
+    @Test
+    void desconfirmarNaoConfirmadaDevolve404() {
+        UUID idExterno = servico.criar(UUID.randomUUID());
+
+        assertThrows(HttpClientErrorException.NotFound.class, () -> servico.desconfirmar(idExterno));
+    }
+
+    @Test
     void cancelarNaoConfirmadaFunciona() {
         UUID idExterno = servico.criar(UUID.randomUUID());
 

@@ -24,12 +24,23 @@ Java 25 (virtual threads habilitadas), Spring Boot 4, Maven multi-módulo (8 mó
 | `reservas-interno` (profile `hotel,web`) | REST de pré-reserva de hotel | 8084 | db |
 | `reservas-interno` (profile `voo,web`) | REST de pré-reserva de voo | 8085 | db |
 | `reservas-interno` (profile `hotel,sagas`) | consumidor de fila `hotel` | — | db, broker |
-| `reservas-interno` (profile `voo,sagas`) | consumidor de fila `voo` | — | db, broker |
+| `reservas-interno` (profile `voo,sagas`) | consumidor das filas `voo-ida` e `voo-volta` (um nó por perna) | — | db, broker |
 | `pagamento-externo` | simulador instável de gateway de pagamento | 8086 | db |
 | `pagamento-interno` (profile `web`) | REST de pagamento + webhook (publica o início da SAGA) | 8087 | db, broker |
 | `pagamento-interno` (profile `sagas`) | consumidor de fila `pagamento` (início/fim da cadeia) | — | db, broker |
+| `pagamento-interno` (profile `pendencias`) | job, retoma intenções do webhook que falharam | — | db, broker |
 
-`reservas-externo` e `reservas-interno` são o **mesmo artefato** (cada um o seu) rodando várias vezes com `SPRING_PROFILES_ACTIVE` combinando domínio (`hotel`/`voo`) — e, no caso de `reservas-interno`, também papel (`web`/`sagas`) — cada instância com seu próprio database/fila. `pagamento-interno` não tem eixo de domínio (só existe um pagamento), então só varia por papel (`web`/`sagas`).
+`reservas-externo` e `reservas-interno` são o **mesmo artefato** (cada um o seu) rodando várias vezes com `SPRING_PROFILES_ACTIVE` combinando domínio (`hotel`/`voo`) — e, no caso de `reservas-interno`, também papel (`web`/`sagas`) — cada instância com seu próprio database/fila. `pagamento-interno` não tem eixo de domínio (só existe um pagamento), então só varia por papel (`web`/`sagas`/`pendencias`).
+
+### Reserva genérica — simplificação de estudo
+
+O foco é a amarração entre as partes, não o domínio: reserva de qualquer coisa passa pelo mesmo serviço, com o básico — pré-reservar, confirmar, reverter, cancelar.
+
+- domínio novo (ex.: restaurante) = profile novo, mesmo código
+- num sistema real, um serviço por domínio: as regras divergem
+  - voo: confirmar = emitir o bilhete; reverter = void (janela curta, sem custo, o hold continua) ou, fora dela, reembolso pela regra da tarifa
+  - hotel: em geral não há pré-reserva (reserva já confirmada); reverter = cancelar pela política (grátis até uma data, ou não reembolsável)
+- aqui, reverter volta a reserva confirmada pra pré-reserva nos dois domínios — imita o void, mais generoso que o hotel real
 
 ## Interno x externo
 
@@ -63,10 +74,12 @@ flowchart LR
 
   subgraph SAGA["Coreografia SAGA — RabbitMQ (ver saga-choreography.md)"]
     Qpag[fila: pagamento] --> Qhotel[fila: hotel]
-    Qhotel --> Qvoo[fila: voo]
-    Qvoo --> Qsc[fila: sessaocompra]
-    Qsc -.compensação.-> Qvoo
-    Qvoo -.compensação.-> Qhotel
+    Qhotel --> Qida[fila: voo-ida]
+    Qida --> Qvolta[fila: voo-volta]
+    Qvolta --> Qsc[fila: sessaocompra]
+    Qsc -.compensação.-> Qvolta
+    Qvolta -.compensação.-> Qida
+    Qida -.compensação.-> Qhotel
     Qhotel -.compensação.-> Qpag
     Qpag -.compensação.-> Qsc
   end
@@ -75,11 +88,12 @@ flowchart LR
   Qsc -.consome.-> sessaocompra-sagas
   Qpag -.consome.-> pagamento-interno-sagas
   Qhotel -.consome.-> reservas-interno-hotel-sagas
-  Qvoo -.consome.-> reservas-interno-voo-sagas
+  Qida -.consome.-> reservas-interno-voo-sagas
+  Qvolta -.consome.-> reservas-interno-voo-sagas
 ```
 
 `sessaocompra-web` é o único ponto de contato do front com o backend ("porteiro"): chama `reservas-interno` e `pagamento-interno` por trás. Fora do backend, o front só paga no gateway pela URL de pagamento ([purchase-flow-design.md](purchase-flow-design.md#criação-do-pagamento)). A volta do resultado da SAGA até `sessaocompra` está em [purchase-flow-design.md](purchase-flow-design.md).
 
 ## Convenção de configuração
 
-Cada módulo tem `application.yaml` (comum) + `application-<profile>.yaml` (domínio `hotel`/`voo` ou papel `sagas`/`timeout`, quando aplicável) com porta, URL de datasource e credenciais client-id/secret específicas. Tudo parametrizado por variável de ambiente; credenciais sem default — vêm do `.env` ([security-and-auth.md](security-and-auth.md#credenciais-de-dev)).
+Cada módulo tem `application.yaml` (comum) + `application-<profile>.yaml` (domínio `hotel`/`voo` ou papel `sagas`/`timeout`/`pendencias`, quando aplicável) com porta, URL de datasource e credenciais client-id/secret específicas. Tudo parametrizado por variável de ambiente; credenciais sem default — vêm do `.env` ([security-and-auth.md](security-and-auth.md#credenciais-de-dev)).

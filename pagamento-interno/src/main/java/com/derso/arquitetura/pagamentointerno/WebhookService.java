@@ -123,11 +123,12 @@ public class WebhookService {
         }
     }
 
-    // Só ids internos — docs/purchase-flow-design.md#payload-da-mensagem-da-saga
+    // Só ids internos — docs/purchase-flow-design.md#payload-da-mensagem-da-saga.
+    // Rastreio = a sessão: correlaciona os logs de todos os nós, e a republicação do job mantém o mesmo
     private static Map<String, Object> mensagemDaSaga(Pagamento pagamento) {
         return Map.of(
             "tipo", Messaging.EXECUTE,
-            "rastreio", UUID.randomUUID().toString(),
+            "rastreio", pagamento.getIdSessaoCompra().toString(),
             "idPagamento", pagamento.getId(),
             "idSessaoCompra", pagamento.getIdSessaoCompra(),
             "idReservaHotel", pagamento.getIdReservaHotel(),

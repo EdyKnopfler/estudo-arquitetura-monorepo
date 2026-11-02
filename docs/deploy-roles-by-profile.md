@@ -43,7 +43,7 @@ public class ReservasSagas implements SmartLifecycle { ... }
 public class SagasWiring {}
 ```
 
-Em `pagamento-interno` a ponte é `@Profile({ "web", "sagas" })`: o papel `web` também precisa de `Messaging`, porque o webhook publica a primeira mensagem da SAGA na fila `pagamento`. O mecanismo é o mesmo, só a lista de profiles muda.
+Em `pagamento-interno` a ponte é `@Profile({ "web", "sagas", "pendencias" })`: `web` e `pendencias` também precisam de `Messaging`, porque o webhook (e o job que retoma o que ele não conseguiu) publica a primeira mensagem da SAGA na fila `pagamento`. O mecanismo é o mesmo, só a lista de profiles muda.
 
 Funciona porque `@Profile` é um `@Conditional` avaliado pelo `ConfigurationClassParser` **antes** de processar `@Import` — se o profile não bate, a classe inteira (e tudo que ela importaria) é ignorada. `@Import` aceita `@Component` puro além de `@Configuration`, por isso dá pra importar `Messaging` (que é `@Component`) junto com os dois `@Configuration`. Consequência prática: `com.derso.arquitetura.sagas` **não entra** no `@ComponentScan` do app (senão seria varrido incondicionalmente, contornando a gate) — a única porta de entrada pro pacote da lib passa a ser esse `@Import` explícito.
 
@@ -63,6 +63,6 @@ spring:
 
 `sessaocompra` segue o mesmo mecanismo, com um papel a mais: `timeout` — `@Profile("timeout")` no `TimeoutTask` (`@Scheduled`) + `application-timeout.yaml` com `web-application-type: none`. O papel `sagas` dela (pontas da SAGA) segue o padrão acima — ver [purchase-flow-design.md](purchase-flow-design.md).
 
-**Flyway roda só no profile `web`**: `spring.flyway.enabled: false` explícito em `application-sagas.yaml`/`application-timeout.yaml` dos três domínios. Non-óbvio: Flyway precisa de 2 conexões simultâneas pra coordenação de lock durante a migration — com múltiplas instâncias de um profile não-web tentando migrar ao mesmo tempo (e pool pequeno, como em `sessaocompra-timeout`), elas travam entre si até estourar timeout.
+**Flyway roda só no profile `web`**: `spring.flyway.enabled: false` explícito em `application-sagas.yaml`/`application-timeout.yaml`/`application-pendencias.yaml` dos três domínios. Non-óbvio: Flyway precisa de 2 conexões simultâneas pra coordenação de lock durante a migration — com múltiplas instâncias de um profile não-web tentando migrar ao mesmo tempo (e pool pequeno, como em `sessaocompra-timeout`), elas travam entre si até estourar timeout.
 
-Pagamento não tem eixo de domínio (hotel/voo) — só o eixo de papel, então `SPRING_PROFILES_ACTIVE=web` / `SPRING_PROFILES_ACTIVE=sagas` direto, sem combinar com nada. A fiação da fila (`proximafila`, sem `filaanterior`) fica em `application-sagas.yaml` mesmo, não precisou de arquivo por domínio — `estafila` é exceção, ver [saga-choreography.md](saga-choreography.md#peças).
+Pagamento não tem eixo de domínio (hotel/voo) — só o eixo de papel, então `SPRING_PROFILES_ACTIVE=web` / `sagas` / `pendencias` direto, sem combinar com nada. `pendencias` é o job do webhook (`@Scheduled`, instância única, `web-application-type: none`), mesmo princípio do `timeout` de `sessaocompra`. A fiação da fila (`proximafila: hotel`, `filaanterior: sessaocompra`) fica em `application-sagas.yaml` mesmo, não precisou de arquivo por domínio — `estafila` é exceção, ver [saga-choreography.md](saga-choreography.md#peças).

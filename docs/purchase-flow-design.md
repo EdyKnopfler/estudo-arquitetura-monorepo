@@ -16,6 +16,7 @@ Mecanismo em [SessaoCompraController](../sessaocompra/src/main/java/com/derso/ar
 - **timeout da sessão** (`TimeoutTask`): sessão abandonada → cancela e **desfaz as pré-reservas efetuadas**.
   - `INICIADA` (pendente de criar pagamento): prazo pra escolher e avançar
     - voltar pra `INICIADA` (voltar ao pedido, reversão da SAGA) reinicia o prazo, limitado ao teto: o menor entre agora + prazo de `INICIADA` e início + teto
+    - por isso o prazo de `INICIADA` tem coluna própria (`prazo_iniciada`); `start_time` fica como base do teto
   - `CRIANDO_PAGAMENTO`/`EFETUANDO_PAGAMENTO`/`PAGAMENTO_RECUSADO`: tolerância bem maior, só pra limpar sessão largada — o pagamento em si é do timeout do pagamento
   - `PAGAMENTO_EFETUADO` fica fora: a SAGA está rodando — por isso o webhook marca a sessão antes de disparar a SAGA ([Webhook do pagamento](#webhook-do-pagamento))
   - serviços dão erro e nem o cancelamento consegue seguir → `FALHA_CANCELAMENTO`, terminal — registra o caso em vez de perdê-lo
@@ -123,33 +124,44 @@ Cancelar × pagar e prazo × pagar são corridas; quem decide é o gateway, font
 Chega do `pagamento-externo` com `{idTransacao, status}` (`PAGO` | `RECUSADO`) e correlaciona por `id_externo` ([payload](#payload-da-mensagem-da-saga)). Primeiro objetivo: atualizar a sessão — `PAGAMENTO_EFETUADO` tira a sessão da limpeza antes da SAGA começar ([Dois timeouts](#dois-timeouts)).
 
 - `pagamento-interno` chama `sessaocompra` por HTTP, com client-id/secret ([security-and-auth.md](security-and-auth.md#client-idsecret--serviço-a-serviço))
-- sessão já fora de `EFETUANDO_PAGAMENTO`/`PAGAMENTO_RECUSADO` (ex.: recolhida pela limpeza, webhook atrasado demais): falha alto e entra depois ([diretriz](state-driven-endpoints.md)); desfecho esperado nos [exemplos da reconciliação](reconciliation.md#exemplos)
+- webhook repetido (linha já fora de `AGUARDANDO_PAGAMENTO`): ignorado — o update condicional não acha linha; sem conciliação
+- `idTransacao` sem linha (tentativa antiga, renovada): falha alto — correlação em [to-decide.md](to-decide.md)
+- confirmação tardia (sessão já fora de `EFETUANDO_PAGAMENTO`/`PAGAMENTO_RECUSADO`, ex.: recolhida pela limpeza): estornar ([exemplos da reconciliação](reconciliation.md#exemplos))
 
 ### Dual-write no webhook
 
 Pago envolve três destinos sem transação comum: a linha em `pagamentos`, a sessão e a fila da SAGA. O gateway não reenvia webhook que falhou ([premissas](#premissas-do-gateway-simulado-pagamento-externo)) — o recebimento tem que ficar gravado aqui antes de qualquer chamada de rede.
 
-- grava primeiro na linha: `PAGO` + as duas intenções (atualizar sessão, publicar na fila), uma coluna cada
-- depois executa as duas, sessão primeiro — independentes: uma não espera a outra dar certo
-- job de pendências: lê cada intenção e executa se ainda pendente, uma de cada vez — separadas, a falha de uma não refaz a outra
+- três regras:
+  - cada atividade tem um executor só (webhook ou job) — repetição só quando estritamente necessário (quem executava caiu)
+  - nenhuma limpeza remove pendência que o nosso lado vai executar: a intenção só sai quando feita
+  - repetição tratada com idempotência de quem recebe (o "pelo menos uma vez" que sobra)
+- o webhook grava na linha, num update só: `PAGO` + as duas intenções (atualizar sessão, publicar na fila), uma coluna cada, já ocupadas por ele
+  - ocupação = lease na linha, mesmo padrão de `tentativa_em` ([Pagamento da sessão](#pagamento-da-sessão-tentativa-trocável)): coluna com a hora de quem pegou; o update condicional garante que só um ganha
+- e executa na hora, sessão primeiro — independentes: uma não espera a outra dar certo
+  - não deixar tudo pro job: pico de pagamentos esperaria o ciclo dele pra seguir
+  - cada intenção vira feita só no sucesso; a ocupação é liberada no fim, dando certo ou não
+- job de pendências (papel `pendencias`, instância única): retoma só intenção livre ou com ocupação vencida (quem ocupou caiu) — nunca a que o webhook está executando
 - recusa: sem intenção — perder o aviso só deixa a sessão em `EFETUANDO_PAGAMENTO`, sem efeito no fluxo
 
 ## SAGA estendida — sessaocompra como bookend do anel
 
-A cadeia base é `pagamento → hotel → voo` (mecânica em [saga-choreography.md](saga-choreography.md)). O desenho estende o anel com dois nós que fazem update local em `SessaoCompra`, reaproveitando o mesmo mecanismo de compensação pra trás do `sagas-common` — sem framework novo.
+A cadeia base é `pagamento → hotel → voo-ida → voo-volta` (mecânica em [saga-choreography.md](saga-choreography.md)). O desenho estende o anel com dois nós que fazem update local em `SessaoCompra`, reaproveitando o mesmo mecanismo de compensação pra trás do `sagas-common` — sem framework novo.
 
 Diagrama: [README](../README.md#saga-disparada-a-partir-do-webhook-de-pagamento).
 
-- **Sucesso**: webhook de pagamento marca a sessão como `PAGAMENTO_EFETUADO` e dispara o anel ([Webhook do pagamento](#webhook-do-pagamento)) → confirma em `pagamento` → `hotel` → `voo` → `sessaocompra` marca `VIAGEM_RESERVADA`. Fim de cadeia.
+- **Sucesso**: webhook de pagamento marca a sessão como `PAGAMENTO_EFETUADO` e dispara o anel ([Webhook do pagamento](#webhook-do-pagamento)) → confirma em `pagamento` → `hotel` → `voo-ida` → `voo-volta` → `sessaocompra` marca `VIAGEM_RESERVADA`. Fim de cadeia.
 - **Falha em qualquer etapa (inclusive em `sessaocompra: confirma`)**: propaga DESFACA pra trás até `sessaocompra: reverte` — cancelamento explícito do que já foi fechado na sessão: volta pra `INICIADA` e reinicia o prazo de `INICIADA`, limitado ao teto ([Dois timeouts](#dois-timeouts)) — dá mais tempo pro usuário escolher outra opção de voo/hotel/pagamento.
   - modelagem de status da reversão (falha de negócio × erro de execução, quando terminar em `ERRO`): em aberto
 - **Recusa**: não entra no anel — nada foi confirmado, as reservas seguem em pré-reserva. O webhook leva a sessão pra `PAGAMENTO_RECUSADO`, irmão de `EFETUANDO_PAGAMENTO`:
   - não muda o fluxo — serve pra interface avisar o usuário, que tenta de novo (outro cartão, outra conta), inclusive na mesma URL, que segue valendo ([premissas](#premissas-do-gateway-simulado-pagamento-externo))
   - avançar de novo volta pra `EFETUANDO_PAGAMENTO` (mesma URL, ou renovada — ver [Criação do pagamento](#criação-do-pagamento)); pagar direto no gateway leva a `PAGAMENTO_EFETUADO` do mesmo jeito
   - não estende prazo: o tempo extra vem da renovação perto do vencimento, até o teto ([Dois timeouts](#dois-timeouts))
-- **Discard vs. reverter**: quem detecta a falha de confirmação (ex. `voo`, item não disponível mais no fornecedor) trata isso como erro local *antes* de publicar DESFACA — zera a própria pré-reserva. Quem só recebe DESFACA nunca é quem falhou (por construção da coreografia), então sempre faz a mesma ação: reverter pra pré-. Não precisa de flag na mensagem pra essa distinção — mas precisa saber qual linha local afetar (ver "Payload da mensagem da SAGA" abaixo).
+- **Estorno**: no `DESFACA`, o pagamento estorna no gateway e a linha em `pagamentos` volta pra tentativa nova (`CRIANDO`, chave nova) — o avanço seguinte abre outra transação
+  - `ESTORNADO` só existe no gateway: com uma linha por sessão, um estado parado aqui travaria o `criarPagamento` (responderia "criando" pra sempre)
+- **Discard vs. reverter**: quem detecta a falha de confirmação (ex. `voo-ida`, item não disponível mais no fornecedor) trata isso como erro local *antes* de publicar DESFACA — zera a própria pré-reserva. Quem só recebe DESFACA nunca é quem falhou (por construção da coreografia), então sempre faz a mesma ação: reverter pra pré- (`desconfirmar` no externo — simplificação em [architecture-overview.md](architecture-overview.md#reserva-genérica--simplificação-de-estudo)). Não precisa de flag na mensagem pra essa distinção — mas precisa saber qual linha local afetar (ver "Payload da mensagem da SAGA" abaixo).
 - Consequência: `sessaocompra` vira a ponta final da reversão da SAGA (e do sucesso) — ganha um papel `sagas` mínimo pros dois nós e passa a depender de `sagas-common`.
-- **Mecanismo de fiação — reaproveita `proximafila`/`filaanterior`, não precisa de "dois nós" de verdade.** Os dois pontos de contato de `sessaocompra` no anel colapsam numa única fila (`sessaocompra`): `proximafila: sessaocompra` em `voo` e `filaanterior: sessaocompra` em `pagamento` bastam — `Messaging.iniciarConsumo` publica na próxima fila no encaminhamento pra frente e na anterior no encaminhamento pra trás (ver [saga-choreography.md](saga-choreography.md)). Um único handler em `sessaocompra`, igual aos outros, recebe as duas direções na mesma fila e decide pelo campo `tipo` (`EXECUTE` → confirma; `DESFACA` → reverte) — mesmo padrão de `ReservasSagas`/`PagamentoSagas`.
+- **Mecanismo de fiação — reaproveita `proximafila`/`filaanterior`, não precisa de "dois nós" de verdade.** Os dois pontos de contato de `sessaocompra` no anel colapsam numa única fila (`sessaocompra`): `proximafila: sessaocompra` em `voo-volta` e `filaanterior: sessaocompra` em `pagamento` bastam — `Messaging.iniciarConsumo` publica na próxima fila no encaminhamento pra frente e na anterior no encaminhamento pra trás (ver [saga-choreography.md](saga-choreography.md)). Um único handler em `sessaocompra`, igual aos outros, recebe as duas direções na mesma fila e decide pelo campo `tipo` (`EXECUTE` → confirma; `DESFACA` → reverte) — mesmo padrão de `ReservasSagas`/`PagamentoSagas`.
 
 ## Payload da mensagem da SAGA
 
@@ -160,7 +172,9 @@ Cada handler precisa agir num recurso específico (a reserva, o pagamento, a ses
 - `idSessaoCompra` — nós bookend de `sessaocompra` (`confirma`/`reverte`, ver "SAGA estendida" acima).
 - `idPagamento` — id interno (PK) da linha em `pagamentos` (`pagamento-interno`), usado por `PagamentoSagas`.
 - `idReservaHotel` — id interno (PK) da linha em `reservas`, usado por `ReservasSagas` (profile `hotel`).
-- `idReservaVooIda` / `idReservaVooVolta` — mesmo papel, pro profile `voo`. **Nota:** a cadeia tem um único nó `voo`, mas a sessão de compra tem duas reservas de voo — o handler de `voo` age nas duas a partir da mesma mensagem; forma exata (chamadas sequenciais? o que acontece se uma falhar e a outra não?) em aberto.
+- `idReservaVooIda` / `idReservaVooVolta` — mesmo papel, pro profile `voo`: um nó por perna, cada um lê o próprio campo ([cadeia](saga-choreography.md#cadeia)).
+
+`rastreio` é o `idSessaoCompra`: correlaciona os logs de todos os nós, e a republicação pelo job de pendências mantém o mesmo.
 
 **Por que não `idExterno` também:** cada instância `sagas` (`ReservasSagas`/`PagamentoSagas`) roda no mesmo processo/banco que o papel `web` do mesmo domínio — não é um serviço separado, é só outro profile do mesmo artefato (ver [deploy-roles-by-profile.md](deploy-roles-by-profile.md)). Achar `idExterno` a partir do `idReserva`/`idPagamento` é um `findById` pela PK, local, indexado — não é o tipo de busca que a mensagem "rica" tenta evitar. O que se evita são duas coisas bem diferentes:
 - `idExterno` cruzar a fronteira de `reservas-interno`/`pagamento-interno` sem necessidade — não é assunto de `sessaocompra`, do webhook, nem da mensagem da SAGA; é detalhe interno de como cada domínio fala com seu provedor externo. `reservas-interno` e `pagamento-interno` devolvem só o `id` interno.
@@ -181,7 +195,7 @@ Ou seja: nenhum serviço recebe uma "mensagem web" só pra ir buscar algo no ban
 
 Dois axiomas assumidos pra esse simulador (decisão de design deliberada — não é ponto a reavaliar):
 
-1. **Cancelamento/expiração automática do lado externo é confiável.** TTL em `criar`/`confirmar` (`ReservasService`/`ReservasRepository`, `reservas-externo`); os dois são `@Transactional`, então falha explícita = zero efeito colateral. Consequência: o caminho de compensação (cancelar/liberar) não precisa de entrega garantida — melhor esforço basta, mesmo padrão de `ReservasService.liberarMelhorEsforco` (`reservas-interno`).
+1. **Cancelamento/expiração automática do lado externo é confiável.** TTL em `criar`/`confirmar` (`ReservasService`/`ReservasRepository`, `reservas-externo`); os dois são `@Transactional`, então falha explícita = zero efeito colateral. Consequência: liberar pré-reserva (cancelar/trocar) não precisa de entrega garantida — melhor esforço basta, mesmo padrão de `ReservasService.liberarMelhorEsforco` (`reservas-interno`). Não vale pra reverter reserva confirmada: confirmada não tem TTL lá.
 2. **`confirmar`/`remover` são e continuam não-idempotentes.** Guarda estrita `WHERE confirmado = false` em `ReservasRepository` (`reservas-externo`) — uma segunda chamada depois de sucesso real dá o mesmo erro (`EntityNotFoundException`) de uma falha real, sem key nem endpoint de consulta pra desambiguar. Toda a responsabilidade de nunca chamar `confirmar` duas vezes cai em `reservas-interno` — sem ajuda do lado de lá.
 3. **`reservas-externo` precisa de um endpoint de consulta (`consultar`).** Sem ele, um timeout em `confirmar` é ambiguidade irredutível — dado o axioma 2, sucesso e falha real são indistinguíveis sem perguntar de volta à fonte de verdade. É o que torna o resto deste desenho possível.
 
@@ -202,4 +216,4 @@ Dois axiomas assumidos pra esse simulador (decisão de design deliberada — nã
     - quando estoura o limite de tentativas de *obter resposta*: publica mensagem corrente na DLQ manualmente (`basicPublish` direto, sem delivery tag pra `nack`) + publica para trás
       - *esse* é o único momento em que faz sentido para a gente jogar o cara para a DLQ
 
-**Desfazer reserva já confirmada, independente dos axiomas acima:** `remover` só age em reserva não confirmada (`WHERE confirmado = false`). O caso "DESFACA chega numa `Reserva` já `RESERVADA`, reverte pra pré-" (ver "Discard vs. reverter" acima) precisa de uma operação própria em `reservas-externo` (`desconfirmar`/estorno) pra funcionar ponta a ponta.
+**Reverter reserva confirmada:** falha ambígua no `desconfirmar` deixa a reserva confirmada sem TTL que a libere — a compensação segue pra trás mesmo assim, e o caso entra na robustez acima (`consultar` + retentativa).

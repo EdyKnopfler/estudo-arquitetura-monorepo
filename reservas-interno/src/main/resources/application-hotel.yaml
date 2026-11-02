@@ -20,6 +20,8 @@ external-backend:
   client-secret: ${RESERVAS_EXTERNO_HOTEL_SECRET}
 
 sagas:
-  estafila: hotel
-  filaanterior: pagamento
-  proximafila: voo
+  consumers:
+    - estafila: hotel
+      filaanterior: pagamento
+      proximafila: voo-ida
+      campoid: idReservaHotel

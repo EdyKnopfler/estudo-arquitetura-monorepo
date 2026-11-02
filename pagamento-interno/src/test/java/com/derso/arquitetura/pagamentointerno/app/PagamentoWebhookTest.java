@@ -98,6 +98,7 @@ class PagamentoWebhookTest {
         ArgumentCaptor<Map<String, Object>> mensagem = ArgumentCaptor.forClass(Map.class);
         verify(sagas).publicar(eq(FILA), mensagem.capture());
         assertEquals(Messaging.EXECUTE, mensagem.getValue().get("tipo"));
+        assertEquals(pagamento.get("id_sessao_compra").toString(), mensagem.getValue().get("rastreio"));
         assertEquals(pagamento.get("id"), mensagem.getValue().get("idPagamento"));
         assertEquals(pagamento.get("id_sessao_compra"), mensagem.getValue().get("idSessaoCompra"));
         assertEquals(pagamento.get("id_reserva_hotel"), mensagem.getValue().get("idReservaHotel"));

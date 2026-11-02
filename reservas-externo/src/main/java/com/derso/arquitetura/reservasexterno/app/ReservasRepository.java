@@ -23,6 +23,17 @@ public interface ReservasRepository extends JpaRepository<Reserva, UUID> {
     """)
     int confirmar(@Param("idReserva") UUID id, @Param("horaRef") Instant horaRef);
 
+    // Volta pra pré-reserva; o prazo segue contando da criação original
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE Reserva r
+        SET
+            r.confirmado = false
+        WHERE r.id = :idReserva
+            AND r.confirmado = true
+    """)
+    int desconfirmar(@Param("idReserva") UUID id);
+
     @Modifying
     @Query("""
         DELETE FROM Reserva r

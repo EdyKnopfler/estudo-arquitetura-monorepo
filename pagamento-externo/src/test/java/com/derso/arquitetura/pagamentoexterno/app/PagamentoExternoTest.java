@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -231,6 +232,58 @@ class PagamentoExternoTest {
         assertEquals("PENDENTE", linha(id).get("status"));
     }
 
+    @Test
+    void estornarPagaDevolveEConsultarMostraEstornado() throws Exception {
+        UUID id = criarComSucesso(novaChave()).idTransacao();
+        pagarComSucesso(id);
+
+        assertEquals("ESTORNADO", comSucesso(estornar(id)).status());
+
+        assertEquals("ESTORNADO", linha(id).get("status"));
+        assertEquals("ESTORNADO", comSucesso(consultar(id)).status());
+    }
+
+    @Test
+    void estornarDeNovoRespondeEstornado() throws Exception {
+        UUID id = criarComSucesso(novaChave()).idTransacao();
+        pagarComSucesso(id);
+
+        comSucesso(estornar(id));
+        assertEquals("ESTORNADO", comSucesso(estornar(id)).status());
+    }
+
+    @Test
+    void pagarEstornadaRetorna409SemWebhook() throws Exception {
+        UUID id = criarComSucesso(novaChave()).idTransacao();
+        pagarComSucesso(id);
+        comSucesso(estornar(id));
+        clearInvocations(webhook);
+
+        pagar(id).andExpect(status().isConflict());
+
+        assertEquals("ESTORNADO", linha(id).get("status"));
+        verify(webhook, never()).avisar(anyString(), any(), anyString());
+    }
+
+    @Test
+    void estornarNaoPagaRetorna409SemGravar() throws Exception {
+        UUID id = criarComSucesso(novaChave()).idTransacao();
+
+        estornar(id).andExpect(status().isConflict());
+
+        assertEquals("PENDENTE", linha(id).get("status"));
+    }
+
+    @Test
+    void estornarTransacaoDeOutroClienteRetorna404() throws Exception {
+        UUID id = inserirDireto("outroCliente", novaChave(), LocalDateTime.now(ZoneOffset.UTC));
+        jdbc.update("update pagamentos set status = 'PAGO' where id = ?", id);
+
+        estornar(id).andExpect(status().isNotFound());
+
+        assertEquals("PAGO", linha(id).get("status"));
+    }
+
     @Nested
     @TestPropertySource(properties = "simulacao.resultado-pagar=RECUSADO")
     class ComPagamentoRecusado {
@@ -277,6 +330,15 @@ class PagamentoExternoTest {
             assertEquals(0, contarPorChave(chave));
         }
 
+        @Test
+        void estornarRetorna500SemEstornar() throws Exception {
+            UUID id = pagaDireto();
+
+            estornar(id).andExpect(status().isInternalServerError());
+
+            assertEquals("PAGO", linha(id).get("status"));
+        }
+
     }
 
     @Nested
@@ -290,6 +352,15 @@ class PagamentoExternoTest {
             criar(chave).andExpect(status().isInternalServerError());
 
             assertEquals(1, contarPorChave(chave));
+        }
+
+        @Test
+        void estornarRetorna500MasEstorna() throws Exception {
+            UUID id = pagaDireto();
+
+            estornar(id).andExpect(status().isInternalServerError());
+
+            assertEquals("ESTORNADO", linha(id).get("status"));
         }
 
     }
@@ -333,6 +404,17 @@ class PagamentoExternoTest {
 
     private ResultActions cancelar(UUID id) throws Exception {
         return mockMvc.perform(comoCliente(post("/cancelar/" + id)));
+    }
+
+    private ResultActions estornar(UUID id) throws Exception {
+        return mockMvc.perform(comoCliente(post("/estornar/" + id)));
+    }
+
+    // Nos contextos de falha o criar também falha: grava a transação já paga direto no banco
+    private UUID pagaDireto() {
+        UUID id = inserirDireto(CLIENT_ID, novaChave(), LocalDateTime.now(ZoneOffset.UTC));
+        jdbc.update("update pagamentos set status = 'PAGO' where id = ?", id);
+        return id;
     }
 
     private PagamentoResponseDTO comSucesso(ResultActions resultado) throws Exception {

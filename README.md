@@ -52,11 +52,13 @@ flowchart TD
   WH -->|sucesso| PAGC["pagamento (confirmação)"]
 
   PAGC -->|EXECUTE| HOT[hotel]
-  HOT -->|EXECUTE| VOO[voo]
-  VOO -->|EXECUTE| SCC["sessão compra (confirmação)"]
+  HOT -->|EXECUTE| IDA[voo ida]
+  IDA -->|EXECUTE| VOLTA[voo volta]
+  VOLTA -->|EXECUTE| SCC["sessão compra (confirmação)"]
 
-  SCC -.->|"DESFACA, se falhar"| VOO
-  VOO -.->|DESFACA| HOT
+  SCC -.->|"DESFACA, se falhar"| VOLTA
+  VOLTA -.->|DESFACA| IDA
+  IDA -.->|DESFACA| HOT
   HOT -.->|DESFACA| PAGE["pagamento (estorno)"]
   PAGE -.->|DESFACA| SCR["sessão compra (reversão)"]
 ```
@@ -142,30 +144,32 @@ Pra quem está chegando: cada módulo com as etapas do fluxo em que ele aparece 
   * [X] escolher/trocar hotel e voos (web)
   * [X] iniciar pagamento (web)
   * [ ] cancelar pagamento (web)
-  * [ ] confirmar viagem, fim da SAGA (fila — só desenho)
-  * [ ] reverter, falha na SAGA (fila — só desenho)
+  * [X] confirmar viagem, fim da SAGA (fila)
+  * [X] reverter, falha na SAGA (fila)
   * [X] expirar sessão (timeout)
 * **reservas-interno** — hotel e voo
   * [X] pré-reserva / troca (web)
   * [X] cancelar pré-reserva, sessão expirada (web)
-  * [ ] confirmar (sagas)
-  * [ ] cancelar, compensação (sagas)
+  * [X] confirmar (sagas)
+  * [X] reverter pra pré-reserva, compensação (sagas)
 * **reservas-externo** — simula fornecedor _instável_ de hotel/voo
   * [X] criar pré-reserva
   * [X] confirmar
+  * [X] desconfirmar (reverter confirmada)
   * [X] cancelar pré-reserva
 * **pagamento-interno**
   * [X] criar pagamento (web)
   * [ ] cancelar pagamento (web)
   * [ ] expirar pagamento não confirmado (timeout)
-  * [ ] webhook (web — dispara a SAGA, mas sem dados de negócio)
-  * [ ] confirmar pagamento (sagas — stub)
-  * [ ] estornar (sagas — stub)
+  * [X] webhook (web — atualiza a sessão e dispara a SAGA)
+  * [X] retomar o que o webhook não conseguiu (pendencias)
+  * [X] confirmar pagamento (sagas — só repassa: a cobrança já aconteceu no gateway)
+  * [X] estornar (sagas)
 * **pagamento-externo** — simula gateway de pagamento _instável_
   * [X] criar pagamento
   * [X] pagar (simula o usuário na tela do gateway; chama o webhook)
   * [X] consultar situação do pagamento
   * [X] cancelar pagamento pendente
-  * [ ] estornar
+  * [X] estornar
 * **web-base** (biblioteca: autenticação, tratamento de erro e timeout HTTP) — [X] pronto
-* **sagas-common** (biblioteca: coreografia SAGA sobre RabbitMQ) — [ ] mecânica pronta; falta ordem ack/publish
+* **sagas-common** (biblioteca: coreografia SAGA sobre RabbitMQ) — [ ] mecânica pronta; falta ordem ack/publish e publisher confirms

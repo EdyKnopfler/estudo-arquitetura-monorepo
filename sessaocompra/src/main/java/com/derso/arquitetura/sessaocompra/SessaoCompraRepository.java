@@ -92,6 +92,58 @@ public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID
     """)
     void pagamentoRecusado(@Param("idSessao") UUID id);
 
+    // Fim da cadeia de sucesso da SAGA
+    @Modifying
+    @Transactional
+    @Query("""
+        UPDATE SessaoCompra s
+        SET s.status = 'VIAGEM_RESERVADA'
+        WHERE s.id = :idSessao
+            AND s.status = 'PAGAMENTO_EFETUADO'
+    """)
+    int viagemReservada(@Param("idSessao") UUID id);
+
+    // Fim da compensação da SAGA: estornado, a sessão volta pro pedido com as pré-reservas
+    @Modifying
+    @Transactional
+    @Query("""
+        UPDATE SessaoCompra s
+        SET
+            s.status = 'INICIADA',
+            s.prazoIniciada = :prazo
+        WHERE s.id = :idSessao
+            AND s.status = 'PAGAMENTO_EFETUADO'
+    """)
+    int voltarAoPedido(@Param("idSessao") UUID id, @Param("prazo") Instant prazo);
+
+    @Modifying
+    @Transactional
+    @Query(
+        nativeQuery = true,
+        value = """
+            UPDATE sessao_compra
+            SET status = 'CANCELANDO'
+            WHERE id IN (
+                SELECT id
+                FROM sessao_compra
+                WHERE status = 'INICIADA'
+                AND prazo_iniciada < :agora
+                ORDER BY prazo_iniciada
+                LIMIT :batchSize
+                FOR UPDATE SKIP LOCKED
+            )
+            RETURNING
+                id,
+                id_reserva_voo_ida AS idReservaVooIda,
+                id_reserva_hotel AS idReservaHotel,
+                id_reserva_voo_volta AS idReservaVooVolta;
+        """
+    )
+    List<CancelamentoDTO> marcarIniciadasVencidasComoCancelando(
+        @Param("batchSize") int tamanhoLote,
+        @Param("agora") Instant agora
+    );
+
     @Modifying
     @Transactional
     @Query(

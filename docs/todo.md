@@ -9,19 +9,20 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
 * [ ] **Timeout:**
   * [X] sessão em `INICIADA` expirada (`TimeoutTask`, já agendado): **cancela e desfaz as pré-reservas efetuadas**, via REST em `reservas-interno` — não é SAGA
     * [X] também em `CRIANDO_PAGAMENTO`/`EFETUANDO_PAGAMENTO`, com tolerância bem maior — só limpeza de sessão largada
-    * [ ] e em `PAGAMENTO_RECUSADO`, mesma tolerância
+    * [X] e em `PAGAMENTO_RECUSADO`, mesma tolerância
   * [ ] pagamento não efetuado a tempo (`TimeoutPagamentoTask`, em `pagamento-interno`): mesma operação do cancelamento (pede cancelamento ao externo; já pago segue o fluxo), sem mexer na sessão — ver [purchase-flow-design.md](purchase-flow-design.md#dois-timeouts)
   * [ ] modelar os registros de tempo
     * [ ] timeout do pagamento reinicia a cada link criado — é pra pagamento criado e abandonado, mas tem que dar tempo de pagar
     * [X] pré-reservas vencem depois da janela de pagamento (X+Y): têm que durar escolher tudo *e* pagar
     * [ ] avanço devolve o prazo ao usuário (meia hora desde o início, ou o da extensão vigente, até o teto), calculado em `sessaocompra` — ver [teto](purchase-flow-design.md#dois-timeouts)
-    * [ ] prazo de `INICIADA` com registro próprio, separado do `start_time` (base do teto) — reiniciado ao voltar pra `INICIADA`
+    * [X] prazo de `INICIADA` com registro próprio, separado do `start_time` (base do teto) — reiniciado ao voltar pra `INICIADA`
 
 * [ ] **Sessão de compra — ponta da SAGA** (decidido, ver [purchase-flow-design.md](purchase-flow-design.md#saga-estendida--sessaocompra-como-bookend-do-anel)):
-  * [ ] papel `sagas` em `sessaocompra` (passa a depender de `sagas-common`), fila `sessaocompra`; `voo.proximafila` e `pagamento.filaanterior` apontando pra ela
-  * [ ] `EXECUTE` (fim da cadeia de sucesso): marca `VIAGEM_RESERVADA`
-  * [ ] `DESFACA` (fim da compensação — cancelamento explícito do que foi fechado): volta a sessão pra `INICIADA` e reinicia o prazo de `INICIADA`, limitado ao teto
+  * [X] papel `sagas` em `sessaocompra` (passa a depender de `sagas-common`), fila `sessaocompra`; `voo-volta.proximafila` e `pagamento.filaanterior` apontando pra ela
+  * [X] `EXECUTE` (fim da cadeia de sucesso): marca `VIAGEM_RESERVADA`
+  * [X] `DESFACA` (fim da compensação — cancelamento explícito do que foi fechado): volta a sessão pra `INICIADA` e reinicia o prazo de `INICIADA`, limitado ao teto
     * modelagem de status da reversão: ver [to-decide.md](to-decide.md)
+  * [ ] sessão fora de `PAGAMENTO_EFETUADO` quando a SAGA chega ao fim (provisório: fila de erros) — ver [to-decide.md](to-decide.md)
 
 * [ ] **Pagamentos** — fluxo, criação desenhada em [purchase-flow-design.md](purchase-flow-design.md#criação-do-pagamento):
   * [X] criação no interno (`PUT /pagamentos/{idSessao}`, chamado por `sessaocompra`; unique em `id_sessao_compra`): pagamento por sessão, intenção gravada antes do externo, troca de tentativa até obter URL, depois devolve sempre a mesma
@@ -40,7 +41,7 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
       * [X] (interno) ao renovar, o cancelamento descobre que já está pago → responde "já pago", sem disparar a SAGA (fecha pelo webhook) ([reconciliação](reconciliation.md))
       * [X] (sessaocompra) faltam pré-reservas → complete o pedido antes de continuar
       * [X] (sessaocompra) sessão já cancelada pelo timeout → falha, inicie outra sessão
-      * [ ] (sessaocompra) sessão em `PAGAMENTO_RECUSADO` → repete o `PUT` e volta pra `EFETUANDO_PAGAMENTO`
+      * [X] (sessaocompra) sessão em `PAGAMENTO_RECUSADO` → repete o `PUT` e volta pra `EFETUANDO_PAGAMENTO`
   * [ ] **voltar ao pedido** (cancelar o pagamento corrente → sessão `INICIADA`), orientado a estado ([diretriz](state-driven-endpoints.md), [desenho](purchase-flow-design.md#cancelamento-e-prazo--gateway-como-juiz)): endpoint em `sessaocompra` e em `pagamento-interno`; reinicia o prazo de `INICIADA`, limitado ao teto ([Dois timeouts](purchase-flow-design.md#dois-timeouts)); o avanço seguinte abre tentativa nova com os ids de reserva atuais
     * casos, um por vez:
       * [ ] (interno) link criado → cancela no externo
@@ -61,18 +62,21 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
   * [X] **externo:** consultar — devolve a situação atual da transação ([reconciliação](reconciliation.md))
   * [X] **externo:** cancelar transação pendente
   * [ ] implementação do webhook no interno
-    * [ ] validar assinatura/origem e proteger contra reprocessamento
+    * [ ] validar assinatura/origem
+    * [X] proteger contra reprocessamento: webhook repetido é ignorado (update condicional)
     * [ ] pagamento aceito é reconciliado a favor da venda, mesmo fora da tentativa vigente ([reconciliação](reconciliation.md))
       * tentativa antiga e duas tentativas pagas: ver [to-decide.md](to-decide.md)
-    * [ ] intenções gravadas antes de chamar sessão/fila + job de pendências — ver [Dual-write](#dual-write-pagamentoreservas-outbox-das-reservas-descartado--ver-desenho)
-    * [ ] sucesso: sessão vai pra `PAGAMENTO_EFETUADO` via HTTP (`PUT /servico/sessoes/{id}/pagamento-efetuado`, já com auth de serviço — ver [Testes](#testes))
-      * [ ] aceita vindo de `PAGAMENTO_RECUSADO` (pago direto no gateway)
-    * [ ] sucesso: publica `EXECUTE` na fila `pagamento` com os ids internos ([desenho do payload](purchase-flow-design.md#payload-da-mensagem-da-saga))
-    * [ ] recusa: sessão vai pra `PAGAMENTO_RECUSADO` via HTTP, sem SAGA ([desenho](purchase-flow-design.md#saga-estendida--sessaocompra-como-bookend-do-anel))
+    * [X] intenções gravadas antes de chamar sessão/fila + job de pendências — ver [Dual-write](#dual-write-pagamentoreservas-outbox-das-reservas-descartado--ver-desenho)
+    * [X] sucesso: sessão vai pra `PAGAMENTO_EFETUADO` via HTTP (`PUT /servico/sessoes/{id}/pagamento-efetuado`)
+      * [X] aceita vindo de `PAGAMENTO_RECUSADO` (pago direto no gateway)
+    * [X] sucesso: publica `EXECUTE` na fila `pagamento` com os ids internos ([desenho do payload](purchase-flow-design.md#payload-da-mensagem-da-saga))
+    * [X] recusa: sessão vai pra `PAGAMENTO_RECUSADO` via HTTP, sem SAGA ([desenho](purchase-flow-design.md#saga-estendida--sessaocompra-como-bookend-do-anel))
+    * [ ] confirmação tardia (sessão já fora de `EFETUANDO_PAGAMENTO`/`PAGAMENTO_RECUSADO`): estornar — hoje o `PUT` não faz nada (TODO em `SessaoCompraService.pagamentoEfetuado`)
   * [ ] **sagas:** eventos de confirmação e cancelamento
     * [X] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
-    * [ ] compensação: estorna e repassa `DESFACA` até `sessaocompra` (`filaanterior: sessaocompra`, ver [saga-choreography.md](saga-choreography.md#cadeia))
-  * [ ] **externo:** endpoint de estorno, _deve falhar às vezes de propósito_
+    * [X] compensação: estorna e repassa `DESFACA` até `sessaocompra` (`filaanterior: sessaocompra`, ver [saga-choreography.md](saga-choreography.md#cadeia))
+      * [ ] falha no estorno: ver [to-decide.md](to-decide.md)
+  * [X] **externo:** endpoint de estorno, _deve falhar às vezes de propósito_
   * [ ] **externo:** latência aleatória (chaos) — hoje só sorteia falha
   * [ ] Testes integrados
     * [ ] Requisição > Externo > Pagar > Webhook
@@ -85,11 +89,12 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
     * [X] cancelamento por timeout da sessão (chamado pelo `TimeoutTask` de `sessaocompra`, via REST)
   * [ ] **sagas:** eventos de confirmação e cancelamento por reversão
     * [X] fiação das filas de "entrada" e saída
-    * [ ] chama endpoints do serviço externo
+    * [X] chama endpoints do serviço externo (`confirmar`; reversão por `desconfirmar`, volta pra pré-reserva)
   * [X] **externo:** simula serviço externo, **introduz erros aleatórios**
     * [X] **pré-reserva:** cria reserva sem confirmação
     * [X] **confirmação:** confirma pré-reservas dentro da validade
     * [X] **cancelamento:** cancela pré-reservas
+    * [X] **desconfirmação:** volta a confirmada pra pré-reserva ([simplificação](architecture-overview.md#reserva-genérica--simplificação-de-estudo))
     * [X] _deve falhar às vezes de propósito_
   * [ ] Testes integrados
     * [X] Requisição > Externo (`ReservasExternoServiceIntegrationTest`)
@@ -102,9 +107,10 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
     * [X] cancelamento por timeout da sessão (chamado pelo `TimeoutTask` de `sessaocompra`, via REST)
   * [ ] **sagas:** eventos de confirmação e cancelamento por reversão
     * [X] fiação das filas de "entrada" e saída
-    * [ ] chama endpoints do serviço externo
-    * [ ] agir nas duas reservas (ida + volta) a partir de uma mensagem — forma: ver [to-decide.md](to-decide.md)
-    * [ ] fim da cadeia de sucesso: publica `EXECUTE` na fila `sessaocompra` (confirma a viagem); recebe `DESFACA` de volta se `sessaocompra` falhar ao confirmar
+    * [X] chama endpoints do serviço externo
+    * [X] agir nas duas reservas (ida + volta) — um nó por perna (`voo-ida`, `voo-volta`), mesmo processo ([cadeia](saga-choreography.md#cadeia))
+    * [X] fim da cadeia de sucesso: publica `EXECUTE` na fila `sessaocompra` (confirma a viagem)
+    * [ ] recebe `DESFACA` de volta se `sessaocompra` falhar ao confirmar — ver [to-decide.md](to-decide.md)
   * [X] **externo:** simula serviço externo, **introduz erros aleatórios**
     * [X] **pré-reserva:** cria reserva sem confirmação
     * [X] **confirmação:** confirma pré-reservas dentro da validade
@@ -124,10 +130,10 @@ Transversais ou de "amarração", não de regra de negócio de um domínio — l
 
 ### Dual-write pagamento/reservas (outbox das reservas descartado — ver desenho)
 
-- [ ] **Dual-write no webhook de pagamento** (decidido — ponto crucial do fluxo). Registrar o pago + atualizar a sessão + publicar a 1ª mensagem da SAGA, sem transação comum: intenções gravadas na linha antes, job de pendências — [desenho](purchase-flow-design.md#dual-write-no-webhook). **Ordem:** depois do item de reservas abaixo — esse expõe a versão geral do problema (dual-write contra sistema externo não-idempotente), o outbox do webhook é um caso mais estreito do mesmo tema. **Nota:** a criação do pagamento é outro dual-write, resolvido com intenção gravada antes da chamada — ver [purchase-flow-design.md](purchase-flow-design.md#dual-write-na-criação).
+- [X] **Dual-write no webhook de pagamento**. Registrar o pago + atualizar a sessão + publicar a 1ª mensagem da SAGA, sem transação comum: intenções gravadas na linha antes, job de pendências — [desenho](purchase-flow-design.md#dual-write-no-webhook). Ressalva da publicação sem confirm: ver [Hygiene](#hygiene--housekeeping).
 - [ ] **Robustez do passo de confirmar/reverter `Reserva` em `reservas-interno`.** Desenho fechado (axiomas do `reservas-externo`, esboço de arquitetura) em [purchase-flow-design.md](purchase-flow-design.md). Quebra em:
   - [ ] Endpoint de consulta de estado (`consultar`) em `reservas-externo` — desambigua timeout/falha de infra sem exigir idempotência do lado de lá.
-  - [ ] Endpoint `desconfirmar`/estorno em `reservas-externo` — falta pra reverter uma `Reserva` já confirmada.
+  - [X] Endpoint `desconfirmar` em `reservas-externo` — reverte uma `Reserva` já confirmada.
   - [x] ~~`Messaging`: novo desfecho "erro tratado (negócio)" → ack + publica pra trás, sem passar pela DLQ.~~ — `ResultadoHandler.ack(PARA_TRAS)`.
   - [x] ~~`Messaging`: novo desfecho "ack puro, sem publish" — falha em obter resposta do externo; resolução fica pra task.~~ — `ResultadoHandler.ack(NENHUM)`.
   - [ ] Status de intenção + contador de tentativas em `Reserva` (nomes em aberto) — transição idempotente (`WHERE` aceita estado anterior e o alvo).
@@ -147,10 +153,10 @@ Estratégia e comandos: [testing-strategy.md](testing-strategy.md). Integrados p
 
 - [ ] **Depois de separar criar/pagar no externo** ([desenho](purchase-flow-design.md#criação-do-pagamento)):
   - webhook publica `EXECUTE` na fila `pagamento`: fila temporária ligada à exchange `sagas` + `basicGet`
-- [ ] **Com os handlers da SAGA e o timeout implementados:**
-  - handlers de `ReservasSagas`/`PagamentoSagas` ponta a ponta — `ReservasSagasTest` já cobre os desfechos de `confirmar`/`cancelar` isolados; falta com id real na mensagem, e `PagamentoSagas`
+- [ ] **Com os handlers da SAGA implementados:** desfechos isolados cobertos (`ReservasSagasTest`, `PagamentoSagasTest`, `SessaoCompraSagasTest`)
+  - [ ] integrado da cadeia inteira (sessão → pré-reservas → pagar → webhook → `VIAGEM_RESERVADA`), rastreável pelo `rastreio` (= `idSessaoCompra`)
   - integrados "encaminha sucesso" / "notificação de falha" de [Features por domínio](#features-por-domínio) (pagamento, hotel, voo)
-- [ ] **`PUT /servico/sessoes/{id}/pagamento-efetuado`**: autenticação coberta (`SessaoCompraServicoAuthTest`); falta o teste da transição de estado — entra com o [webhook](purchase-flow-design.md#webhook-do-pagamento).
+- [X] **`PUT /servico/sessoes/{id}/pagamento-efetuado`**: autenticação (`SessaoCompraServicoAuthTest`) e transição de estado (`SessaoCompraFluxoTest`).
 
 ### Hygiene / housekeeping
 

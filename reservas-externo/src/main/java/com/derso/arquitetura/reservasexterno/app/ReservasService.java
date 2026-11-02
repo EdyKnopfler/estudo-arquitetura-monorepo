@@ -56,6 +56,15 @@ public class ReservasService {
     }
 
     @Transactional
+    public void desconfirmar(UUID id) {
+        seraQueVaiFalhar();
+
+        if (repositorio.desconfirmar(id) == 0) {
+            throw new EntityNotFoundException("Reserva não encontrada ou não confirmada");
+        }
+    }
+
+    @Transactional
     public void remover(UUID id) {
         seraQueVaiFalhar();
 

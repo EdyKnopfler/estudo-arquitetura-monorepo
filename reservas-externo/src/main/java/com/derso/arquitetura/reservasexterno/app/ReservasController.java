@@ -42,6 +42,16 @@ public class ReservasController {
         return ResponseEntity.ok().build();
     }
 
+    // Reversão da SAGA: imita o void de voo (o hold continua); hotel real cancelaria pela política —
+    // simplificação em docs/architecture-overview.md#reserva-genérica--simplificação-de-estudo
+    @PutMapping("/desconfirmar/{id}")
+    public ResponseEntity<Void> desconfirmarReserva(
+        @PathVariable("id") UUID id
+    ) {
+        servico.desconfirmar(id);
+        return ResponseEntity.ok().build();
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> cancelarReserva(
         @PathVariable("id") UUID id

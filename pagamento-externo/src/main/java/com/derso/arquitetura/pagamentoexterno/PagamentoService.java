@@ -73,6 +73,7 @@ public class PagamentoService {
             }
             case EXPIRADO -> throw new BusinessException("Transação expirada: " + idTransacao);
             case CANCELADO -> throw new BusinessException("Transação cancelada: " + idTransacao);
+            case ESTORNADO -> throw new BusinessException("Transação estornada: " + idTransacao);
             case PENDENTE -> { }
         }
 
@@ -122,6 +123,32 @@ public class PagamentoService {
 
         if (pagamento.statusEm(Instant.now()) == StatusPagamento.PAGO) {
             throw new BusinessException("Transação já paga: " + idTransacao);
+        }
+
+        return pagamento;
+    }
+
+    // Devolve a paga; já estornada responde como está, pra repetição depois de falha ambígua
+    public Pagamento estornar(String idCliente, UUID idTransacao) {
+        ResultadoSimulado resultado = simulador.decidir();
+
+        if (resultado == ResultadoSimulado.FALHA_ANTES_DE_GRAVAR) {
+            throw new RuntimeException("Falha simulada antes de estornar: " + UUID.randomUUID());
+        }
+
+        Pagamento pagamento = consultar(idCliente, idTransacao);
+
+        if (pagamento.getStatus() == StatusPagamento.PAGO) {
+            transactionTemplate.execute(status -> repositorio.estornar(idTransacao));
+            pagamento = consultar(idCliente, idTransacao);
+        }
+
+        if (pagamento.getStatus() != StatusPagamento.ESTORNADO) {
+            throw new BusinessException("Transação não paga: " + idTransacao);
+        }
+
+        if (resultado == ResultadoSimulado.FALHA_DEPOIS_DE_GRAVAR) {
+            throw new RuntimeException("Falha simulada depois de estornar: " + UUID.randomUUID());
         }
 
         return pagamento;

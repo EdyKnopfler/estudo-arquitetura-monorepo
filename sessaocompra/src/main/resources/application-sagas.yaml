@@ -1,0 +1,13 @@
+spring:
+  main:
+    web-application-type: none
+
+  flyway:
+    enabled: false # só o papel web migra; ver docs/deploy-roles-by-profile.md
+
+sagas:
+  estafila: sessaocompra # ponta final da cadeia: EXECUTE fecha a viagem, DESFACA volta ao pedido
+  rabbithost: ${BROKER_HOST:localhost}
+  rabbitport: ${BROKER_PORT:5672}
+  rabbituser: ${BROKER_USER:cueio}
+  rabbitpassword: ${BROKER_PASSWORD}

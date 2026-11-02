@@ -1,5 +1,6 @@
 package com.derso.arquitetura.reservasinterno.sagas;
 
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Profile;
@@ -15,5 +16,6 @@ import com.derso.arquitetura.sagas.Messaging;
 @Configuration
 @Profile("sagas")
 @Import({ JacksonConfig.class, RabbitConfig.class, Messaging.class })
+@EnableConfigurationProperties(ConsumersSaga.class)
 public class SagasWiring {
 }

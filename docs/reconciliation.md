@@ -29,3 +29,4 @@ Critério que orienta as decisões de fluxo entre os serviços internos e os `-e
   - sem informação pra reconciliar — não dá pra sair cancelando sem poder cancelar lá
   - retentar enquanto fizer sentido; o limite são as pré-reservas, que também expiram
   - pagamento achado tarde dispara a SAGA; a confirmação falha na pré-reserva expirada e a compensação estorna o pagamento
+- confirmação de pagamento tardia, com a sessão já fora do pagamento (ex.: recolhida pela limpeza): estorna

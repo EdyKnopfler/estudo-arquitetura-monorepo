@@ -54,4 +54,13 @@ public interface PagamentoRepository extends JpaRepository<Pagamento, UUID> {
     """)
     int cancelar(@Param("id") UUID id);
 
+    @Modifying
+    @Query("""
+        UPDATE Pagamento p
+        SET p.status = 'ESTORNADO'
+        WHERE p.id = :id
+            AND p.status = 'PAGO'
+    """)
+    int estornar(@Param("id") UUID id);
+
 }

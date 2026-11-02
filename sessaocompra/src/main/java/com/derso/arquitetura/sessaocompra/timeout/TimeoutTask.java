@@ -1,8 +1,8 @@
 package com.derso.arquitetura.sessaocompra.timeout;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.function.Supplier;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -30,17 +30,20 @@ public class TimeoutTask {
     // Prazos: docs/purchase-flow-design.md#dois-timeouts
     @Scheduled(fixedDelayString = "PT1M")
     public void processaTimeouts() {
-        processa(List.of("INICIADA"), SessaoCompra.PRAZO_INICIADA);
-        processa(List.of("CRIANDO_PAGAMENTO", "EFETUANDO_PAGAMENTO", "PAGAMENTO_RECUSADO"), SessaoCompra.TOLERANCIA_LIMPEZA);
+        // INICIADA tem prazo próprio (reinicia ao voltar pro pedido); o resto conta do início
+        processa(() -> repositorio.marcarIniciadasVencidasComoCancelando(TAMANHO_LOTE, Instant.now()));
+        processa(() -> repositorio.marcarLoteComoCancelando(
+            List.of("CRIANDO_PAGAMENTO", "EFETUANDO_PAGAMENTO", "PAGAMENTO_RECUSADO"),
+            TAMANHO_LOTE,
+            Instant.now().minus(SessaoCompra.TOLERANCIA_LIMPEZA)
+        ));
     }
 
-    private void processa(List<String> status, Duration prazo) {
+    private void processa(Supplier<List<CancelamentoDTO>> proximoLote) {
         List<CancelamentoDTO> expiradas;
 
         do {
-            Instant referencia = Instant.now().minus(prazo);
-            expiradas = repositorio.marcarLoteComoCancelando(status, TAMANHO_LOTE, referencia);
-
+            expiradas = proximoLote.get();
             expiradas.forEach(servico::desfazerPreReservas);
         } while (expiradas.size() > 0);
     }

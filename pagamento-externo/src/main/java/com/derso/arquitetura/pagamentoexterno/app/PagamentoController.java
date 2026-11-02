@@ -54,6 +54,11 @@ public class PagamentoController {
         return resposta(servico.cancelar(authentication.getPrincipal().toString(), idTransacao));
     }
 
+    @PostMapping("/estornar/{idTransacao}")
+    public PagamentoResponseDTO estornar(@PathVariable("idTransacao") UUID idTransacao, Authentication authentication) {
+        return resposta(servico.estornar(authentication.getPrincipal().toString(), idTransacao));
+    }
+
     private PagamentoResponseDTO resposta(Pagamento pagamento) {
         return new PagamentoResponseDTO(
             pagamento.getId(),

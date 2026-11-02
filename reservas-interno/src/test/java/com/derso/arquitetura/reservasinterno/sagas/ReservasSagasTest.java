@@ -2,11 +2,13 @@ package com.derso.arquitetura.reservasinterno.sagas;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -31,9 +33,8 @@ class ReservasSagasTest {
     private final Messaging sagas = mock(Messaging.class);
     private final ReservasSagas reservasSagas;
 
-    ReservasSagasTest() throws IOException {
-        reservasSagas = new ReservasSagas(sagas, servicoExterno, repositorio);
-        reservasSagas.estaFila = "hotel";
+    ReservasSagasTest() {
+        reservasSagas = new ReservasSagas(new ConsumersSaga(List.of()), sagas, servicoExterno, repositorio);
     }
 
     @Test
@@ -41,9 +42,10 @@ class ReservasSagasTest {
         UUID idExterno = UUID.randomUUID();
         Reserva reserva = new Reserva(UUID.randomUUID(), idExterno);
 
-        ResultadoHandler resultado = reservasSagas.confirmar(reserva, "rastreio-1");
+        ResultadoHandler resultado = reservasSagas.confirmar(reserva, "hotel", "rastreio-1");
 
         verify(servicoExterno).confirmar(idExterno);
+        verify(repositorio).marcarReservada(reserva.getId());
         assertEquals(RetornoBroker.ACK, resultado.retornoBroker());
         assertEquals(Encaminhamento.PARA_FRENTE, resultado.encaminhamento());
     }
@@ -55,7 +57,7 @@ class ReservasSagasTest {
 
         doThrow(notFound()).when(servicoExterno).confirmar(idExterno);
 
-        ResultadoHandler resultado = reservasSagas.confirmar(reserva, "rastreio-2");
+        ResultadoHandler resultado = reservasSagas.confirmar(reserva, "hotel", "rastreio-2");
 
         assertEquals(RetornoBroker.ACK, resultado.retornoBroker());
         assertEquals(Encaminhamento.PARA_TRAS, resultado.encaminhamento());
@@ -70,7 +72,7 @@ class ReservasSagasTest {
             HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", HttpHeaders.EMPTY, new byte[0], null
         )).when(servicoExterno).confirmar(idExterno);
 
-        ResultadoHandler resultado = reservasSagas.confirmar(reserva, "rastreio-3");
+        ResultadoHandler resultado = reservasSagas.confirmar(reserva, "hotel", "rastreio-3");
 
         assertEquals(RetornoBroker.ACK, resultado.retornoBroker());
         assertEquals(Encaminhamento.NENHUM, resultado.encaminhamento());
@@ -83,42 +85,65 @@ class ReservasSagasTest {
 
         doThrow(new RuntimeException("timeout")).when(servicoExterno).confirmar(idExterno);
 
-        ResultadoHandler resultado = reservasSagas.confirmar(reserva, "rastreio-4");
+        ResultadoHandler resultado = reservasSagas.confirmar(reserva, "hotel", "rastreio-4");
 
         assertEquals(RetornoBroker.ACK, resultado.retornoBroker());
         assertEquals(Encaminhamento.NENHUM, resultado.encaminhamento());
     }
 
     @Test
-    void cancelarComSucessoDevolveAckParaTras() {
+    void reverterComSucessoDesconfirmaVoltaPraPreReservaEDevolveAckParaTras() {
         UUID idExterno = UUID.randomUUID();
         Reserva reserva = new Reserva(UUID.randomUUID(), idExterno);
 
-        ResultadoHandler resultado = reservasSagas.cancelar(reserva, "rastreio-5");
+        ResultadoHandler resultado = reservasSagas.reverter(reserva, "hotel", "rastreio-5");
 
-        verify(servicoExterno).cancelar(idExterno);
+        verify(servicoExterno).desconfirmar(idExterno);
+        verify(repositorio).marcarPreReservada(reserva.getId());
         assertEquals(RetornoBroker.ACK, resultado.retornoBroker());
         assertEquals(Encaminhamento.PARA_TRAS, resultado.encaminhamento());
     }
 
     @Test
-    void cancelarComFalhaAindaAssimDevolveAckParaTras_melhorEsforco() {
+    void reverterJaDesconfirmadaNoExternoVoltaPraPreReservaMesmoAssim() {
         UUID idExterno = UUID.randomUUID();
         Reserva reserva = new Reserva(UUID.randomUUID(), idExterno);
+        doThrow(notFound()).when(servicoExterno).desconfirmar(idExterno);
 
-        doThrow(new RuntimeException("reservas-externo indisponível")).when(servicoExterno).cancelar(idExterno);
+        ResultadoHandler resultado = reservasSagas.reverter(reserva, "hotel", "rastreio-6");
 
-        ResultadoHandler resultado = reservasSagas.cancelar(reserva, "rastreio-6");
+        verify(repositorio).marcarPreReservada(reserva.getId());
+        assertEquals(Encaminhamento.PARA_TRAS, resultado.encaminhamento());
+    }
 
+    @Test
+    void reverterComFalhaAmbiguaNaoMexeNoStatusMasSegueParaTras() {
+        UUID idExterno = UUID.randomUUID();
+        Reserva reserva = new Reserva(UUID.randomUUID(), idExterno);
+        doThrow(new RuntimeException("reservas-externo indisponível")).when(servicoExterno).desconfirmar(idExterno);
+
+        ResultadoHandler resultado = reservasSagas.reverter(reserva, "hotel", "rastreio-7");
+
+        verify(repositorio, never()).marcarPreReservada(any());
         assertEquals(RetornoBroker.ACK, resultado.retornoBroker());
         assertEquals(Encaminhamento.PARA_TRAS, resultado.encaminhamento());
     }
 
     @Test
-    void idReservaDaMensagemAindaNaoImplementado() {
-        // Trava o comportamento atual (stub proposital) — ver TODO no próprio método.
-        // Este teste deve mudar quando o payload da mensagem ganhar o campo de verdade.
-        assertThrows(UnsupportedOperationException.class, () -> reservasSagas.idReservaDaMensagem(Map.of()));
+    void idReservaDaMensagemLeOCampoDoNo() {
+        UUID ida = UUID.randomUUID();
+        UUID volta = UUID.randomUUID();
+        // como chega do broker: UUID serializado como string
+        Map<String, Object> mensagem = Map.of("idReservaVooIda", ida.toString(), "idReservaVooVolta", volta.toString());
+
+        assertEquals(ida, ReservasSagas.idReservaDaMensagem(mensagem, "idReservaVooIda"));
+        assertEquals(volta, ReservasSagas.idReservaDaMensagem(mensagem, "idReservaVooVolta"));
+    }
+
+    @Test
+    void idReservaAusenteNaMensagemLanca() {
+        assertThrows(IllegalArgumentException.class,
+            () -> ReservasSagas.idReservaDaMensagem(Map.of("idReservaHotel", UUID.randomUUID().toString()), "idReservaVooIda"));
     }
 
     private static HttpClientErrorException.NotFound notFound() {

@@ -109,6 +109,20 @@ class PagamentoExternoServiceIntegrationTest {
         }
     }
 
+    // reversão da SAGA: estornar paga devolve ESTORNADO, e estornar de novo também
+    @Test
+    void estornarTransacaoPagaDevolveEstornadaEEstornarDeNovoDevolveOMesmo() {
+        try (GenericContainer<?> externo = subirPagamentoExterno("SUCESSO")) {
+            PagamentoExternoService servico = servico(externo);
+            CriarTransacaoResponse criada = servico.criar("cartao", new BigDecimal("100.00"), UUID.randomUUID());
+            RestClient.create(urlBase(externo)).post().uri("/pagar/{id}", criada.idTransacao()).retrieve().toBodilessEntity();
+
+            assertEquals("ESTORNADO", servico.estornar(criada.idTransacao()).status());
+            assertEquals("ESTORNADO", servico.estornar(criada.idTransacao()).status());
+            assertEquals("ESTORNADO", servico.consultar(criada.idTransacao()).status());
+        }
+    }
+
     @Test
     void falhaAntesDeGravarDevolve500SemTransacao() {
         try (GenericContainer<?> externo = subirPagamentoExterno("FALHA_ANTES_DE_GRAVAR")) {

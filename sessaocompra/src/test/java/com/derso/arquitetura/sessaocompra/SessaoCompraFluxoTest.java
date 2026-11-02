@@ -1,8 +1,10 @@
 package com.derso.arquitetura.sessaocompra;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -16,10 +18,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -117,6 +121,7 @@ class SessaoCompraFluxoTest {
         assertEquals("INICIADA", linha.get("status"));
         assertEquals(cliente, linha.get("id_customer"));
         assertNotNull(linha.get("start_time"));
+        assertEquals(instante(linha.get("start_time")).plus(SessaoCompra.PRAZO_INICIADA), instante(linha.get("prazo_iniciada")));
         assertNull(linha.get("id_reserva_hotel"));
         assertNull(linha.get("id_reserva_voo_ida"));
         assertNull(linha.get("id_reserva_voo_volta"));
@@ -297,6 +302,61 @@ class SessaoCompraFluxoTest {
     }
 
     @Test
+    void fimDaSagaComSucessoFechaAViagem() throws Exception {
+        UUID sessao = sessaoPaga(UUID.randomUUID());
+
+        assertTrue(servico.viagemReservada(sessao));
+
+        assertEquals("VIAGEM_RESERVADA", linha(sessao).get("status"));
+    }
+
+    // ex.: PUT da sessão ainda com o job de pendências quando a SAGA chega ao fim
+    @Test
+    void fimDaSagaComSessaoForaDePagamentoEfetuadoNaoMexe() throws Exception {
+        UUID cliente = UUID.randomUUID();
+        UUID sessao = criarSessaoCompleta(cliente);
+        putComoCliente(sessao, "/iniciando-pagamento", cliente).andExpect(status().isOk());
+
+        assertFalse(servico.viagemReservada(sessao));
+        assertFalse(servico.voltarAoPedido(sessao));
+
+        assertEquals("EFETUANDO_PAGAMENTO", linha(sessao).get("status"));
+    }
+
+    @Test
+    void fimDaCompensacaoVoltaAoPedidoComPrazoReiniciadoEOTimeoutNaoRecolhe() throws Exception {
+        UUID cliente = UUID.randomUUID();
+        UUID sessao = sessaoPaga(cliente);
+        iniciadaHa(sessao, Duration.ofMinutes(20));
+        Instant antes = Instant.now();
+
+        assertTrue(servico.voltarAoPedido(sessao));
+
+        Map<String, Object> linha = linha(sessao);
+        assertEquals("INICIADA", linha.get("status"));
+        Instant prazo = instante(linha.get("prazo_iniciada"));
+        assertFalse(prazo.isBefore(antes.plus(SessaoCompra.PRAZO_INICIADA).truncatedTo(ChronoUnit.MILLIS)));
+        assertFalse(prazo.isAfter(Instant.now().plus(SessaoCompra.PRAZO_INICIADA)));
+
+        new TimeoutTask(repositorio, servico).processaTimeouts();
+        assertEquals("INICIADA", linha(sessao).get("status"));
+
+        // de volta ao pedido, aceita alteração de novo
+        putComoCliente(sessao, "/hotel", cliente).andExpect(status().isOk());
+    }
+
+    @Test
+    void prazoReiniciadoAoVoltarAoPedidoNaoPassaDoTeto() throws Exception {
+        UUID sessao = sessaoPaga(UUID.randomUUID());
+        iniciadaHa(sessao, SessaoCompra.TETO.minus(Duration.ofMinutes(5)));
+
+        assertTrue(servico.voltarAoPedido(sessao));
+
+        Map<String, Object> linha = linha(sessao);
+        assertEquals(instante(linha.get("start_time")).plus(SessaoCompra.TETO), instante(linha.get("prazo_iniciada")));
+    }
+
+    @Test
     void falhaAoDesfazerPreReservasNoTimeoutRegistraFalhaCancelamento() throws Exception {
         UUID cliente = UUID.randomUUID();
         UUID sessao = criarSessaoCompleta(cliente);
@@ -473,8 +533,22 @@ class SessaoCompraFluxoTest {
         return sessao;
     }
 
+    private UUID sessaoPaga(UUID cliente) throws Exception {
+        UUID sessao = criarSessaoCompleta(cliente);
+        putComoCliente(sessao, "/iniciando-pagamento", cliente).andExpect(status().isOk());
+        putComoServico(sessao, "/pagamento-efetuado").andExpect(status().isOk());
+        return sessao;
+    }
+
+    // INICIADA vence pelo prazo próprio; os outros estados, pela tolerância contada do início
     private void expirar(UUID sessao) {
         iniciadaHa(sessao, SessaoCompra.PRAZO_INICIADA.plus(Duration.ofMinutes(1)));
+        jdbc.update("update sessao_compra set prazo_iniciada = ? where id = ?",
+            LocalDateTime.ofInstant(Instant.now().minus(Duration.ofMinutes(1)), ZoneOffset.UTC), sessao);
+    }
+
+    private static Instant instante(Object timestamp) {
+        return ((Timestamp) timestamp).toLocalDateTime().toInstant(ZoneOffset.UTC);
     }
 
     private void iniciadaHa(UUID sessao, Duration tempo) {

@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.derso.arquitetura.pagamentointerno.entity.Pagamento;
 
@@ -113,6 +114,25 @@ public interface PagamentoRepository extends JpaRepository<Pagamento, UUID> {
             AND p.status = 'AGUARDANDO_PAGAMENTO'
     """)
     int renovarTentativa(@Param("id") UUID id, @Param("idExterno") UUID idExterno, @Param("novaChave") UUID novaChave);
+
+    // Estorno confirmado no gateway: a sessão volta pro pedido, então a linha volta pra tentativa nova
+    // (mesmo efeito de renovarTentativa) — ESTORNADO só existe lá, no registro do gateway
+    @Modifying
+    @Transactional
+    @Query("""
+        UPDATE Pagamento p
+        SET
+            p.status = 'CRIANDO',
+            p.chaveIdempotencia = :novaChave,
+            p.idExterno = null,
+            p.urlPagamento = null,
+            p.vencimento = null,
+            p.tentativaEm = null
+        WHERE p.id = :id
+            AND p.idExterno = :idExterno
+            AND p.status = 'PAGO'
+    """)
+    int reabrirAposEstorno(@Param("id") UUID id, @Param("idExterno") UUID idExterno, @Param("novaChave") UUID novaChave);
 
     // Webhook pago: grava as intenções já ocupadas por ele. Sem linha afetada, webhook repetido
     @Modifying

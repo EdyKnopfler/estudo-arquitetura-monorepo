@@ -21,6 +21,9 @@ public class SessaoCompra {
     // Limpeza de sessão largada com pagamento em criação/criado; o pagamento em si é do timeout do pagamento
     public static final Duration TOLERANCIA_LIMPEZA = Duration.ofHours(1);
 
+    // Prazo documentado da pré-reserva no -externo (TEMPO_MAXIMO lá), contado desde o início — nada estende além
+    public static final Duration TETO = Duration.ofHours(1);
+
     @Id
     @Column(nullable = false, updatable = false)
     private UUID id;
@@ -44,11 +47,22 @@ public class SessaoCompra {
     @Column(name = "start_time")
     private Instant inicio;
 
+    @Column(name = "prazo_iniciada")
+    private Instant prazoIniciada;
+
     public SessaoCompra(UUID idCustomer) {
         this.id = UUID.randomUUID();
         this.idCustomer = idCustomer;
         this.status = SessaoCompraStatus.INICIADA;
         this.inicio = Instant.now();
+        this.prazoIniciada = inicio.plus(PRAZO_INICIADA);
+    }
+
+    // Voltar pra INICIADA reinicia o prazo, limitado ao teto
+    public Instant prazoAoVoltarPraIniciada(Instant agora) {
+        Instant reiniciado = agora.plus(PRAZO_INICIADA);
+        Instant teto = inicio.plus(TETO);
+        return reiniciado.isBefore(teto) ? reiniciado : teto;
     }
 
 }

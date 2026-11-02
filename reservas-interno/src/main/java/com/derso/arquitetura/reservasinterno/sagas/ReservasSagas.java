@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -24,22 +23,15 @@ import jakarta.persistence.EntityNotFoundException;
 @Profile("sagas")
 public class ReservasSagas implements SmartLifecycle {
 
-    @Value("${sagas.estafila}")
-    public String estaFila;
-
-    @Value("${sagas.filaanterior:#{null}}")
-    public String filaAnterior;
-
-    @Value("${sagas.proximafila:#{null}}")
-    public String proximaFila;
-
+    private final ConsumersSaga consumersSaga;
     private final Messaging sagas;
     private final ReservasExternoService servicoExterno;
     private final ReservasRepository repositorio;
 
     private boolean running = false;
 
-    public ReservasSagas(Messaging sagas, ReservasExternoService servicoExterno, ReservasRepository repositorio) throws IOException {
+    public ReservasSagas(ConsumersSaga consumersSaga, Messaging sagas, ReservasExternoService servicoExterno, ReservasRepository repositorio) {
+        this.consumersSaga = consumersSaga;
         this.sagas = sagas;
         this.servicoExterno = servicoExterno;
         this.repositorio = repositorio;
@@ -48,88 +40,94 @@ public class ReservasSagas implements SmartLifecycle {
     @Override
     public void start() {
         try {
-            Optional<String> optFilaAnterior = Optional.ofNullable(filaAnterior);
-            Optional<String> optProximaFila = Optional.ofNullable(proximaFila);
-
-            sagas.configurarServico(estaFila, optFilaAnterior, optProximaFila);
-
-            sagas.iniciarConsumo(
-                estaFila + "-consumer",
-                estaFila,
-                optFilaAnterior,
-                optProximaFila,
-                mensagem -> {
-                    double tipo = ((Number) mensagem.getOrDefault("tipo", Messaging.EXECUTE)).doubleValue();
-                    Object rastreio = mensagem.get("rastreio");
-                    UUID idReserva = idReservaDaMensagem(mensagem);
-
-                    // findById local (mesmo processo/banco do papel web deste domínio) — não é chamada de
-                    // rede, é só a PK indexada. idExterno nunca sai daqui pra fora. Ver docs/purchase-flow-design.md.
-                    Reserva reserva = repositorio.findById(idReserva)
-                        .orElseThrow(() -> new EntityNotFoundException("Reserva não encontrada: " + idReserva));
-
-                    return (tipo == Messaging.EXECUTE)
-                            ? confirmar(reserva, rastreio)
-                            : cancelar(reserva, rastreio);
-                }
-            );
-
+            for (ConsumersSaga.Consumer consumer : consumersSaga.consumers()) {
+                iniciarConsumer(consumer);
+            }
             running = true;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
+    private void iniciarConsumer(ConsumersSaga.Consumer consumer) throws IOException {
+        Optional<String> optFilaAnterior = Optional.ofNullable(consumer.filaanterior());
+        Optional<String> optProximaFila = Optional.ofNullable(consumer.proximafila());
+
+        sagas.configurarServico(consumer.estafila(), optFilaAnterior, optProximaFila);
+
+        sagas.iniciarConsumo(
+            consumer.estafila() + "-consumer",
+            consumer.estafila(),
+            optFilaAnterior,
+            optProximaFila,
+            mensagem -> {
+                double tipo = ((Number) mensagem.getOrDefault("tipo", Messaging.EXECUTE)).doubleValue();
+                Object rastreio = mensagem.get("rastreio");
+                UUID idReserva = idReservaDaMensagem(mensagem, consumer.campoid());
+
+                // findById local (mesmo processo/banco do papel web deste domínio) — não é chamada de
+                // rede, é só a PK indexada. idExterno nunca sai daqui pra fora. Ver docs/purchase-flow-design.md.
+                Reserva reserva = repositorio.findById(idReserva)
+                    .orElseThrow(() -> new EntityNotFoundException("Reserva não encontrada: " + idReserva));
+
+                return (tipo == Messaging.EXECUTE)
+                        ? confirmar(reserva, consumer.estafila(), rastreio)
+                        : reverter(reserva, consumer.estafila(), rastreio);
+            }
+        );
+    }
+
     // package-private (não private) pra dar pra testar direto, sem passar pela mensagem/repositório.
-    ResultadoHandler confirmar(Reserva reserva, Object rastreio) {
+    ResultadoHandler confirmar(Reserva reserva, String fila, Object rastreio) {
         try {
             servicoExterno.confirmar(reserva.getIdExterno());
-            System.out.println("[" + estaFila + "] confirmado — rastreio=" + rastreio);
+            System.out.println("[" + fila + "] confirmado — rastreio=" + rastreio);
 
-            atualizarStatusReserva(reserva.getId(), "RESERVADA");
+            repositorio.marcarReservada(reserva.getId());
             return ResultadoHandler.ack(Encaminhamento.PARA_FRENTE);
         } catch (HttpClientErrorException.NotFound e) {
             // falha de negócio: guarda WHERE confirmado=false do reservas-externo rejeitou — reserva não existe
             // mais/expirou/já foi confirmada. Resposta definitiva, não é ambíguo. Ver docs/purchase-flow-design.md.
-            System.out.println("[" + estaFila + "] falha de negócio ao confirmar — rastreio=" + rastreio);
+            System.out.println("[" + fila + "] falha de negócio ao confirmar — rastreio=" + rastreio);
 
-            atualizarStatusReserva(reserva.getId(), "FALHA");
+            // TODO status de falha ainda sem nome — docs/todo.md
             return ResultadoHandler.ack(Encaminhamento.PARA_TRAS);
         } catch (Exception e) {
             // falha geral: timeout/infra/5xx — não dá pra saber se o confirmar aconteceu do outro lado.
             // Ambíguo até existir o endpoint `consultar` + a task de retentativa (ver docs/todo.md); por ora
             // só ack e não avança em nenhuma direção — mensagem fica "perdida" até esse trabalho existir.
-            System.err.println("[" + estaFila + "] falha geral ao confirmar — rastreio=" + rastreio + " — " + e.getMessage());
+            System.err.println("[" + fila + "] falha geral ao confirmar — rastreio=" + rastreio + " — " + e.getMessage());
             return ResultadoHandler.ack(Encaminhamento.NENHUM);
         }
     }
 
     // package-private, mesmo motivo de confirmar() acima.
-    ResultadoHandler cancelar(Reserva reserva, Object rastreio) {
-        // Melhor esforço — TTL do reservas-externo é a rede de segurança (axioma 1, docs/purchase-flow-design.md).
-        // Por isso não se ramifica em falha de negócio/geral como o confirmar: sucesso ou falha aqui,
-        // a compensação sempre segue pra trás.
+    // Quem recebe DESFACA confirmou antes e não foi quem falhou: volta pra pré-reserva. A compensação
+    // segue pra trás em qualquer desfecho daqui.
+    ResultadoHandler reverter(Reserva reserva, String fila, Object rastreio) {
         try {
-            servicoExterno.cancelar(reserva.getIdExterno());
-            System.out.println("[" + estaFila + "] cancelado — rastreio=" + rastreio);
+            servicoExterno.desconfirmar(reserva.getIdExterno());
+            System.out.println("[" + fila + "] revertido pra pré-reserva — rastreio=" + rastreio);
+            repositorio.marcarPreReservada(reserva.getId());
+        } catch (HttpClientErrorException.NotFound e) {
+            // lá já não está confirmada (ex.: DESFACA repetido) — o externo é a fonte da verdade
+            System.out.println("[" + fila + "] já não estava confirmada no externo — rastreio=" + rastreio);
+            repositorio.marcarPreReservada(reserva.getId());
         } catch (Exception e) {
-            System.err.println("[" + estaFila + "] falha ao cancelar, seguindo (melhor esforço) — rastreio=" + rastreio + " — " + e.getMessage());
+            // TODO falha ambígua: confirmada não tem TTL lá, pode ficar presa — robustez em docs/todo.md
+            System.err.println("[" + fila + "] falha ao reverter, seguindo — rastreio=" + rastreio + " — " + e.getMessage());
         }
 
-        atualizarStatusReserva(reserva.getId(), "CANCELADA");
         return ResultadoHandler.ack(Encaminhamento.PARA_TRAS);
     }
 
-    // TODO Reserva ainda não tem coluna de status (migration já tem "-- TODO falta status") — ver docs/todo.md,
-    // "Dual-write pagamento/reservas". Nomes de status ainda em aberto; strings aqui são só placeholder.
-    private void atualizarStatusReserva(UUID idReserva, String novoStatus) {
-    }
-
-    // TODO lança de propósito: handler pausado até a mensagem da SAGA carregar o id da reserva (hoje só
-    // `rastreio`) — depende do fluxo de pagamento/webhook. Ver docs/purchase-flow-design.md#payload-da-mensagem-da-saga
-    // e docs/todo.md.
-    UUID idReservaDaMensagem(Map<String, Object> mensagem) {
-        throw new UnsupportedOperationException("id de reserva ainda não existe na mensagem da SAGA");
+    // Id ausente ou inválido lança: o Messaging trata como erro não capturado (nack + DESFACA pra trás)
+    static UUID idReservaDaMensagem(Map<String, Object> mensagem, String campoId) {
+        Object valor = mensagem.get(campoId);
+        if (valor == null) {
+            throw new IllegalArgumentException("Mensagem da SAGA sem " + campoId);
+        }
+        return UUID.fromString(valor.toString());
     }
 
     @Override

@@ -57,6 +57,7 @@ import org.springframework.web.client.ResourceAccessException;
 import com.derso.arquitetura.webbase.teste.CredenciaisDev;
 import com.derso.arquitetura.webbase.teste.PostgresTestcontainersConfig;
 import com.derso.arquitetura.pagamentointerno.PagamentoExternoService;
+import com.derso.arquitetura.pagamentointerno.PagamentoRepository;
 import com.derso.arquitetura.pagamentointerno.dto.CriarPagamentoRequest;
 import com.derso.arquitetura.pagamentointerno.dto.CriarTransacaoResponse;
 import com.derso.arquitetura.pagamentointerno.dto.PagamentoDTO;
@@ -86,6 +87,9 @@ class PagamentoCriacaoTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private PagamentoRepository repositorio;
 
     @MockitoBean
     private PagamentoExternoService externo;
@@ -147,6 +151,28 @@ class PagamentoCriacaoTest {
         Map<String, Object> linha = linhaDaSessao(idSessao);
         assertEquals("AGUARDANDO_PAGAMENTO", linha.get("status"));
         assertEquals(nova.idTransacao(), linha.get("id_externo"));
+    }
+
+    // Reversão da SAGA: sessão volta pro pedido e o avanço seguinte abre tentativa nova no gateway
+    @Test
+    void depoisDoEstornoAvancarDeNovoAbreTentativaNova() throws Exception {
+        UUID idSessao = novaSessao();
+        CriarTransacaoResponse estornada = respostaDoGateway();
+        CriarTransacaoResponse nova = respostaDoGateway();
+        when(externo.criar(anyString(), any(BigDecimal.class), any(UUID.class))).thenReturn(estornada, nova);
+        criar(idSessao, novoPedido()).andExpect(status().isOk());
+        UUID id = (UUID) linhaDaSessao(idSessao).get("id");
+        jdbc.update("update pagamentos set status = 'PAGO' where id = ?", id);
+
+        assertEquals(1, repositorio.reabrirAposEstorno(id, estornada.idTransacao(), UUID.randomUUID()));
+
+        criar(idSessao, novoPedido())
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("AGUARDANDO_PAGAMENTO"))
+            .andExpect(jsonPath("$.urlPagamento").value(nova.urlPagamento()));
+        List<UUID> chaves = chavesEnviadas(2);
+        assertNotEquals(chaves.get(0), chaves.get(1));
+        assertEquals(nova.idTransacao(), linhaDaSessao(idSessao).get("id_externo"));
     }
 
     @Test

@@ -5,9 +5,11 @@ import com.rabbitmq.client.*;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 @Component
 public class Messaging {
@@ -21,7 +23,8 @@ public class Messaging {
 
     private final ObjectMapper objectMapper;
     private final Channel channel;
-    private volatile String consumerTag;
+    // um por fila consumida — um processo pode ser vários nós da cadeia (ex.: voo-ida e voo-volta)
+    private final List<String> consumerTags = new CopyOnWriteArrayList<>();
 
     public Messaging(ObjectMapper objectMapper, Channel channel) throws IOException {
         this.objectMapper = objectMapper;
@@ -102,22 +105,26 @@ public class Messaging {
             }
         };
 
-        consumerTag = channel.basicConsume(
+        String consumerTag = channel.basicConsume(
                 filaEsteServico,
                 false,
                 nomeConsumidor,
                 callback,
-                consumerTag -> {
-                    System.out.println(consumerTag + " sendo cancelado pelo broker");
+                tagCancelada -> {
+                    System.out.println(tagCancelada + " sendo cancelado pelo broker");
                 }
         );
+        consumerTags.add(consumerTag);
     }
 
     public void pararConsumo() {
         try {
-            if (consumerTag != null && channel.isOpen()) {
-                channel.basicCancel(consumerTag);
+            for (String consumerTag : consumerTags) {
+                if (channel.isOpen()) {
+                    channel.basicCancel(consumerTag);
+                }
             }
+            consumerTags.clear();
         } catch (IOException e) {
             System.err.println("ERRO AO FECHAR CANAL:");
             e.printStackTrace();

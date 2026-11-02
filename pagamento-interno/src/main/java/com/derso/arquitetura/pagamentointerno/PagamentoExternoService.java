@@ -51,6 +51,14 @@ public class PagamentoExternoService {
             .body(CriarTransacaoResponse.class);
     }
 
+    // Idempotente no gateway: estornar de novo devolve ESTORNADO
+    public CriarTransacaoResponse estornar(UUID idTransacao) {
+        return restClient.post()
+            .uri("/estornar/{idTransacao}", idTransacao)
+            .retrieve()
+            .body(CriarTransacaoResponse.class);
+    }
+
     public CriarTransacaoResponse consultar(UUID idTransacao) {
         return restClient.get()
             .uri("/consultar/{idTransacao}", idTransacao)

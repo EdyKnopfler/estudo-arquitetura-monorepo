@@ -47,6 +47,14 @@ public class ReservasExternoService {
         .toBodilessEntity();
   }
 
+  // Reversão da SAGA (volta pra pré-reserva). Não engole exceção, mesmo motivo de confirmar.
+  public void desconfirmar(UUID idExterno) {
+    restClient.put()
+        .uri("/reservas/desconfirmar/{id}", idExterno)
+        .retrieve()
+        .toBodilessEntity();
+  }
+
   // Melhor esforço — ver ReservasService.trocarReserva / docs/purchase-flow-design.md.
   public void cancelar(UUID idExterno) {
     restClient.delete()

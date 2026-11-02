@@ -75,6 +75,7 @@ class ReservasInternoWebTest {
 
         assertEquals(idExterno, idExternoGravado(id));
         assertNotEquals(idExterno, id);
+        assertEquals("PRE_RESERVADA", jdbc.queryForObject("select status from reservas where id = ?", String.class, id));
     }
 
     @Test

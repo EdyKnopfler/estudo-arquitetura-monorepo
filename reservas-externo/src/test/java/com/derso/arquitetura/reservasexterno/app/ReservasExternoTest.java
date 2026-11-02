@@ -115,6 +115,28 @@ class ReservasExternoTest {
     }
 
     @Test
+    void desconfirmarConfirmadaVoltaPraPreReserva() throws Exception {
+        UUID id = inserirDireto(LocalDateTime.now(ZoneOffset.UTC), true);
+
+        mockMvc.perform(comoCliente(put("/reservas/desconfirmar/" + id))).andExpect(status().isOk());
+
+        assertEquals(false, linha(id).get("confirmado"));
+    }
+
+    @Test
+    void desconfirmarNaoConfirmadaRetorna404() throws Exception {
+        UUID id = criar(UUID.randomUUID());
+
+        mockMvc.perform(comoCliente(put("/reservas/desconfirmar/" + id))).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void desconfirmarInexistenteRetorna404() throws Exception {
+        mockMvc.perform(comoCliente(put("/reservas/desconfirmar/" + UUID.randomUUID())))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
     void removerNaoConfirmadaApagaALinha() throws Exception {
         UUID id = criar(UUID.randomUUID());
 
@@ -157,6 +179,16 @@ class ReservasExternoTest {
                 .andExpect(status().isInternalServerError());
 
             assertEquals(false, linha(id).get("confirmado"));
+        }
+
+        @Test
+        void desconfirmarRetorna500SemDesconfirmar() throws Exception {
+            UUID id = inserirDireto(LocalDateTime.now(ZoneOffset.UTC), true);
+
+            mockMvc.perform(comoCliente(put("/reservas/desconfirmar/" + id)))
+                .andExpect(status().isInternalServerError());
+
+            assertEquals(true, linha(id).get("confirmado"));
         }
 
     }

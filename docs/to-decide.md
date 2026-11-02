@@ -11,6 +11,8 @@ Decisões em aberto. O que já está decidido e falta implementar fica em [todo.
   * terminar em `ERRO` depende dessa distinção (erro de execução, não falha de negócio)
   * diagramas do README só depois de fechar essa modelagem
 * [ ] a considerar na reversão: remover as reservas que falharam e notificar o usuário, que decide se volta pra tentar outras opções
+* [ ] fim da SAGA com a sessão fora de `PAGAMENTO_EFETUADO` (ex.: o `PUT` da sessão ainda com o job de pendências) — provisório: fila de erros, sem encaminhar
+  * inclui o `DESFACA` de volta quando `sessaocompra` falha ao confirmar — hoje a fila `sessaocompra` não tem anterior (exceção no `DESFACA` faria loop)
 
 ### Pagamentos
 
@@ -18,10 +20,7 @@ Decisões em aberto. O que já está decidido e falta implementar fica em [todo.
 * [ ] webhook:
   * [ ] como correlacionar webhook de tentativa antiga — a linha só guarda o `id_externo` vigente
   * [ ] duas tentativas pagas na mesma sessão
-
-### Voo
-
-* [ ] forma de agir nas duas reservas (ida + volta) a partir de uma mensagem
+* [ ] falha no estorno (cliente cobrado sem viagem) — erro catastrófico, a modelar; provisório: fila de erros, sem reverter a sessão
 
 ## Lacunas de arquitetura
 
@@ -42,6 +41,7 @@ Decisões em aberto. O que já está decidido e falta implementar fica em [todo.
 
 ### Pontos a revisitar (não são bugs)
 
+- webhook publicar direto em `hotel`, com `pagamento` só como fila anterior: no sucesso o pagamento só repassa (a cobrança já aconteceu) — por ora o repasse fica (sem código, aparece no rastreio)
 - Prioridade bem baixa: relógio da sessão começa na criação, não na primeira pré-reserva — conservador, os prazos dados se supõem suficientes. Começar na primeira pré-reserva ganharia o tempo até a primeira escolha, mas sessão sem escolha ficaria sem relógio pro timeout de `INICIADA`.
 - `basicQos(1)` limita cada instância de SAGA a processar uma mensagem por vez — teto de throughput conhecido, revisitar se/quando houver medição de carga real.
 - `JWT_PUBLIC_KEY`/`JWT_PRIVATE_KEY` no `.env`/`.env.clientes` não seguem o padrão `<SERVIÇO>_ID`/`_SECRET` do resto do arquivo (são infra compartilhada tipo `DB_HOST`, não credencial de um par específico) — considerar renomear pra algo tipo `CLIENTE_JWT_PUBLIC_KEY` se ficar confuso.
