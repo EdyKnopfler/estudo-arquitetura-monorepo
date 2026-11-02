@@ -68,7 +68,7 @@ public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID
         SET
             s.status = 'EFETUANDO_PAGAMENTO'
         WHERE s.id = :idSessao
-            AND s.status = 'CRIANDO_PAGAMENTO'
+            AND s.status IN ('CRIANDO_PAGAMENTO', 'PAGAMENTO_RECUSADO')
     """)
     int pagamentoCriado(@Param("idSessao") UUID id);
 
@@ -78,9 +78,19 @@ public interface SessaoCompraRepository extends JpaRepository<SessaoCompra, UUID
         SET
             s.status = 'PAGAMENTO_EFETUADO'
         WHERE s.id = :idSessao
-            AND s.status = 'EFETUANDO_PAGAMENTO'
+            AND s.status IN ('EFETUANDO_PAGAMENTO', 'PAGAMENTO_RECUSADO')
     """)
     void pagamentoEfetuado(@Param("idSessao") UUID id);
+
+    @Modifying
+    @Query("""
+        UPDATE SessaoCompra s
+        SET
+            s.status = 'PAGAMENTO_RECUSADO'
+        WHERE s.id = :idSessao
+            AND s.status = 'EFETUANDO_PAGAMENTO'
+    """)
+    void pagamentoRecusado(@Param("idSessao") UUID id);
 
     @Modifying
     @Transactional

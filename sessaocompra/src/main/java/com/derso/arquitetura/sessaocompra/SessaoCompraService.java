@@ -128,7 +128,7 @@ public class SessaoCompraService {
 
         if (linhas == 0) {
             switch (sessao.getStatus()) {
-                case CRIANDO_PAGAMENTO, EFETUANDO_PAGAMENTO -> { }
+                case CRIANDO_PAGAMENTO, EFETUANDO_PAGAMENTO, PAGAMENTO_RECUSADO -> { }
                 case INICIADA -> throw new BusinessException("Sessão de compra incompleta: faltam reservas de hotel e/ou voo");
                 default -> throw new BusinessException("Sessão de compra não está mais aceitando alterações: " + sessao.getStatus());
             }
@@ -183,9 +183,15 @@ public class SessaoCompraService {
         }
     }
 
+    // TODO sessão já fora de EFETUANDO_PAGAMENTO/PAGAMENTO_RECUSADO (confirmação tardia): estornar — docs/todo.md
     @Transactional
     public void pagamentoEfetuado(UUID id) {
         repositorio.pagamentoEfetuado(id);
+    }
+
+    @Transactional
+    public void pagamentoRecusado(UUID id) {
+        repositorio.pagamentoRecusado(id);
     }
 
 }

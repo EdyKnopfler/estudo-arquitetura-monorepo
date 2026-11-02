@@ -10,10 +10,10 @@ import com.derso.arquitetura.sagas.Messaging;
 
 /**
  * Ponte pro sagas-common: a lib fica sem @Profile, agnóstica a quem a consome.
- * Papel "sagas" consome e publica; papel "web" só publica a 1ª mensagem no webhook.
+ * Papel "sagas" consome e publica; "web" e "pendencias" só publicam a 1ª mensagem (WebhookService).
  */
 @Configuration
-@Profile({ "web", "sagas" })
+@Profile({ "web", "sagas", "pendencias" })
 @Import({ JacksonConfig.class, RabbitConfig.class, Messaging.class })
 public class SagasWiring {
 }

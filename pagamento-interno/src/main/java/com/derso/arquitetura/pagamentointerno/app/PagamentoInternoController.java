@@ -1,11 +1,7 @@
 package com.derso.arquitetura.pagamentointerno.app;
 
-import java.io.IOException;
-import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,9 +10,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.derso.arquitetura.pagamentointerno.PagamentoService;
+import com.derso.arquitetura.pagamentointerno.WebhookService;
 import com.derso.arquitetura.pagamentointerno.dto.CriarPagamentoRequest;
 import com.derso.arquitetura.pagamentointerno.dto.PagamentoDTO;
-import com.derso.arquitetura.sagas.Messaging;
+import com.derso.arquitetura.pagamentointerno.dto.WebhookRequest;
 
 import jakarta.validation.Valid;
 
@@ -24,18 +21,12 @@ import jakarta.validation.Valid;
 @Profile("web")
 public class PagamentoInternoController {
 
-    private final Messaging sagas;
     private final PagamentoService servico;
+    private final WebhookService webhook;
 
-    // não-final: teste troca por fila própria — mesma fila consumida pelo papel sagas
-    private String filaPagamento;
-
-    public PagamentoInternoController(Messaging sagas, PagamentoService servico,
-            @Value("${sagas.estafila}") String filaPagamento) throws IOException {
-        this.sagas = sagas;
+    public PagamentoInternoController(PagamentoService servico, WebhookService webhook) {
         this.servico = servico;
-        this.filaPagamento = filaPagamento;
-        sagas.configurarServico(filaPagamento, Optional.empty(), Optional.empty());
+        this.webhook = webhook;
     }
 
     // Chamada por sessaocompra.iniciarPagamento; PUT porque repetir devolve o mesmo pagamento —
@@ -47,20 +38,9 @@ public class PagamentoInternoController {
         );
     }
 
-    // TODO receber o corpo que pagamento-externo já manda ({idTransacao, status}, status PAGO | RECUSADO).
-    // Buscar `pagamentos WHERE id_externo = idTransacao` e montar a mensagem completa (idPagamento,
-    // idSessaoCompra, idReservaHotel, idReservaVooIda, idReservaVooVolta — só ids internos) em vez de
-    // só tipo+rastreio.
-    // Ver docs/purchase-flow-design.md#payload-da-mensagem-da-saga e docs/todo.md.
+    // Chamado por pagamento-externo
     @PostMapping("/webhook")
-    public void webhookServicoExterno() throws IOException {
-        String rastreio = UUID.randomUUID().toString();
-
-        sagas.publicar(filaPagamento, Map.of(
-                "tipo", Messaging.EXECUTE,
-                "rastreio", rastreio
-        ));
-
-        System.out.println("[webhook] disparando SAGA rastreio=" + rastreio);
+    public void webhook(@RequestBody @Valid WebhookRequest aviso) {
+        webhook.receber(aviso.idTransacao(), aviso.status());
     }
 }

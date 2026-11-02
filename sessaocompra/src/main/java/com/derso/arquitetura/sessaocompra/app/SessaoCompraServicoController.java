@@ -27,4 +27,9 @@ public class SessaoCompraServicoController {
         service.pagamentoEfetuado(id);
     }
 
+    @PutMapping("/{id}/pagamento-recusado")
+    public void pagamentoRecusado(@PathVariable("id") UUID id) {
+        service.pagamentoRecusado(id);
+    }
+
 }

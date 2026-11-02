@@ -61,6 +61,8 @@ import com.derso.arquitetura.pagamentointerno.dto.CriarPagamentoRequest;
 import com.derso.arquitetura.pagamentointerno.dto.CriarTransacaoResponse;
 import com.derso.arquitetura.pagamentointerno.dto.PagamentoDTO;
 import com.derso.arquitetura.pagamentointerno.entity.StatusPagamento;
+import com.derso.arquitetura.pagamentointerno.sessaocompra.SessaoCompraClient;
+import com.derso.arquitetura.sagas.Messaging;
 import com.derso.arquitetura.sagas.RabbitMQTestcontainersConfig;
 
 import tools.jackson.databind.json.JsonMapper;
@@ -87,6 +89,13 @@ class PagamentoCriacaoTest {
 
     @MockitoBean
     private PagamentoExternoService externo;
+
+    // mesmos mocks de PagamentoWebhookTest: definição igual = contexto em cache compartilhado
+    @MockitoBean
+    private SessaoCompraClient sessaoCompra;
+
+    @MockitoBean
+    private Messaging sagas;
 
     @AfterEach
     void apagaPagamentosCriados() {

@@ -31,7 +31,7 @@ public class TimeoutTask {
     @Scheduled(fixedDelayString = "PT1M")
     public void processaTimeouts() {
         processa(List.of("INICIADA"), SessaoCompra.PRAZO_INICIADA);
-        processa(List.of("CRIANDO_PAGAMENTO", "EFETUANDO_PAGAMENTO"), SessaoCompra.TOLERANCIA_LIMPEZA);
+        processa(List.of("CRIANDO_PAGAMENTO", "EFETUANDO_PAGAMENTO", "PAGAMENTO_RECUSADO"), SessaoCompra.TOLERANCIA_LIMPEZA);
     }
 
     private void processa(List<String> status, Duration prazo) {

@@ -107,6 +107,8 @@ class PagamentoCriacaoIntegradoTest {
             .withEnv("PAGAMENTO_EXTERNO_SECRET", CredenciaisDev.de("PAGAMENTO_EXTERNO_SECRET"))
             .withEnv("SESSAO_COMPRA_ID", CredenciaisDev.de("SESSAO_COMPRA_ID"))
             .withEnv("SESSAO_COMPRA_SECRET", CredenciaisDev.de("SESSAO_COMPRA_SECRET"))
+            .withEnv("PAGAMENTO_INTERNO_ID", CredenciaisDev.de("PAGAMENTO_INTERNO_ID"))
+            .withEnv("PAGAMENTO_INTERNO_SECRET", CredenciaisDev.de("PAGAMENTO_INTERNO_SECRET"))
             .waitingFor(Wait.forLogMessage(".*Started PagamentoInternoApplication.*\\n", 1)
                 .withStartupTimeout(Duration.ofMinutes(3)));
         pagamentoInterno.start();

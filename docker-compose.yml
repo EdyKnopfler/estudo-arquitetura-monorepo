@@ -217,6 +217,24 @@ services:
         condition: service_healthy
     restart: on-failure
 
+  pagamento-interno-pendencias:
+    build:
+      context: .
+      dockerfile: pagamento-interno/Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "${PAGAMENTO_INTERNO_PENDENCIAS_DEBUG_PORT}:${PAGAMENTO_INTERNO_PENDENCIAS_DEBUG_PORT}"
+    environment:
+      SPRING_PROFILES_ACTIVE: pendencias
+      JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:${PAGAMENTO_INTERNO_PENDENCIAS_DEBUG_PORT}
+    depends_on:
+      db:
+        condition: service_started
+      broker:
+        condition: service_healthy
+    restart: on-failure
+
   # Timeout de limpeza de reservas não confirmadas
   sessaocompra-timeout:
     build:

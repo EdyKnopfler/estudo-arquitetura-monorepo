@@ -3,6 +3,6 @@ package com.derso.arquitetura.pagamentointerno.entity;
 public enum StatusPagamento {
     CRIANDO,
     AGUARDANDO_PAGAMENTO,
-    // ainda só na resposta: achado ao renovar, não é gravado — quem fecha o estado é o webhook
+    // gravado só pelo webhook; achado ao renovar, só vai na resposta
     PAGO
 }

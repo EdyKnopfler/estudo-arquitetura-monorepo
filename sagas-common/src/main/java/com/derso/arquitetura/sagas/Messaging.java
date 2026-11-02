@@ -124,7 +124,10 @@ public class Messaging {
         }
     }
 
-    public void publicar(String fila, Object mensagem) throws IOException {
+    // synchronized: Channel não aceita publicação concorrente (várias requisições web publicam no mesmo).
+    // TODO com publisher confirms (waitForConfirms), o lock seguraria cada espera pelo broker — trocar por
+    // channel por thread ou pool. Ver docs/todo.md (ordem ack/publish em iniciarConsumo).
+    public synchronized void publicar(String fila, Object mensagem) throws IOException {
         byte[] body = objectMapper.writeValueAsBytes(mensagem);
 
         channel.basicPublish(

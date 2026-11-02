@@ -52,6 +52,7 @@ import com.derso.arquitetura.sessaocompra.pagamentointerno.dto.PagamentoInternoR
 import com.derso.arquitetura.sessaocompra.reservasinterno.ReservasInternoHotelClient;
 import com.derso.arquitetura.sessaocompra.reservasinterno.ReservasInternoVooClient;
 import com.derso.arquitetura.webbase.jwt.UsuarioAutenticado;
+import com.derso.arquitetura.webbase.teste.CredenciaisDev;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 // reservas-interno e pagamento-interno mockados na fronteira HTTP — foco aqui é segurança/persistência
@@ -64,6 +65,8 @@ class SessaoCompraFluxoTest {
 
     private static final String URL_PAGAMENTO = "http://gateway/pagar/123";
     private static final Instant VENCIMENTO = Instant.parse("2030-01-01T12:15:00Z");
+    private static final String CLIENT_ID = CredenciaisDev.de("PAGAMENTO_INTERNO_ID");
+    private static final String CLIENT_SECRET = CredenciaisDev.de("PAGAMENTO_INTERNO_SECRET");
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final List<UUID> sessoesCriadas = new ArrayList<>();
@@ -228,6 +231,65 @@ class SessaoCompraFluxoTest {
         expirar(sessao);
         timeout.processaTimeouts();
         assertEquals("EFETUANDO_PAGAMENTO", linha(sessao).get("status"));
+
+        iniciadaHa(sessao, SessaoCompra.TOLERANCIA_LIMPEZA.plus(Duration.ofMinutes(1)));
+        timeout.processaTimeouts();
+        assertEquals("CANCELADA", linha(sessao).get("status"));
+    }
+
+    @Test
+    void pagamentoEfetuadoTiraDeEfetuandoPagamento() throws Exception {
+        UUID cliente = UUID.randomUUID();
+        UUID sessao = criarSessaoCompleta(cliente);
+        putComoCliente(sessao, "/iniciando-pagamento", cliente).andExpect(status().isOk());
+
+        putComoServico(sessao, "/pagamento-efetuado").andExpect(status().isOk());
+
+        assertEquals("PAGAMENTO_EFETUADO", linha(sessao).get("status"));
+    }
+
+    @Test
+    void recusaMarcaRecusadoEAvancarDeNovoVoltaPraEfetuandoPagamento() throws Exception {
+        UUID cliente = UUID.randomUUID();
+        UUID sessao = criarSessaoCompleta(cliente);
+        putComoCliente(sessao, "/iniciando-pagamento", cliente).andExpect(status().isOk());
+
+        putComoServico(sessao, "/pagamento-recusado").andExpect(status().isOk());
+        assertEquals("PAGAMENTO_RECUSADO", linha(sessao).get("status"));
+
+        putComoCliente(sessao, "/iniciando-pagamento", cliente)
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.etapa").value("PAGAR"))
+            .andExpect(jsonPath("$.urlPagamento").value(URL_PAGAMENTO));
+
+        verify(pagamentoInternoClient, times(2)).criar(any(), any(), any(), any());
+        assertEquals("EFETUANDO_PAGAMENTO", linha(sessao).get("status"));
+    }
+
+    // usuário pagou direto no gateway, pela mesma URL, depois da recusa
+    @Test
+    void pagamentoEfetuadoAceitaVindoDeRecusado() throws Exception {
+        UUID cliente = UUID.randomUUID();
+        UUID sessao = criarSessaoCompleta(cliente);
+        putComoCliente(sessao, "/iniciando-pagamento", cliente).andExpect(status().isOk());
+        putComoServico(sessao, "/pagamento-recusado").andExpect(status().isOk());
+
+        putComoServico(sessao, "/pagamento-efetuado").andExpect(status().isOk());
+
+        assertEquals("PAGAMENTO_EFETUADO", linha(sessao).get("status"));
+    }
+
+    @Test
+    void timeoutLimpaSessaoRecusadaSoDepoisDaTolerancia() throws Exception {
+        UUID cliente = UUID.randomUUID();
+        UUID sessao = criarSessaoCompleta(cliente);
+        putComoCliente(sessao, "/iniciando-pagamento", cliente).andExpect(status().isOk());
+        putComoServico(sessao, "/pagamento-recusado").andExpect(status().isOk());
+        TimeoutTask timeout = new TimeoutTask(repositorio, servico);
+
+        expirar(sessao);
+        timeout.processaTimeouts();
+        assertEquals("PAGAMENTO_RECUSADO", linha(sessao).get("status"));
 
         iniciadaHa(sessao, SessaoCompra.TOLERANCIA_LIMPEZA.plus(Duration.ofMinutes(1)));
         timeout.processaTimeouts();
@@ -427,6 +489,12 @@ class SessaoCompraFluxoTest {
 
     private ResultActions putComoCliente(UUID sessao, String sufixo, UUID idCliente) throws Exception {
         return mockMvc.perform(put("/sessoes/" + sessao + sufixo).with(comoCliente(idCliente)));
+    }
+
+    private ResultActions putComoServico(UUID sessao, String sufixo) throws Exception {
+        return mockMvc.perform(put("/servico/sessoes/" + sessao + sufixo)
+            .header("X-Client-Id", CLIENT_ID)
+            .header("X-Client-Secret", CLIENT_SECRET));
     }
 
     private RequestPostProcessor comoCliente(UUID idCliente) {

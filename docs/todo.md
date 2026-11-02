@@ -155,3 +155,4 @@ Estratégia e comandos: [testing-strategy.md](testing-strategy.md). Integrados p
 ### Hygiene / housekeeping
 
 - [ ] `Messaging.iniciarConsumo` dá ack/nack da mensagem recebida **antes** de publicar a próxima na cadeia — queda nesse intervalo perde a publicação sem redelivery (a mensagem de entrada já foi consumida). Corrigir junto com o trabalho de robustez dos handlers (mesma área).
+- [ ] Reformular `sagas-common` pra publisher confirms (`waitForConfirms`) e múltiplos channels em threads — hoje um `Channel` só, com `publicar` em `synchronized`: suficiente pra testes locais, mas publicação perdida passa em silêncio (a intenção do webhook fica marcada como feita). Inclui `ReturnListener` pro `mandatory = true`.

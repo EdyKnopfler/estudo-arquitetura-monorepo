@@ -1,6 +1,7 @@
 package com.derso.arquitetura.pagamentointerno;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -14,6 +15,8 @@ import com.derso.arquitetura.pagamentointerno.entity.Pagamento;
 public interface PagamentoRepository extends JpaRepository<Pagamento, UUID> {
 
     Optional<Pagamento> findByIdSessaoCompra(UUID idSessaoCompra);
+
+    Optional<Pagamento> findByIdExterno(UUID idExterno);
 
     // ON CONFLICT: duas chamadas simultâneas pra mesma sessão — a segunda só lê a linha da primeira
     @Modifying
@@ -110,5 +113,52 @@ public interface PagamentoRepository extends JpaRepository<Pagamento, UUID> {
             AND p.status = 'AGUARDANDO_PAGAMENTO'
     """)
     int renovarTentativa(@Param("id") UUID id, @Param("idExterno") UUID idExterno, @Param("novaChave") UUID novaChave);
+
+    // Webhook pago: grava as intenções já ocupadas por ele. Sem linha afetada, webhook repetido
+    @Modifying
+    @Query("""
+        UPDATE Pagamento p
+        SET
+            p.status = 'PAGO',
+            p.sessaoPendente = true,
+            p.filaPendente = true,
+            p.intencoesOcupadasEm = :agora
+        WHERE p.id = :id
+            AND p.idExterno = :idExterno
+            AND p.status = 'AGUARDANDO_PAGAMENTO'
+    """)
+    int registrarPago(@Param("id") UUID id, @Param("idExterno") UUID idExterno, @Param("agora") Instant agora);
+
+    // Mesmo lease de ocuparTentativa: só uma execução das intenções por vez
+    @Modifying
+    @Query("""
+        UPDATE Pagamento p
+        SET p.intencoesOcupadasEm = :agora
+        WHERE p.id = :id
+            AND (p.sessaoPendente = true OR p.filaPendente = true)
+            AND (p.intencoesOcupadasEm IS NULL OR p.intencoesOcupadasEm < :limite)
+    """)
+    int ocuparIntencoes(@Param("id") UUID id, @Param("agora") Instant agora, @Param("limite") Instant limite);
+
+    @Modifying
+    @Query("UPDATE Pagamento p SET p.sessaoPendente = false WHERE p.id = :id")
+    int concluirIntencaoSessao(@Param("id") UUID id);
+
+    @Modifying
+    @Query("UPDATE Pagamento p SET p.filaPendente = false WHERE p.id = :id")
+    int concluirIntencaoFila(@Param("id") UUID id);
+
+    @Modifying
+    @Query("UPDATE Pagamento p SET p.intencoesOcupadasEm = null WHERE p.id = :id")
+    int liberarIntencoes(@Param("id") UUID id);
+
+    @Query(nativeQuery = true, value = """
+        SELECT id
+        FROM pagamentos
+        WHERE (sessao_pendente OR fila_pendente)
+            AND (intencoes_ocupadas_em IS NULL OR intencoes_ocupadas_em < :limite)
+        LIMIT :lote
+    """)
+    List<UUID> comIntencoesLivres(@Param("limite") Instant limite, @Param("lote") int lote);
 
 }

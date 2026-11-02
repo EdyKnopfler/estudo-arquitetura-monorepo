@@ -55,4 +55,13 @@ public class Pagamento {
     @Column(name = "tentativa_em")
     private Instant tentativaEm;
 
+    @Column(name = "sessao_pendente", nullable = false)
+    private boolean sessaoPendente;
+
+    @Column(name = "fila_pendente", nullable = false)
+    private boolean filaPendente;
+
+    @Column(name = "intencoes_ocupadas_em")
+    private Instant intencoesOcupadasEm;
+
 }
