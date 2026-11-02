@@ -33,8 +33,8 @@
 
   <properties>
     <java.version>25</java.version>
-    <!-- testes @Tag("integrado") só rodam com -Pintegrado — docs/testing-strategy.md -->
-    <testes.excluidos>integrado</testes.excluidos>
+    <!-- testes @Tag("integrado") só rodam com -Pintegrado, e @Tag("sistema") com -Psistema — docs/testing-strategy.md -->
+    <testes.excluidos>integrado,sistema</testes.excluidos>
     <!-- reuse do Testcontainers (docs/testing-strategy.md) — CI desliga com -Dtestes.reuse=false -->
     <testes.reuse>true</testes.reuse>
   </properties>
@@ -85,6 +85,13 @@
       <properties>
         <testes.excluidos></testes.excluidos>
         <groups>integrado</groups>
+      </properties>
+    </profile>
+    <profile>
+      <id>sistema</id>
+      <properties>
+        <testes.excluidos></testes.excluidos>
+        <groups>sistema</groups>
       </properties>
     </profile>
   </profiles>

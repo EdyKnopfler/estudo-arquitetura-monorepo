@@ -28,8 +28,13 @@ public class ChavesJwtDeTeste {
         return registry -> {
             registry.add("jwt.trusted-issuers[0].kid", () -> KID);
             registry.add("jwt.trusted-issuers[0].issuer", () -> EMISSOR);
-            registry.add("jwt.trusted-issuers[0].public-key", () -> base64(PAR.getPublic().getEncoded()));
+            registry.add("jwt.trusted-issuers[0].public-key", ChavesJwtDeTeste::chavePublicaConfiavel);
         };
+    }
+
+    // pro teste integrado: o sessaocompra em container recebe a pública por env
+    static String chavePublicaConfiavel() {
+        return base64(PAR.getPublic().getEncoded());
     }
 
     static JwtIssuerService emissorConfiavel() {

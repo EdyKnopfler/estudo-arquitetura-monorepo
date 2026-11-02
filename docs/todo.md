@@ -22,7 +22,7 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
   * [X] `EXECUTE` (fim da cadeia de sucesso): marca `VIAGEM_RESERVADA`
   * [X] `DESFACA` (fim da compensação — cancelamento explícito do que foi fechado): volta a sessão pra `INICIADA` e reinicia o prazo de `INICIADA`, limitado ao teto
     * modelagem de status da reversão: ver [to-decide.md](to-decide.md)
-  * [ ] sessão fora de `PAGAMENTO_EFETUADO` quando a SAGA chega ao fim (provisório: fila de erros) — ver [to-decide.md](to-decide.md)
+  * [ ] sessão fora de `PAGAMENTO_EFETUADO` quando a SAGA chega ao fim (provisório: fila de erros) — ver [to-decide.md](to-decide.md#erros-catastróficos)
 
 * [ ] **Pagamentos** — fluxo, criação desenhada em [purchase-flow-design.md](purchase-flow-design.md#criação-do-pagamento):
   * [X] criação no interno (`PUT /pagamentos/{idSessao}`, chamado por `sessaocompra`; unique em `id_sessao_compra`): pagamento por sessão, intenção gravada antes do externo, troca de tentativa até obter URL, depois devolve sempre a mesma
@@ -75,19 +75,19 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
   * [ ] **sagas:** eventos de confirmação e cancelamento
     * [X] recebe do anterior e passa para o próximo (filas de "entrada" e saída)
     * [X] compensação: estorna e repassa `DESFACA` até `sessaocompra` (`filaanterior: sessaocompra`, ver [saga-choreography.md](saga-choreography.md#cadeia))
-      * [ ] falha no estorno: ver [to-decide.md](to-decide.md)
+      * [ ] falha no estorno: ver [to-decide.md](to-decide.md#erros-catastróficos)
   * [X] **externo:** endpoint de estorno, _deve falhar às vezes de propósito_
   * [ ] **externo:** latência aleatória (chaos) — hoje só sorteia falha
-  * [ ] Testes integrados
-    * [ ] Requisição > Externo > Pagar > Webhook
-    * [ ] Encaminha sucesso para outro serviço
-    * [ ] Notificação de falha por outro serviço
+  * [X] Testes integrados e de sistema
+    * [X] Requisição > Externo > Pagar > Webhook (`SagaCaminhoFelizSistemaTest`)
+    * [X] Encaminha sucesso para outro serviço (`SagaCaminhoFelizSistemaTest`)
+    * [X] Notificação de falha por outro serviço (`SagaFalhaVooVoltaSistemaTest`)
 
 * [ ] **Hotel:**
   * [X] **web:** interação com usuário (pré-reservas) — chamado por `sessaocompra`, não o inverso
     * [X] chama endpoints do serviço externo
     * [X] cancelamento por timeout da sessão (chamado pelo `TimeoutTask` de `sessaocompra`, via REST)
-  * [ ] **sagas:** eventos de confirmação e cancelamento por reversão
+  * [X] **sagas:** eventos de confirmação e cancelamento por reversão
     * [X] fiação das filas de "entrada" e saída
     * [X] chama endpoints do serviço externo (`confirmar`; reversão por `desconfirmar`, volta pra pré-reserva)
   * [X] **externo:** simula serviço externo, **introduz erros aleatórios**
@@ -96,10 +96,10 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
     * [X] **cancelamento:** cancela pré-reservas
     * [X] **desconfirmação:** volta a confirmada pra pré-reserva ([simplificação](architecture-overview.md#reserva-genérica--simplificação-de-estudo))
     * [X] _deve falhar às vezes de propósito_
-  * [ ] Testes integrados
+  * [X] Testes integrados e de sistema
     * [X] Requisição > Externo (`ReservasExternoServiceIntegrationTest`)
-    * [ ] Encaminha sucesso para outro serviço
-    * [ ] Notificação de falha por outro serviço
+    * [X] Encaminha sucesso para outro serviço (`SagaCaminhoFelizSistemaTest`)
+    * [X] Notificação de falha por outro serviço (`SagaFalhaVooVoltaSistemaTest`)
 
 * [ ] **Voo:** para voos ida e volta, mesma estrutura de _Hotel_
   * [X] **web:** interação com usuário (pré-reservas) — chamado por `sessaocompra`, não o inverso
@@ -116,10 +116,10 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
     * [X] **confirmação:** confirma pré-reservas dentro da validade
     * [X] **cancelamento:** cancela pré-reservas
     * [X] _deve falhar às vezes de propósito_
-  * [ ] Testes integrados
+  * [X] Testes integrados e de sistema
     * [X] Requisição > Externo (mesmo código de _Hotel_, só muda o profile — coberto por `ReservasExternoServiceIntegrationTest`)
-    * [ ] Encaminha sucesso para outro serviço
-    * [ ] Notificação de falha por outro serviço
+    * [X] Encaminha sucesso para outro serviço (`SagaCaminhoFelizSistemaTest`)
+    * [X] Notificação de falha por outro serviço (`SagaFalhaVooVoltaSistemaTest`)
 
 * [ ] **Clientes:** refresh token (TODO em `AuthController`)
 * [ ] **Pagamentos — regra de precificação:** `metodo`/`valor` hoje fixos em `PagamentoService`
@@ -151,11 +151,12 @@ Transversais ou de "amarração", não de regra de negócio de um domínio — l
 
 Estratégia e comandos: [testing-strategy.md](testing-strategy.md). Integrados por domínio: seção [Features por domínio](#features-por-domínio).
 
-- [ ] **Depois de separar criar/pagar no externo** ([desenho](purchase-flow-design.md#criação-do-pagamento)):
-  - webhook publica `EXECUTE` na fila `pagamento`: fila temporária ligada à exchange `sagas` + `basicGet`
-- [ ] **Com os handlers da SAGA implementados:** desfechos isolados cobertos (`ReservasSagasTest`, `PagamentoSagasTest`, `SessaoCompraSagasTest`)
-  - [ ] integrado da cadeia inteira (sessão → pré-reservas → pagar → webhook → `VIAGEM_RESERVADA`), rastreável pelo `rastreio` (= `idSessaoCompra`)
-  - integrados "encaminha sucesso" / "notificação de falha" de [Features por domínio](#features-por-domínio) (pagamento, hotel, voo)
+- [ ] análises adversariais baseadas nas regras de negócio e nas situações de erro, gerando testes novos (caminhos tristes)
+- [X] **Depois de separar criar/pagar no externo** ([desenho](purchase-flow-design.md#criação-do-pagamento)):
+  - webhook publica `EXECUTE` na fila `pagamento`: coberto pelo teste da cadeia, que lê a mensagem da fila sem consumir ([serviços em fases](testing-strategy.md#serviços-em-fases))
+- [X] **Com os handlers da SAGA implementados:** desfechos isolados cobertos (`ReservasSagasTest`, `PagamentoSagasTest`, `SessaoCompraSagasTest`)
+  - [X] de sistema, cadeia inteira (sessão → pré-reservas → pagar → webhook → `VIAGEM_RESERVADA`), rastreável pelo `rastreio` (= `idSessaoCompra`): `SagaCaminhoFelizSistemaTest`
+  - [X] de sistema, caminho triste: parte do webhook com as reservas semeadas; voo-volta falha por negócio → reversão → confere pagamento (estornado e reaberto) e sessão — cobre "notificação de falha" de [Features por domínio](#features-por-domínio) (pagamento, hotel, voo): `SagaFalhaVooVoltaSistemaTest`
 - [X] **`PUT /servico/sessoes/{id}/pagamento-efetuado`**: autenticação (`SessaoCompraServicoAuthTest`) e transição de estado (`SessaoCompraFluxoTest`).
 
 ### Hygiene / housekeeping

@@ -1,13 +1,14 @@
 # Estratégia de testes
 
-Dois tipos de teste, cada um com o modo que ele exige — nenhum teste roda em dois modos.
+Três tipos de teste, cada um com o modo que ele exige — nenhum teste roda em dois modos.
 
 ## Rodar
 
-- tudo: [`./run-all-tests.sh`](../run-all-tests.sh) — microsserviço, depois integrado, derrubando os containers de teste ao fim de cada fase
+- tudo: [`./run-all-tests.sh`](../run-all-tests.sh) — microsserviço, depois integrado, depois sistema, derrubando os containers de teste ao fim de cada fase
+  - parâmetros liga/desliga integrado (padrão sim) e sistema (padrão não, pelo tempo) — uso no [README](../README.md#testes)
   - um Maven por módulo: num reactor só, o processo do Maven fica de pé a suíte inteira e a máquina de 8 GB swapa
   - `install` antes: gera os jars que o integrado sobe (ver [abaixo](#teste-integrado-mvnw-package--dskiptests--mvnw-test--pintegrado))
-  - nunca os dois em paralelo: o integrado precisa dos jars, e a RAM não aguenta
+  - nunca duas fases em paralelo: integrado e sistema precisam dos jars, e a RAM não aguenta
 - um módulo: `./mvnw -pl <módulo> install`, depois `./mvnw -pl <módulo> test -Pintegrado`
   - `web-base` e `sagas-common` precisam estar instalados (test-jars)
 - no fim, liberar RAM: comando em [Reuse de containers](#reuse-de-containers)
@@ -44,11 +45,36 @@ Serviços reais conversando entre si.
 - cada serviço sobe como container via `ServicoEmContainer` (test-jar do `web-base`): jar já compilado no host + imagem só com o JRE, numa network do Testcontainers
   - por que não o `Dockerfile` do módulo: ele builda com Maven dentro do Docker usando `RUN --mount` (cache), que exige BuildKit — o cliente Docker do Testcontainers não suporta. E build Maven dentro do Docker é justamente o passo que pesa na RAM
   - consequência: o jar precisa existir antes (`package`); sem ele o teste falha dizendo isso. Jar velho = teste contra código velho
+  - uma imagem por módulo, nome fixo `arquitetura-teste/<módulo>`, sobrescrita a cada execução: com nome aleatório, builds iguais viravam a mesma imagem com várias tags, a limpeza do fim (por id) falhava e acumulava
 - sem reuse: cada classe monta e derruba seus containers
 
-## Regras (valem pros dois tipos)
+## Teste de sistema (`./mvnw package -DskipTests && ./mvnw test -Psistema`)
+
+A cadeia inteira da SAGA, com todos os serviços: mesma mecânica do integrado (`ServicoEmContainer`), mas leva minutos — por isso fora da suíte padrão e do `-Pintegrado`.
+
+- marcado com `@Tag("sistema")`; profile `sistema` roda só eles
+- vivem em `sessaocompra` (dona das duas pontas da cadeia)
+
+### Serviços em fases
+
+Teste que passa por muitos serviços não sobe todos de uma vez (~11 JVMs na máquina de 8 GB): cada serviço sobe só na fase em que trabalha e cai depois — pico de 3 JVMs, ao custo de tempo. Infra comum em `AmbienteSaga` (`sessaocompra`); comandos no [README](../README.md#testes).
+
+- a mensagem espera o consumidor que ainda não subiu: quem publica já declara a `proximafila` (durável)
+  - serviço derrubado sobe de novo noutra fase com o estado intacto no Postgres
+- uma instância de produção pode reunir vários nós (ex.: `voo,sagas` consome `voo-ida` e `voo-volta`); no teste, um nó por container, pra validar cada etapa
+  - env `SAGAS_CONSUMERS_0_*` substitui a lista do yaml: lista indexada só é lida da fonte de maior prioridade
+- cenário pode partir do meio do fluxo: o teste roda as migrations (Flyway) e semeia as linhas antes de o serviço subir — ele valida o mesmo histórico depois
+  - timestamp semeado como `now() at time zone 'UTC'`: a sessão JDBC vem com o fuso da JVM
+- contar mensagens: `rabbitmqctl list_queues name messages` — prontas + sem ack, então fila vazia = consumidor terminou (`queueDeclarePassive` só conta as prontas)
+- ler sem consumir: `basicGet` sem auto-ack + `basicNack` com requeue
+- narrativa: o próprio teste conta o que faz e confere (`RoteiroTesteIntegrado`), terminal com cor + `target/roteiro-<cenário>.txt`; log de container não é guardado
+  - sem contexto Spring o logback fica em DEBUG: baixado pra WARN
+- um `@Test` chamando as etapas em ordem: para na primeira falha, com o ✘ no roteiro
+
+## Regras (valem pra todos os tipos)
 
 - Docker precisa estar no ar; o teste sobe tudo o mais sozinho — ninguém (nem agente) sobe ambiente à mão pra teste
+  - qualquer backend: o Testcontainers detecta. Preferência de dev: rootless — sem VM de RAM fixa (a de 2 GB do Docker Desktop derrubou o teste da cadeia) e sem daemon root
 - `.env` carregado no ambiente: client-id/secret vêm de lá ([credenciais de dev](security-and-auth.md#credenciais-de-dev)); `run-all-tests.sh` e `java.test.config` já carregam
   - usuário/senha de Postgres e RabbitMQ não: vêm do container do próprio teste (no integrado, repassados ao serviço via `withEnv`)
 - sem `contextLoads` — qualquer `@SpringBootTest` do módulo já prova que o contexto sobe

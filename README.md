@@ -80,6 +80,8 @@ Desenho completo em [docs/purchase-flow-design.md](docs/purchase-flow-design.md)
 
 Registro de quando a coreografia rodou ponta a ponta com handlers dummy (falha simulada no fim da cadeia). No código atual os handlers já começaram a ganhar regra de verdade e a saída abaixo não se reproduz — para rodar, faça antes `git checkout eb095f6` (num clone sem `.env` criado: esse commit ainda versionava os arquivos `.env`).
 
+Hoje a cadeia roda de verdade, com regra de negócio, no teste integrado da compra ponta a ponta — comando em [Testes](#testes).
+
 Para rodar:
 
 ```
@@ -108,8 +110,10 @@ pagamento-interno-sagas-1       | [pagamento] ESTORNANDO pagamento — rastreio=
 Precisa do Docker no ar e do `.env` (ver [Rodar localmente](#rodar-localmente)) — Postgres e RabbitMQ sobem sozinhos via Testcontainers (nada do `docker compose`). Estratégia e regras em [docs/testing-strategy.md](docs/testing-strategy.md).
 
 ```bash
-# tudo (microsserviço + integrados), um módulo por vez — já carrega o .env
-./run-all-tests.sh
+# suíte um módulo por vez — já carrega o .env
+./run-all-tests.sh            # microsserviço + integrados (padrão)
+./run-all-tests.sh nao        # só microsserviço
+./run-all-tests.sh sim sim    # + testes de sistema (cadeia inteira da SAGA, alguns minutos)
 
 # comandos avulsos abaixo: carregue o .env antes, uma vez por terminal
 set -a; source .env; set +a
@@ -125,6 +129,12 @@ set -a; source .env; set +a
 
 # testes integrados (serviços reais em container) — o package antes é obrigatório: o teste usa o jar compilado
 ./mvnw package -DskipTests && ./mvnw test -Pintegrado
+
+# testes de sistema: a compra ponta a ponta pela SAGA, etapa por etapa — roteiro em sessaocompra/target/roteiro-caminho-feliz.txt
+./mvnw package -DskipTests && ./mvnw test -pl sessaocompra -am -Psistema -Dtest=SagaCaminhoFelizSistemaTest -Dsurefire.failIfNoSpecifiedTests=false
+
+# a reversão pela cadeia inteira (voo-volta falha, pagamento estornado) — roteiro em sessaocompra/target/roteiro-falha-voo-volta.txt
+./mvnw package -DskipTests && ./mvnw test -pl sessaocompra -am -Psistema -Dtest=SagaFalhaVooVoltaSistemaTest -Dsurefire.failIfNoSpecifiedTests=false
 
 # Postgres/RabbitMQ dos testes ficam de pé entre execuções (reuse) — pra liberar RAM:
 docker rm -f $(docker ps -aq --filter label=org.testcontainers.hash)

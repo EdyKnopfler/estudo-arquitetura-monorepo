@@ -30,6 +30,10 @@ Decisões em aberto. O que já está decidido e falta implementar fica em [todo.
   - a favor do DTO: não reaproveitar entidade JPA nem DTO de REST — contratos com motivos de mudança diferentes
   - ganha peso com os ids de negócio na mensagem ([payload](purchase-flow-design.md#payload-da-mensagem-da-saga))
 
+### Erros catastróficos
+
+- [ ] tratamento de erros catastróficos usando a DLQ: hoje os provisórios (falha no estorno; fim da SAGA com a sessão fora do estado) só caem na fila `errors`, sem ninguém consumir
+
 ### Estados intermediários
 
 - [ ] estado intermediário que guarda chamada externa (ex.: status de intenção em `Reserva`): como não deixá-lo preso

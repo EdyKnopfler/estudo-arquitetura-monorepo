@@ -5,6 +5,8 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
 import org.testcontainers.containers.GenericContainer;
@@ -15,20 +17,28 @@ import org.testcontainers.images.builder.ImageFromDockerfile;
 // que o cliente Docker do Testcontainers não suporta. Estratégia de testes: docs/testing-strategy.md
 public final class ServicoEmContainer {
 
+    // um build por módulo na execução: os containers do mesmo módulo saem da mesma imagem
+    private static final Map<String, ImageFromDockerfile> IMAGENS = new ConcurrentHashMap<>();
+
     private ServicoEmContainer() {
     }
 
     public static GenericContainer<?> de(String modulo) {
-        Path jar = jarDoModulo(modulo);
-        return new GenericContainer<>(
-            new ImageFromDockerfile()
-                .withFileFromPath("app.jar", jar)
-                .withDockerfileFromBuilder(imagem -> imagem
-                    .from("eclipse-temurin:25-jre-alpine")
-                    .copy("app.jar", "/app.jar")
-                    .entryPoint("java", "-jar", "/app.jar")
-                    .build())
-        ).withEnv("JAVA_TOOL_OPTIONS", "-Xmx256m -XX:+UseSerialGC");
+        return new GenericContainer<>(IMAGENS.computeIfAbsent(modulo, ServicoEmContainer::imagem))
+            // teste curto: só o C1 (sobe mais rápido, JIT gasta menos), cache de código e pilhas menores
+            .withEnv("JAVA_TOOL_OPTIONS", "-Xmx256m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss256k");
+    }
+
+    // Nome fixo e sem apagar no fim: cada execução sobrescreve a mesma tag. Com nome aleatório, builds
+    // iguais viravam a mesma imagem com várias tags, e a limpeza do fim (por id) falhava — acumulava
+    private static ImageFromDockerfile imagem(String modulo) {
+        return new ImageFromDockerfile("arquitetura-teste/" + modulo, false)
+            .withFileFromPath("app.jar", jarDoModulo(modulo))
+            .withDockerfileFromBuilder(imagem -> imagem
+                .from("eclipse-temurin:25-jre-alpine")
+                .copy("app.jar", "/app.jar")
+                .entryPoint("java", "-jar", "/app.jar")
+                .build());
     }
 
     private static Path jarDoModulo(String modulo) {
