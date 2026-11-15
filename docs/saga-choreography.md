@@ -16,6 +16,7 @@ Implementação própria sobre o cliente Java cru do RabbitMQ (`com.rabbitmq.cli
 
 - Exchange único `sagas` (tipo `direct`), uma fila por nome lógico (`pagamento`, `hotel`, `voo-ida`, `voo-volta`, `sessaocompra`), roteamento = nome da fila.
 - Toda fila é declarada com dead-letter para o exchange `errors_exchange` / routing key `errors` — mensagem rejeitada sem republish cai lá.
+  - vai mudar pra DLQ por fila: [dlq-and-reprocessing.md](dlq-and-reprocessing.md)
 - Mensagem é um JSON genérico (`Map<String, Object>`) com um campo `tipo`: `1.0` = `EXECUTE` (seguir adiante), `2.0` = `DESFACA` (compensar, seguir para trás). Default é `EXECUTE` se ausente.
 - `basicQos(1)`: cada instância processa uma mensagem por vez (serializa, mas também é teto de throughput).
 

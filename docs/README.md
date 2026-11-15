@@ -4,6 +4,7 @@ Detalhamento por tópico. O [CLAUDE.md](../CLAUDE.md) na raiz traz o resumo exec
 
 - [architecture-overview.md](architecture-overview.md) — mapa de componentes, portas, bancos de dados e fluxo de uma compra ponta a ponta
 - [saga-choreography.md](saga-choreography.md) — mecânica da coreografia SAGA (filas, mensagem, compensação)
+- [dlq-and-reprocessing.md](dlq-and-reprocessing.md) — desenho da DLQ por fila e do reprocessador (o que cai lá, reprocessar só a falha)
 - [purchase-flow-design.md](purchase-flow-design.md) — desenho de como `sessaocompra` amarra pré-reservas, pagamento e a SAGA estendida
 - [reconciliation.md](reconciliation.md) — critério de reconciliação de estado com os `-externo` (a favor da venda) e divisão de papéis simulador × nosso lado
 - [state-driven-endpoints.md](state-driven-endpoints.md) — diretriz dos endpoints que movem o fluxo: intenção em vez de operação, caminho feliz primeiro, caso não tratado falha alto

@@ -203,7 +203,7 @@ Dois axiomas assumidos pra esse simulador (decisão de design deliberada — nã
 
 - **caminho feliz** (chamada externa dá resposta definitiva — sucesso ou falha de negócio): síncrono, direto no handler do `sagas-common` — sem delay, sem task.
 - desfechos do handler no framework SAGAS (`ResultadoHandler`, ver [saga-choreography.md](saga-choreography.md)):
-  - erros "tratados" (de negócio) com ack + publica para trás — pula a DLQ, que fica só pra falha sistêmica/inesperada
+  - erros "tratados" (de negócio) com ack + publica para trás — pula a DLQ ([o que cai lá](dlq-and-reprocessing.md#princípio))
   - "ack" puro para retentativa em caso de falha em *obter resposta* do serviço externo — obrigatório: `basicQos(1)` faz segurar sem ack travar a instância consumidora inteira
 - status de intenção + task de retentativa (não redelivery do RabbitMQ)
   - status de intenção + contador de tentativas em `Reserva` (nomes em aberto), transição idempotente (`WHERE` aceita estado anterior ou já-no-alvo)
@@ -213,7 +213,7 @@ Dois axiomas assumidos pra esse simulador (decisão de design deliberada — nã
     - chama `consultar` pra saber o estado real (seguro de repetir — leitura pura)
     - sequência SAGAS para frente (sucesso) ou para trás (falha de negócio), via `Messaging.publicar()` — só o primitivo de publish, o loop de ack/nack de `iniciarConsumo` não serve aqui
     - publica *antes* de marcar status terminal — se a escrita cair no meio, o próximo tick refaz com segurança; pior caso é mensagem duplicada, downstream já tolera at-least-once (ordem inversa exigiria um segundo scan estilo outbox)
-    - quando estoura o limite de tentativas de *obter resposta*: publica mensagem corrente na DLQ manualmente (`basicPublish` direto, sem delivery tag pra `nack`) + publica para trás
-      - *esse* é o único momento em que faz sentido para a gente jogar o cara para a DLQ
+    - quando estoura o limite de tentativas de *obter resposta*: publica a mensagem corrente manualmente (`basicPublish` direto, sem delivery tag pra `nack`) + publica para trás
+      - destino em aberto: DLQ ou um lugar à parte — falha persistente do externo não é bug nosso ([to-decide](to-decide.md#dlq-e-reprocessamento))
 
 **Reverter reserva confirmada:** falha ambígua no `desconfirmar` deixa a reserva confirmada sem TTL que a libere — a compensação segue pra trás mesmo assim, e o caso entra na robustez acima (`consultar` + retentativa).

@@ -21,6 +21,7 @@ Decisões em aberto. O que já está decidido e falta implementar fica em [todo.
   * [ ] como correlacionar webhook de tentativa antiga — a linha só guarda o `id_externo` vigente
   * [ ] duas tentativas pagas na mesma sessão
 * [ ] falha no estorno (cliente cobrado sem viagem) — erro catastrófico, a modelar; provisório: fila de erros, sem reverter a sessão
+  * alternativa: DLQ + seguir pra trás até `sessaocompra`, como nas reservas ([princípio](dlq-and-reprocessing.md#compensação-continua-a-falha-vai-pra-dlq))
 
 ## Lacunas de arquitetura
 
@@ -32,12 +33,28 @@ Decisões em aberto. O que já está decidido e falta implementar fica em [todo.
 
 ### Erros catastróficos
 
-- [ ] tratamento de erros catastróficos usando a DLQ: hoje os provisórios (falha no estorno; fim da SAGA com a sessão fora do estado) só caem na fila `errors`, sem ninguém consumir
+- [ ] tratamento de erros catastróficos usando a DLQ: hoje os provisórios (falha no estorno; fim da SAGA com a sessão fora do estado) só caem na fila `errors` — o consumo previsto é o [reprocessador](dlq-and-reprocessing.md#reprocessador), mas o desfecho de cada um segue a modelar
+
+### DLQ e reprocessamento
+
+Desenho decidido em [dlq-and-reprocessing.md](dlq-and-reprocessing.md).
+
+- [ ] falha persistente do externo numa etapa (não é bug nosso, mas precisa de tratamento) — provisório: DLQ
+  - serviço de retry dentro da janela de validade dos recursos externos
+  - falhar depois das tentativas, mover pra um lugar à parte (diferenciar de "precisa reprocessar"), e o reprocessamento é o usuário tentar de novo — tentar com recurso já preso cai em "estado desejado já atingido"
+- [ ] reprocessador:
+  - [ ] escolher uma mensagem: varrer com `basicGet` sem ack e devolver as outras (DLQ pequena), ou drenar a DLQ pra um banco próprio
+  - [ ] limite por motivo: exige o framework publicar na DLQ à mão com a causa no header (+ `ack`) — aí não há `x-death`, e o sinal de reprocessamento precisaria ser outro
+  - [ ] autenticação
+  - [ ] testes
+- [ ] monitoração das `*.dlq` (ex.: API de management, plugin Prometheus) — importante em produção
+- [ ] cenários de teste de sistema que mandam mensagem pra DLQ, a partir do webhook
 
 ### Estados intermediários
 
 - [ ] estado intermediário que guarda chamada externa (ex.: status de intenção em `Reserva`): como não deixá-lo preso
   - timeout próprio pra cada um, ou limpar a partir do timeout da sessão
+- [ ] recurso preso por falha na reversão (reserva confirmada sem TTL) quando o usuário desiste em vez de tentar de novo
 
 ### Testes
 

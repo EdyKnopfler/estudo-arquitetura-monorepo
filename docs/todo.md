@@ -137,8 +137,18 @@ Transversais ou de "amarração", não de regra de negócio de um domínio — l
   - [x] ~~`Messaging`: novo desfecho "erro tratado (negócio)" → ack + publica pra trás, sem passar pela DLQ.~~ — `ResultadoHandler.ack(PARA_TRAS)`.
   - [x] ~~`Messaging`: novo desfecho "ack puro, sem publish" — falha em obter resposta do externo; resolução fica pra task.~~ — `ResultadoHandler.ack(NENHUM)`.
   - [ ] Status de intenção + contador de tentativas em `Reserva` (nomes em aberto) — transição idempotente (`WHERE` aceita estado anterior e o alvo).
-  - [ ] Task de retentativa: acha reservas em intenção, resolve via `consultar`, publica a sequência SAGA pra frente/trás — marca status terminal *depois* de publicar, não antes (retry seguro se cair no meio, downstream já tolera duplicata). Ao estourar o limite de tentativas: publica manualmente na fila de erros (mensagem original já foi ackeada, não tem nack pra dar).
+  - [ ] Task de retentativa: acha reservas em intenção, resolve via `consultar`, publica a sequência SAGA pra frente/trás — marca status terminal *depois* de publicar, não antes (retry seguro se cair no meio, downstream já tolera duplicata). Ao estourar o limite de tentativas: publica manualmente (mensagem original já foi ackeada, não tem nack pra dar) — destino em aberto, ver [to-decide.md](to-decide.md#dlq-e-reprocessamento).
   - [ ] Handler de negócio em `ReservasSagas` usando esse fluxo.
+
+### DLQ e reprocessamento
+
+Desenho em [dlq-and-reprocessing.md](dlq-and-reprocessing.md).
+
+- [ ] DLQ por fila (`<fila>.dlq`) em `Messaging.declararFila`, no lugar da `errors` única
+- [ ] mensagem com `x-death` (reprocessamento) → encaminhamento `NENHUM`
+- [ ] reservas: falha na reversão → `NACK_DLQ` + `PARA_TRAS` (hoje `ACK`)
+- [ ] testes de sistema: falha cai na DLQ da etapa, as outras vazias (`AmbienteSaga.conferirDlqVazia` passa a olhar por fila)
+- [ ] serviço reprocessador (HTTP): olhar a fila, reprocessar uma, reprocessar a fila com limite de quantidade
 
 ### Autenticação
 
