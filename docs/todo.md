@@ -27,7 +27,7 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
 * [ ] **Pagamentos** — fluxo, criação desenhada em [purchase-flow-design.md](purchase-flow-design.md#criação-do-pagamento):
   * [X] criação no interno (`PUT /pagamentos/{idSessao}`, chamado por `sessaocompra`; unique em `id_sessao_compra`): pagamento por sessão, intenção gravada antes do externo, troca de tentativa até obter URL, depois devolve sempre a mesma
     * [X] chave de idempotência por tentativa: repetida em falha, trocada quando a transação expira no gateway
-  * [ ] **avançar rumo ao pagamento** (`iniciando-pagamento` → `PUT /pagamentos/{idSessao}`), orientado a estado ([diretriz](state-driven-endpoints.md))
+  * [X] **avançar rumo ao pagamento** (`iniciando-pagamento` → `PUT /pagamentos/{idSessao}`), orientado a estado ([diretriz](state-driven-endpoints.md))
     * [X] idempotente ([cadeia](purchase-flow-design.md#cadeia-idempotente)): falha não reverte a sessão; em `CRIANDO_PAGAMENTO`/`EFETUANDO_PAGAMENTO` repete o `PUT`
     * [X] caminho feliz: resposta traz a etapa (URL + vencimento), não só a URL
     * casos, um por vez:
@@ -48,8 +48,8 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
         * [ ] (externo) ainda não expirado → cancelado
         * [ ] (externo) já expirado → nada a fazer
       * [ ] (interno) sem link → nada a fazer — que falha no fluxo da sessão leva a isso?
-      * [ ] (interno) já pago → segue o fluxo da venda ([desenho](purchase-flow-design.md#cancelamento-e-prazo--gateway-como-juiz)); alternativa levantada: estornar e cancelar mesmo
-      * [ ] (sessaocompra) a partir de `PAGAMENTO_RECUSADO` — fluxo ainda não pensado
+      * [ ] (interno) já pago → segue o fluxo da venda ([desenho](purchase-flow-design.md#cancelamento-e-prazo--gateway-como-juiz))
+      * [ ] (sessaocompra) a partir de `PAGAMENTO_RECUSADO` → volta pra `INICIADA` ([desenho](purchase-flow-design.md#cancelamento-e-prazo--gateway-como-juiz))
   * [X] **externo:** criar ([premissas](purchase-flow-design.md#premissas-do-gateway-simulado-pagamento-externo))
     * [X] banco próprio (`externo_pagamento`) e tabela `pagamentos`
     * [X] _deve falhar às vezes de propósito_ — metade antes de gravar, metade depois
@@ -77,13 +77,13 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
     * [X] compensação: estorna e repassa `DESFACA` até `sessaocompra` (`filaanterior: sessaocompra`, ver [saga-choreography.md](saga-choreography.md#cadeia))
       * [ ] falha no estorno: ver [to-decide.md](to-decide.md#erros-catastróficos)
   * [X] **externo:** endpoint de estorno, _deve falhar às vezes de propósito_
-  * [ ] **externo:** latência aleatória (chaos) — hoje só sorteia falha
+  * [ ] **externo:** latência aleatória (chaos), nos mesmos moldes do `reservas-externo` — hoje só sorteia falha
   * [X] Testes integrados e de sistema
     * [X] Requisição > Externo > Pagar > Webhook (`SagaCaminhoFelizSistemaTest`)
     * [X] Encaminha sucesso para outro serviço (`SagaCaminhoFelizSistemaTest`)
     * [X] Notificação de falha por outro serviço (`SagaFalhaVooVoltaSistemaTest`)
 
-* [ ] **Hotel:**
+* [X] **Hotel:**
   * [X] **web:** interação com usuário (pré-reservas) — chamado por `sessaocompra`, não o inverso
     * [X] chama endpoints do serviço externo
     * [X] cancelamento por timeout da sessão (chamado pelo `TimeoutTask` de `sessaocompra`, via REST)
@@ -115,6 +115,7 @@ Como `sessaocompra` se conecta com os módulos abaixo (pré-reserva, pagamento, 
     * [X] **pré-reserva:** cria reserva sem confirmação
     * [X] **confirmação:** confirma pré-reservas dentro da validade
     * [X] **cancelamento:** cancela pré-reservas
+    * [X] **desconfirmação:** volta a confirmada pra pré-reserva (mesmo código de _Hotel_)
     * [X] _deve falhar às vezes de propósito_
   * [X] Testes integrados e de sistema
     * [X] Requisição > Externo (mesmo código de _Hotel_, só muda o profile — coberto por `ReservasExternoServiceIntegrationTest`)
@@ -136,7 +137,8 @@ Transversais ou de "amarração", não de regra de negócio de um domínio — l
   - [X] Endpoint `desconfirmar` em `reservas-externo` — reverte uma `Reserva` já confirmada.
   - [x] ~~`Messaging`: novo desfecho "erro tratado (negócio)" → ack + publica pra trás, sem passar pela DLQ.~~ — `ResultadoHandler.ack(PARA_TRAS)`.
   - [x] ~~`Messaging`: novo desfecho "ack puro, sem publish" — falha em obter resposta do externo; resolução fica pra task.~~ — `ResultadoHandler.ack(NENHUM)`.
-  - [ ] Status de intenção + contador de tentativas em `Reserva` (nomes em aberto) — transição idempotente (`WHERE` aceita estado anterior e o alvo).
+  - [ ] Status de intenção, de falha/cancelada + contador de tentativas em `Reserva` (nomes em aberto) — transição idempotente (`WHERE` aceita estado anterior e o alvo).
+  - [ ] Guarda local no `confirmar`: `Reserva` já `RESERVADA` (redelivery) → segue pra frente sem chamar o externo — sem ela, o 404 do externo ([axioma 2](purchase-flow-design.md#status-de-reserva-e-não-idempotência-de-reservas-externo)) dispara `DESFACA` de reserva confirmada
   - [ ] Task de retentativa: acha reservas em intenção, resolve via `consultar`, publica a sequência SAGA pra frente/trás — marca status terminal *depois* de publicar, não antes (retry seguro se cair no meio, downstream já tolera duplicata). Ao estourar o limite de tentativas: publica manualmente (mensagem original já foi ackeada, não tem nack pra dar) — destino em aberto, ver [to-decide.md](to-decide.md#dlq-e-reprocessamento).
   - [ ] Handler de negócio em `ReservasSagas` usando esse fluxo.
 

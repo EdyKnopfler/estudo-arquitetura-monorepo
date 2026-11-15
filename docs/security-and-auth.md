@@ -4,9 +4,9 @@ Duas identidades distintas, deliberadamente separadas — não misturar ao mexer
 
 ## JWT — cliente final
 
-`web-base/jwt/JwtIssuerService.java`+`JwtValidatorService.java`: RSA assimétrico (RS256), expiração de 10 minutos, claims `id`/`email`/`userType`/`iss`, `kid` no header. Emitido por `clientes` (`AuthController`) após login. `clientes` e `sessaocompra` (profile `web`) validam esse JWT (`JwtAuthenticationFilter`, ligado pela autoconfiguração do `web-base` com `security.auth-type: jwt`, ver [web-base-hardening.md](web-base-hardening.md)) — `reservas-interno` e `pagamento-interno` não usam JWT, porque não são chamados pelo front (só client-id/secret, ver seção seguinte). `sessaocompra` é o único ponto de contato do front com o backend ("porteiro": ela mesma chama `reservas-interno` internamente, front nunca fala direto com esses serviços — ver [purchase-flow-design.md](purchase-flow-design.md)).
+RSA assimétrico (RS256), emitido por `clientes` no login ([JwtIssuerService](../web-base/src/main/java/com/derso/arquitetura/webbase/jwt/JwtIssuerService.java)). Só `clientes` e `sessaocompra` validam ([JwtValidatorService](../web-base/src/main/java/com/derso/arquitetura/webbase/jwt/JwtValidatorService.java)): `sessaocompra` é o único ponto de contato do front ("porteiro", [desenho](purchase-flow-design.md#interação-do-usuário)); `reservas-interno` e `pagamento-interno` não são chamados pelo front e usam só client-id/secret (seção seguinte). Ligação pela autoconfiguração do `web-base`: [web-base-hardening.md](web-base-hardening.md).
 
-**Validação não assume "é tudo meu, confio"**: `JwtValidatorService` resolve a chave pelo `kid` do header (parte do que é assinado — um `kid` forjado só faz a verificação falhar contra a chave errada) via `TrustedJwtIssuersConfig` (`jwt.trusted-issuers`, uma lista de `{kid, issuer, public-key}` por serviço), e só aceita o token se o `iss` do payload bater com o emissor esperado *para aquele kid específico* — pega até o caso de token assinado pela chave certa mas alegando ser de outro emissor. O emissor é `clientes`; o design suporta múltiplas chaves/emissores confiados sem mudar código, só config. `aud` foi deliberadamente deixado de fora: `clientes` e `sessaocompra` validam o mesmo token por design (não é confusão a fechar) — ver [web-base-hardening.md](web-base-hardening.md#autenticação-jwt--cliente-final).
+Validação por `kid` + `iss` por emissor confiado — decisões em [web-base-hardening.md](web-base-hardening.md#autenticação-jwt--cliente-final).
 
 ### Gerar o par de chaves local
 
@@ -47,13 +47,21 @@ O `.env` (e `.env.clientes`) é a fonte única das credenciais de dev — senhas
 - fora do git: cada clone cria o seu a partir do `.example`, que só lista as variáveis, com os segredos vazios
 - sem default no código: yaml referencia só `${VAR}`, e teste lê do ambiente ([CredenciaisDev](../web-base/src/test/java/com/derso/arquitetura/webbase/teste/CredenciaisDev.java)) — falta de `.env` falha alto em vez de cair num valor fixo
   - motivo: default versionado é credencial no git, que os scanners apontam (já aconteceu com a chave JWT privada)
+- chaves JWT fogem do padrão `<SERVIÇO>_ID`/`_SECRET`: são infra compartilhada (tipo `DB_HOST`), não credencial de um par
 - mesmo esquema pro `databases.sql` (cria o usuário do banco com senha): versionado só o `databases.sql.example`
 
 ## Tratamento de erro
 
-`@RestControllerAdvice` globais do `web-base`, usados por todos os serviços web (HTTP) — mapeamento exceção → status em [TrataErros.java](../web-base/src/main/java/com/derso/arquitetura/webbase/config/TrataErros.java) e [TrataErrosDeBanco.java](../web-base/src/main/java/com/derso/arquitetura/webbase/config/TrataErrosDeBanco.java). Por que o 500 devolve mensagem genérica: [web-base-hardening.md](web-base-hardening.md#tratamento-de-erro-trataerros).
+`@RestControllerAdvice` globais do `web-base`, usados por todos os serviços web (HTTP) — mapeamento exceção → status em [TrataErros.java](../web-base/src/main/java/com/derso/arquitetura/webbase/config/TrataErros.java) e [TrataErrosDeBanco.java](../web-base/src/main/java/com/derso/arquitetura/webbase/config/TrataErrosDeBanco.java). Por que o 500 devolve mensagem genérica: [web-base-hardening.md](web-base-hardening.md#tratamento-de-erro).
 
-## Limitações conhecidas (aceitáveis para estudo local, não levar adiante sem revisar)
+## Limitações conhecidas
 
-- Client-secret sem rate limit — credencial errada vira 401 sem nenhum limite de tentativas por IP/client-id. Fora de escopo do `web-base` (é infra de borda, não lógica de autenticação em si).
-- `aud` não é validado no JWT — `clientes` e `sessaocompra` aceitam o mesmo token por design (ver seção JWT acima), então não é uma lacuna ativa, mas também não há proteção caso surja um segundo tipo de token com público-alvo diferente.
+Aceitáveis para estudo local, não levar adiante sem revisar:
+
+- client-secret sem rate limit — [por quê](web-base-hardening.md#client-idsecret--serviço-a-serviço)
+- `aud` não validado no JWT — [por quê](web-base-hardening.md#autenticação-jwt--cliente-final)
+- JDWP exposto em todo serviço, pra attach de debugger — sem autenticação (debugger anexado = RCE); não pode existir fora de `localhost`
+- secrets em `.env`/`.env.<serviço>` sem gestão real (vault, secrets manager) — são credenciais de dev descartáveis
+- sem TLS em nenhuma comunicação (front↔serviços, serviço↔serviço, app↔Postgres/RabbitMQ)
+- sem rate limit/lockout em `/login` — fica pra borda (gateway/WAF): throttling por IP não precisa entender o payload, sai mais barato antes da app e ajusta sem redeploy
+  - reavaliar se precisar de lockout por `email` (semântica de negócio que a borda não enxerga)

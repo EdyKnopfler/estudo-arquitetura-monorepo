@@ -49,7 +49,7 @@ Java 25 (virtual threads), Spring Boot, Maven multi-módulo (8 módulos + parent
 
 ## Escrita (código e docs)
 
-Princípio: cada fato mora num lugar só, e quem é dono depende do tipo de fato. Os outros lugares linkam pro dono em vez de copiar — cópia desatualiza.
+Princípio: cada fato tem um dono, onde mora o detalhe; quem é dono depende do tipo de fato. Fora do dono, no máximo um resumo bem curto, sempre com link pro dono (como citação) — cópia de detalhe desatualiza.
 
 | Tipo de fato | Dono |
 |---|---|
@@ -59,12 +59,15 @@ Princípio: cada fato mora num lugar só, e quem é dono depende do tipo de fato
 | O que falta, em nível de fluxo/feature | `docs/todo.md` |
 | O que falta, em nível de implementação | `TODO` no código |
 | Decisão em aberto | `docs/to-decide.md` |
-| Em que pé está cada módulo, pra quem chega | `README.md` — uma entrada por etapa do fluxo, sem detalhe |
+| Landing page: em que pé está cada módulo, pra quem chega | `README.md` — visão de negócio, sem detalhe técnico; pode repetir o que a doc diz |
 
 - Ao implementar, a doc encolhe pro porquê e pro não óbvio — pode resumir código quando isso explica algo.
 - Estado e "próximos passos" só em `docs/todo.md`, `TODO` no código e `README.md`.
+- Doc descreve medidas e decisões, não quem implementa: nome de classe/método/arquivo só quando necessário, e então como link pro código.
+- Enumeração que é só exemplo leva "ex.:" — sem isso, a lista se lê como completa.
 - Comentário no código só pro que a leitura não mostra, em uma linha; se o porquê está em `docs/`, aponte pra lá.
-- Só vira decisão o que eu confirmei; o resto vai pro `to-decide.md`.
+- `todo.md` e `to-decide.md` são índices: itens curtos que linkam pra doc do tópico quando ela existe — lá mora o detalhe, decidido ou em aberto.
+- Só vira decisão o que eu confirmei; o resto tem que constar no `to-decide.md`.
 
 Atualizar docs (fim de tarefa com código, ou decisão tomada em conversa) — aqui ler `todo.md`/`to-decide.md` está autorizado:
 1. Ache tudo que o assunto toca: `docs/`, `README.md`, `CLAUDE.md`, comentários que citam docs.

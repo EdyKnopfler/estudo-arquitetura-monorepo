@@ -15,6 +15,7 @@ Mecanismo em [SessaoCompraController](../sessaocompra/src/main/java/com/derso/ar
 
 - **timeout da sessão** (`TimeoutTask`): sessão abandonada → cancela e **desfaz as pré-reservas efetuadas**.
   - `INICIADA` (pendente de criar pagamento): prazo pra escolher e avançar
+    - começa na criação da sessão, não na primeira pré-reserva — conservador: começar na primeira ganharia o tempo até a primeira escolha, mas sessão sem escolha ficaria sem relógio
     - voltar pra `INICIADA` (voltar ao pedido, reversão da SAGA) reinicia o prazo, limitado ao teto: o menor entre agora + prazo de `INICIADA` e início + teto
     - por isso o prazo de `INICIADA` tem coluna própria (`prazo_iniciada`); `start_time` fica como base do teto
   - `CRIANDO_PAGAMENTO`/`EFETUANDO_PAGAMENTO`/`PAGAMENTO_RECUSADO`: tolerância bem maior, só pra limpar sessão largada — o pagamento em si é do timeout do pagamento
@@ -116,7 +117,7 @@ Cancelar × pagar e prazo × pagar são corridas; quem decide é o gateway, font
   - sem URL: nada a consultar
   - com URL: pede cancelamento ao gateway — já pago faz o pagamento vencer e seguir o fluxo
   - cancelado, o próximo `PUT` abre tentativa nova — chave nova, ids de reserva atuais
-- timeout do pagamento é a mesma operação no gateway, com outro gatilho, sem mexer na sessão; nosso prazo é maior que o do gateway — quando ele dispara, a URL já venceu e a consulta é definitiva
+- timeout do pagamento é a mesma operação no gateway, com outro gatilho, sem mexer na sessão
 - pagamento aceito que chega pelo webhook é reconciliado a favor da venda, mesmo fora da tentativa vigente
 
 ## Webhook do pagamento
@@ -152,16 +153,19 @@ Diagrama: [README](../README.md#saga-disparada-a-partir-do-webhook-de-pagamento)
 
 - **Sucesso**: webhook de pagamento marca a sessão como `PAGAMENTO_EFETUADO` e dispara o anel ([Webhook do pagamento](#webhook-do-pagamento)) → confirma em `pagamento` → `hotel` → `voo-ida` → `voo-volta` → `sessaocompra` marca `VIAGEM_RESERVADA`. Fim de cadeia.
 - **Falha em qualquer etapa (inclusive em `sessaocompra: confirma`)**: propaga DESFACA pra trás até `sessaocompra: reverte` — cancelamento explícito do que já foi fechado na sessão: volta pra `INICIADA` e reinicia o prazo de `INICIADA`, limitado ao teto ([Dois timeouts](#dois-timeouts)) — dá mais tempo pro usuário escolher outra opção de voo/hotel/pagamento.
-  - modelagem de status da reversão (falha de negócio × erro de execução, quando terminar em `ERRO`): em aberto
+  - em aberto: modelagem de status da reversão
+    - diferenciar falha de negócio × erro de execução (inclui serviço externo) — status próprio (`REVERTENDO`?) ou informação no payload
+    - terminar em `ERRO` depende dessa distinção (erro de execução, não falha de negócio)
+    - diagramas do README só depois de fechar essa modelagem
 - **Recusa**: não entra no anel — nada foi confirmado, as reservas seguem em pré-reserva. O webhook leva a sessão pra `PAGAMENTO_RECUSADO`, irmão de `EFETUANDO_PAGAMENTO`:
   - não muda o fluxo — serve pra interface avisar o usuário, que tenta de novo (outro cartão, outra conta), inclusive na mesma URL, que segue valendo ([premissas](#premissas-do-gateway-simulado-pagamento-externo))
   - avançar de novo volta pra `EFETUANDO_PAGAMENTO` (mesma URL, ou renovada — ver [Criação do pagamento](#criação-do-pagamento)); pagar direto no gateway leva a `PAGAMENTO_EFETUADO` do mesmo jeito
   - não estende prazo: o tempo extra vem da renovação perto do vencimento, até o teto ([Dois timeouts](#dois-timeouts))
 - **Estorno**: no `DESFACA`, o pagamento estorna no gateway e a linha em `pagamentos` volta pra tentativa nova (`CRIANDO`, chave nova) — o avanço seguinte abre outra transação
   - `ESTORNADO` só existe no gateway: com uma linha por sessão, um estado parado aqui travaria o `criarPagamento` (responderia "criando" pra sempre)
-- **Discard vs. reverter**: quem detecta a falha de confirmação (ex. `voo-ida`, item não disponível mais no fornecedor) trata isso como erro local *antes* de publicar DESFACA — zera a própria pré-reserva. Quem só recebe DESFACA nunca é quem falhou (por construção da coreografia), então sempre faz a mesma ação: reverter pra pré- (`desconfirmar` no externo — simplificação em [architecture-overview.md](architecture-overview.md#reserva-genérica--simplificação-de-estudo)). Não precisa de flag na mensagem pra essa distinção — mas precisa saber qual linha local afetar (ver "Payload da mensagem da SAGA" abaixo).
-- Consequência: `sessaocompra` vira a ponta final da reversão da SAGA (e do sucesso) — ganha um papel `sagas` mínimo pros dois nós e passa a depender de `sagas-common`.
-- **Mecanismo de fiação — reaproveita `proximafila`/`filaanterior`, não precisa de "dois nós" de verdade.** Os dois pontos de contato de `sessaocompra` no anel colapsam numa única fila (`sessaocompra`): `proximafila: sessaocompra` em `voo-volta` e `filaanterior: sessaocompra` em `pagamento` bastam — `Messaging.iniciarConsumo` publica na próxima fila no encaminhamento pra frente e na anterior no encaminhamento pra trás (ver [saga-choreography.md](saga-choreography.md)). Um único handler em `sessaocompra`, igual aos outros, recebe as duas direções na mesma fila e decide pelo campo `tipo` (`EXECUTE` → confirma; `DESFACA` → reverte) — mesmo padrão de `ReservasSagas`/`PagamentoSagas`.
+- **Discard vs. reverter**: quem detecta a falha de confirmação (ex. `voo-ida`, item não disponível mais no fornecedor) trata isso como erro local *antes* de publicar DESFACA — zera a própria pré-reserva (no externo ela já não existe; aqui, marca o status de falha — [todo](todo.md)). Quem só recebe DESFACA nunca é quem falhou (por construção da coreografia), então sempre faz a mesma ação: reverter pra pré- (`desconfirmar` no externo — simplificação em [architecture-overview.md](architecture-overview.md#reserva-genérica--simplificação-de-estudo)). Não precisa de flag na mensagem pra essa distinção — mas precisa saber qual linha local afetar (ver "Payload da mensagem da SAGA" abaixo).
+- `sessaocompra` é a ponta final da SAGA nas duas direções, com papel `sagas` próprio ([deploy-roles-by-profile.md](deploy-roles-by-profile.md#aplicado-em-cada-domínio)).
+- **Fiação:** os dois nós colapsam numa única fila `sessaocompra`, com um handler que decide pelo `tipo` — reaproveita a fiação comum em vez de consumo à parte ([saga-choreography.md](saga-choreography.md#cadeia)).
 
 ## Payload da mensagem da SAGA
 
@@ -195,9 +199,10 @@ Ou seja: nenhum serviço recebe uma "mensagem web" só pra ir buscar algo no ban
 
 Dois axiomas assumidos pra esse simulador (decisão de design deliberada — não é ponto a reavaliar):
 
-1. **Cancelamento/expiração automática do lado externo é confiável.** TTL em `criar`/`confirmar` (`ReservasService`/`ReservasRepository`, `reservas-externo`); os dois são `@Transactional`, então falha explícita = zero efeito colateral. Consequência: liberar pré-reserva (cancelar/trocar) não precisa de entrega garantida — melhor esforço basta, mesmo padrão de `ReservasService.liberarMelhorEsforco` (`reservas-interno`). Não vale pra reverter reserva confirmada: confirmada não tem TTL lá.
+1. **Expiração do lado externo é confiável.** Pré-reserva expira por relógio: passado o prazo, `confirmar` recusa — sem job nem limpeza. Criar e confirmar são transacionais: falha explícita = zero efeito colateral. Consequência: liberar pré-reserva (cancelar/trocar) não precisa de entrega garantida — melhor esforço basta. Não vale pra reverter reserva confirmada: confirmada não expira.
 2. **`confirmar`/`remover` são e continuam não-idempotentes.** Guarda estrita `WHERE confirmado = false` em `ReservasRepository` (`reservas-externo`) — uma segunda chamada depois de sucesso real dá o mesmo erro (`EntityNotFoundException`) de uma falha real, sem key nem endpoint de consulta pra desambiguar. Toda a responsabilidade de nunca chamar `confirmar` duas vezes cai em `reservas-interno` — sem ajuda do lado de lá.
-3. **`reservas-externo` precisa de um endpoint de consulta (`consultar`).** Sem ele, um timeout em `confirmar` é ambiguidade irredutível — dado o axioma 2, sucesso e falha real são indistinguíveis sem perguntar de volta à fonte de verdade. É o que torna o resto deste desenho possível.
+
+Consequência do axioma 2: sem um endpoint de consulta (`consultar`), timeout em `confirmar` é ambiguidade irredutível — sucesso e falha real são indistinguíveis sem perguntar à fonte da verdade.
 
 ### Arquitetura: caminho feliz síncrono, caminho lento em background
 

@@ -17,7 +17,7 @@ SPRING_PROFILES_ACTIVE=voo,sagas
 
 `@Profile` vai só no **entrypoint** de cada papel: `@Profile("web")` no `@RestController`, `@Profile("sagas")` no listener de fila, `@Profile("timeout")` no job — se o profile não está ativo, o bean **não é instanciado** (não é "existe desligado").
 
-`@Service` e repositórios ficam **sem** `@Profile`: são a regra de negócio compartilhada, a mesma acionada por portas diferentes (REST, fila, job). Ex.: `ReservasExternoService` serve tanto a pré-reserva (`web`) quanto o `confirmar`/`cancelar` do `ReservasSagas` (`sagas`).
+`@Service` e repositórios ficam **sem** `@Profile`: são a regra de negócio compartilhada, a mesma acionada por portas diferentes (REST, fila, job). Ex.: a mesma regra de reservas atende a pré-reserva (`web`) e a confirmação/desfazer da SAGA (`sagas`).
 
 ```java
 @RestController

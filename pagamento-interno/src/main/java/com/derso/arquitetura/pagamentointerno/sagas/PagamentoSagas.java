@@ -98,7 +98,7 @@ public class PagamentoSagas implements SmartLifecycle {
                 throw new IllegalStateException("Estorno sem ESTORNADO no gateway: " + situacao);
             }
         } catch (Exception e) {
-            // TODO erro catastrófico (cliente cobrado sem viagem) — desfecho em aberto, docs/todo.md.
+            // TODO erro catastrófico (cliente cobrado sem viagem) — desfecho em aberto, docs/to-decide.md.
             // Provisório: mensagem pra fila de erros, sem reverter a sessão.
             System.err.println("[pagamento] falha ao estornar — rastreio=" + rastreio + " — " + e.getMessage());
             return ResultadoHandler.nackDlq(Encaminhamento.NENHUM);

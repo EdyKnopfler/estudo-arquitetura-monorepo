@@ -18,6 +18,7 @@ Implementação própria sobre o cliente Java cru do RabbitMQ (`com.rabbitmq.cli
 - Toda fila é declarada com dead-letter para o exchange `errors_exchange` / routing key `errors` — mensagem rejeitada sem republish cai lá.
   - vai mudar pra DLQ por fila: [dlq-and-reprocessing.md](dlq-and-reprocessing.md)
 - Mensagem é um JSON genérico (`Map<String, Object>`) com um campo `tipo`: `1.0` = `EXECUTE` (seguir adiante), `2.0` = `DESFACA` (compensar, seguir para trás). Default é `EXECUTE` se ausente.
+  - em aberto: DTO próprio da fila no lugar do `Map` — a favor, não reaproveitar entidade JPA nem DTO de REST (motivos de mudança diferentes); ganha peso com os ids de negócio no [payload](purchase-flow-design.md#payload-da-mensagem-da-saga)
 - `basicQos(1)`: cada instância processa uma mensagem por vez (serializa, mas também é teto de throughput).
 
 ## Fluxo de sucesso vs. falha (`Messaging.iniciarConsumo`)
@@ -48,6 +49,7 @@ Fiação em `sagas.*` de [application-sagas.yaml](../pagamento-interno/src/main/
 
 - o início da SAGA é o webhook de pagamento (papel `web` de `pagamento-interno`): publica o `EXECUTE` inicial na fila `pagamento`
 - `pagamento` é o primeiro nó da cadeia
+  - no sucesso só repassa (a cobrança já aconteceu) — por ora fica: sem código, e aparece no rastreio; alternativa: o webhook publicar direto em `hotel`, com `pagamento` só como fila anterior
   - nada o antecede no caminho de execução: a `filaanterior` dele (`sessaocompra`) só serve à reversão (estorno → `sessaocompra`, ver extensão abaixo)
 - `sessaocompra` é a ponta final nas duas direções: sem `filaanterior` nem `proximafila`
   - com anterior, uma exceção no `DESFACA` republicaria `DESFACA` pra trás e a reversão entraria em loop

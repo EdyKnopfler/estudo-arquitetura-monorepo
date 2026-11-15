@@ -7,13 +7,14 @@ Três tipos de teste, cada um com o modo que ele exige — nenhum teste roda em 
 - tudo: [`./run-all-tests.sh`](../run-all-tests.sh) — microsserviço, depois integrado, depois sistema, derrubando os containers de teste ao fim de cada fase
   - parâmetros liga/desliga integrado (padrão sim) e sistema (padrão não, pelo tempo) — uso no [README](../README.md#testes)
   - um Maven por módulo: num reactor só, o processo do Maven fica de pé a suíte inteira e a máquina de 8 GB swapa
-  - `install` antes: gera os jars que o integrado sobe (ver [abaixo](#teste-integrado-mvnw-package--dskiptests--mvnw-test--pintegrado))
+  - jars antes: integrado e sistema sobem o jar compilado ([por quê](#teste-integrado))
   - nunca duas fases em paralelo: integrado e sistema precisam dos jars, e a RAM não aguenta
-- um módulo: `./mvnw -pl <módulo> install`, depois `./mvnw -pl <módulo> test -Pintegrado`
-  - `web-base` e `sagas-common` precisam estar instalados (test-jars)
+- reactor inteiro: `./mvnw package -DskipTests`, depois `./mvnw test` (microsserviço), `-Pintegrado` ou `-Psistema`
+- por módulo (`-pl`, como o script): `install` no lugar de `package` — fora do reactor, `web-base` e `sagas-common` (test-jars) têm que estar no repositório local
+  - ex.: `./mvnw -pl <módulo> install`, depois `./mvnw -pl <módulo> test -Pintegrado`
 - no fim, liberar RAM: comando em [Reuse de containers](#reuse-de-containers)
 
-## Teste de microsserviço (`./mvnw test`)
+## Teste de microsserviço
 
 Um serviço isolado, rodando no próprio processo do teste.
 
@@ -37,18 +38,18 @@ Postgres/RabbitMQ ficam de pé entre execuções (`withReuse(true)`) — rodar u
 - estado persiste entre execuções — por isso a regra de limpeza abaixo é obrigatória
 - derrubar (liberar RAM, ou depois de editar migration já aplicada): `docker rm -f $(docker ps -aq --filter label=org.testcontainers.hash)`
 
-## Teste integrado (`./mvnw package -DskipTests && ./mvnw test -Pintegrado`)
+## Teste integrado
 
 Serviços reais conversando entre si.
 
 - marcado com `@Tag("integrado")` — fora do `mvn test` padrão (parent pom exclui a tag; profile `integrado` inverte e roda só eles)
 - cada serviço sobe como container via `ServicoEmContainer` (test-jar do `web-base`): jar já compilado no host + imagem só com o JRE, numa network do Testcontainers
   - por que não o `Dockerfile` do módulo: ele builda com Maven dentro do Docker usando `RUN --mount` (cache), que exige BuildKit — o cliente Docker do Testcontainers não suporta. E build Maven dentro do Docker é justamente o passo que pesa na RAM
-  - consequência: o jar precisa existir antes (`package`); sem ele o teste falha dizendo isso. Jar velho = teste contra código velho
+  - consequência: o jar precisa existir antes (`package` ou `install`); sem ele o teste falha dizendo isso. Jar velho = teste contra código velho
   - uma imagem por módulo, nome fixo `arquitetura-teste/<módulo>`, sobrescrita a cada execução: com nome aleatório, builds iguais viravam a mesma imagem com várias tags, a limpeza do fim (por id) falhava e acumulava
 - sem reuse: cada classe monta e derruba seus containers
 
-## Teste de sistema (`./mvnw package -DskipTests && ./mvnw test -Psistema`)
+## Teste de sistema
 
 A cadeia inteira da SAGA, com todos os serviços: mesma mecânica do integrado (`ServicoEmContainer`), mas leva minutos — por isso fora da suíte padrão e do `-Pintegrado`.
 

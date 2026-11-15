@@ -30,7 +30,7 @@ Java 25 (virtual threads habilitadas), Spring Boot 4, Maven multi-módulo (8 mó
 | `pagamento-interno` (profile `sagas`) | consumidor de fila `pagamento` (início/fim da cadeia) | — | db, broker |
 | `pagamento-interno` (profile `pendencias`) | job, retoma intenções do webhook que falharam | — | db, broker |
 
-`reservas-externo` e `reservas-interno` são o **mesmo artefato** (cada um o seu) rodando várias vezes com `SPRING_PROFILES_ACTIVE` combinando domínio (`hotel`/`voo`) — e, no caso de `reservas-interno`, também papel (`web`/`sagas`) — cada instância com seu próprio database/fila. `pagamento-interno` não tem eixo de domínio (só existe um pagamento), então só varia por papel (`web`/`sagas`/`pendencias`).
+Cada módulo roda várias vezes, combinando por profile domínio (`hotel`/`voo`) e papel; `pagamento-interno` só varia por papel ([deploy-roles-by-profile.md](deploy-roles-by-profile.md#profiles-se-combinam)).
 
 ### Reserva genérica — simplificação de estudo
 
@@ -45,11 +45,11 @@ O foco é a amarração entre as partes, não o domínio: reserva de qualquer co
 ## Interno x externo
 
 - **`-interno`**: controle de reservas no nível da **agência de viagens** — é quem participa da cadeia da SAGA e decide confirmar ou cancelar. Chama o `-externo` correspondente via REST (client-id/secret) pra efetivar a reserva do lado de fora.
-- **`-externo`**: simula o **fornecedor real** (a companhia aérea, a rede de hotel, o gateway de pagamento) sendo chamado. Não participa da coreografia da SAGA — só responde a quem o chama (exceção: o gateway de pagamento avisa o resultado por webhook), com falha e latência aleatórias propositais (chaos engineering — ver `ReservasService.seraQueVaiFalhar()` em `reservas-externo`).
+- **`-externo`**: simula o **fornecedor real** (a companhia aérea, a rede de hotel, o gateway de pagamento) sendo chamado. Não participa da coreografia da SAGA — só responde a quem o chama (exceção: o gateway de pagamento avisa o resultado por webhook), com falha e latência aleatórias propositais (chaos engineering).
 
 ## Padrão de módulos por domínio
 
-Reservas, pagamento e sessão de compra são cada um um artefato único por domínio (`reservas-interno`, `pagamento-interno`, `sessaocompra`), com controller REST e listener de fila no mesmo processo — o papel ativo em cada instância é escolhido por profile Spring em runtime, ver [deploy-roles-by-profile.md](deploy-roles-by-profile.md) pro mecanismo. `sessaocompra` tem um papel a mais: `timeout` (job `@Scheduled` que cancela sessões expiradas) — mesmo princípio (`@Profile`/`web-application-type: none`).
+Reservas, pagamento e sessão de compra: um artefato único por domínio, com o papel de cada instância escolhido por profile em runtime ([deploy-roles-by-profile.md](deploy-roles-by-profile.md)).
 
 Bibliotecas transversais:
 
@@ -92,7 +92,7 @@ flowchart LR
   Qvolta -.consome.-> reservas-interno-voo-sagas
 ```
 
-`sessaocompra-web` é o único ponto de contato do front com o backend ("porteiro"): chama `reservas-interno` e `pagamento-interno` por trás. Fora do backend, o front só paga no gateway pela URL de pagamento ([purchase-flow-design.md](purchase-flow-design.md#criação-do-pagamento)). A volta do resultado da SAGA até `sessaocompra` está em [purchase-flow-design.md](purchase-flow-design.md).
+`sessaocompra-web` é o único ponto de contato do front com o backend ("porteiro", [desenho](purchase-flow-design.md#interação-do-usuário)): chama `reservas-interno` e `pagamento-interno` por trás. Fora do backend, o front só paga no gateway pela URL de pagamento ([purchase-flow-design.md](purchase-flow-design.md#criação-do-pagamento)). A volta do resultado da SAGA até `sessaocompra` está em [purchase-flow-design.md](purchase-flow-design.md).
 
 ## Convenção de configuração
 

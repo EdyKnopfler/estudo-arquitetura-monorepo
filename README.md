@@ -80,7 +80,7 @@ Desenho completo em [docs/purchase-flow-design.md](docs/purchase-flow-design.md)
 
 Registro de quando a coreografia rodou ponta a ponta com handlers dummy (falha simulada no fim da cadeia). No código atual os handlers já começaram a ganhar regra de verdade e a saída abaixo não se reproduz — para rodar, faça antes `git checkout eb095f6` (num clone sem `.env` criado: esse commit ainda versionava os arquivos `.env`).
 
-Hoje a cadeia roda de verdade, com regra de negócio, no teste integrado da compra ponta a ponta — comando em [Testes](#testes).
+Hoje a cadeia roda de verdade, com regra de negócio, no teste de sistema da compra ponta a ponta — comando em [Testes](#testes).
 
 Para rodar:
 
@@ -149,7 +149,7 @@ Pra quem está chegando: cada módulo com as etapas do fluxo em que ele aparece 
 * **clientes**
   * [X] cadastro
   * [X] login, emite JWT
-* **sessaocompra** — único ponto de contato do front com o backend ("porteiro")
+* **sessaocompra** — único ponto de contato do front com o backend ("porteiro", [desenho](docs/purchase-flow-design.md#interação-do-usuário))
   * [X] criar sessão (web)
   * [X] escolher/trocar hotel e voos (web)
   * [X] iniciar pagamento (web)
